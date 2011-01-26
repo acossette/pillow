@@ -1,0 +1,13 @@
+*.user
+*.[ao]
+*.so
+debug
+release
+[Mm]akefile*
+*~
+*.bak
+*.old
+*.tmp
+lib
+*.pdb
+*.obj

@@ -1,0 +1,110 @@
+#ifndef _PILLOW_HTTPREQUEST_H_
+#define _PILLOW_HTTPREQUEST_H_
+
+#include <QObject>
+#include "parser/parser.h"
+#include <QtNetwork/QHostAddress>
+class QIODevice;
+
+namespace Pillow
+{
+	//
+	// HttpRequest
+	//
+
+	typedef QPair<QByteArray, QByteArray> HttpHeader;
+	typedef QVector<HttpHeader> HttpHeaderCollection;
+	struct HttpHeaderRef 
+	{ 
+		int fieldPos, fieldLength, valuePos, valueLength; 
+		HttpHeaderRef(int fieldPos, int fieldLength, int valuePos, int valueLength) 
+			: fieldPos(fieldPos), fieldLength(fieldLength), valuePos(valuePos), valueLength(valueLength) {}
+		HttpHeaderRef() {}
+	};
+
+	class HttpRequest : public QObject
+	{
+		Q_OBJECT
+		QIODevice* _inputDevice,* _outputDevice;
+		http_parser _parser;
+
+	public:
+		enum State { Uninitialized, Initializing, ReceivingHeaders, ReceivingContent, SendingHeaders, SendingContent, Completed, Flushing, Closed };
+		enum { MaximumRequestHeaderLength = 32 * 1024 };
+		enum { MaximumRequestContentLength = 128 * 1024 * 1024 };
+		Q_ENUMS(State);
+
+	private:
+		State _state;
+
+		// Request fields.
+		QByteArray _requestBuffer;
+		QByteArray _requestMethod, _requestUri, _requestFragment, _requestPath, _requestQueryString, _requestHttpVersion;
+		QVector<HttpHeaderRef> _requestHeadersRef;
+		HttpHeaderCollection _requestHeaders;
+		int _requestContentLength;
+
+		// Response fields.
+		QByteArray _responseHeadersBuffer;
+		int _responseStatusCode;
+		qint64 _responseContentLength, _responseContentBytesSent;
+		bool _responseConnectionKeepAlive;
+
+	private:
+		void initialize();
+		void transitionToReceivingHeaders();
+		void transitionToReceivingContent();
+		void transitionToSendingHeaders();
+		void transitionToSendingContent();
+		void transitionToCompleted();
+		void transitionToFlushing();
+		void transitionToClosed();
+		void writeRequestErrorResponse(int statusCode = 400); // Used internally when an error happens while receiving a request. It sends an error response to the client and closes the connection right away.
+		static void parser_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen);
+
+	private slots:
+		void processInput();
+		void flush();
+		void drain();
+
+	public:
+		HttpRequest(QIODevice* inputOutputDevice, QObject* parent = 0);
+		HttpRequest(QIODevice* inputDevice, QIODevice* outputDevice, QObject* parent = 0);
+		~HttpRequest();
+
+		inline QIODevice* inputDevice() const { return _inputDevice; }
+		inline QIODevice* outputDevice() const { return _outputDevice; }
+		inline State state() const { return _state; }
+
+		QHostAddress remoteAddress() const;
+
+		// Request members.
+		inline const QByteArray& requestMethod() const { return _requestMethod; }
+		inline const QByteArray& requestUri() const { return _requestUri; }
+		inline const QByteArray& requestFragment() const { return _requestFragment; }
+		inline const QByteArray& requestPath() const { return _requestPath; }
+		inline const QByteArray& requestQueryString() const { return _requestQueryString; }
+		inline const QByteArray& requestHttpVersion() const { return _requestHttpVersion; }
+		inline const HttpHeaderCollection& requestHeaders() const { return _requestHeaders; }
+		QByteArray getRequestHeaderValue(const QByteArray& field);
+		QByteArray requestContent() const;
+
+		// Response members.
+		int responseStatusCode() const { return _responseStatusCode; }
+		qint64 responseContentLength() const { return _responseContentLength; }
+
+	public slots:
+		void writeResponse(int statusCode = 200, const HttpHeaderCollection& headers = HttpHeaderCollection(), const QByteArray& content = QByteArray());
+		void writeResponseString(int statusCode = 200, const HttpHeaderCollection& headers = HttpHeaderCollection(), const QString& content = QString());
+		void writeHeaders(int statusCode = 200, const HttpHeaderCollection& headers = HttpHeaderCollection());
+		void writeContent(const QByteArray& content);
+		void close(); // Close communication channels right away, no matter if a response was sent or not.
+
+	signals:
+		void ready(HttpRequest* self);		// The request is ready to be processed, all request headers and content have been received.
+		void completed(HttpRequest* self);	// The response is completed, all response headers and content have been sent.
+		void closed(HttpRequest* self);	// The connection is closing, no further requests will arrive on this object.
+	};
+}
+
+#endif // _PILLOW_HTTPREQUEST_H_
