@@ -2,7 +2,7 @@ include(../examples.pri)
 
 TEMPLATE = app
 
-QT       += core network testlib script
+QT       += core network testlib
 QT       -= gui
 
 CONFIG   += console
@@ -13,5 +13,4 @@ DEPENDPATH = . ../../pillowcore
 LIBS += -L../../lib -lpillowcore
 
 SOURCES += simplessl.cpp
- 
-unix: QMAKE_POST_LINK = $(COPY_FILE) "$$PWD/test.key" "$$OUT_PWD/test.key" && $(COPY_FILE) "$$PWD/test.crt" "$$OUT_PWD/test.crt"
+RESOURCES += simplessl.qrc

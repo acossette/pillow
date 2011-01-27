@@ -18,6 +18,7 @@ HEADERS += \
     HttpServerTest.h \
     HttpRequestTest.h
 
-POST_TARGETDEPS += ../lib/libpillowcore.a
+RESOURCES += tests.qrc
 
-unix: QMAKE_POST_LINK = $(COPY_FILE) "$$PWD/test.key" "$$OUT_PWD/test.key" && $(COPY_FILE) "$$PWD/test.crt" "$$OUT_PWD/test.crt"
+unix: POST_TARGETDEPS += ../lib/libpillowcore.a
+win32: POST_TARGETDEPS += ../lib/pillowcore.lib

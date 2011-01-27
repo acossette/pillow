@@ -764,10 +764,10 @@ void HttpRequestSslSocketTest::sslSocket_sslErrors(const QList<QSslError>& )
 
 void HttpRequestSslSocketTest::init()
 {
-	QVERIFY(QFile::exists("test.crt"));
-	QVERIFY(QFile::exists("test.key"));
-	QFile certificateFile("test.crt"); QVERIFY(certificateFile.open(QIODevice::ReadOnly));
-	QFile keyFile("test.key"); QVERIFY(keyFile.open(QIODevice::ReadOnly));
+	QVERIFY(QFile::exists(":/test.crt"));
+	QVERIFY(QFile::exists(":/test.key"));
+	QFile certificateFile(":/test.crt"); QVERIFY(certificateFile.open(QIODevice::ReadOnly));
+	QFile keyFile(":/test.key"); QVERIFY(keyFile.open(QIODevice::ReadOnly));
 	QSslCertificate certificate(&certificateFile);
 	QSslKey key(&keyFile, QSsl::Rsa);
 

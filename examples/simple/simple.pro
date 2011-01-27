@@ -2,7 +2,7 @@ include(../examples.pri)
 
 TEMPLATE = app
 
-QT       += core network testlib script
+QT       += core network testlib
 QT       -= gui
 
 CONFIG   += console
@@ -13,5 +13,3 @@ DEPENDPATH = . ../../pillowcore
 LIBS += -L../../lib -lpillowcore
 
 SOURCES += simple.cpp
-
- 

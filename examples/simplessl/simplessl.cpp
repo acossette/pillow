@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
 {
 	QCoreApplication a(argc, argv);
 
-	QFile certificateFile("test.crt");
+	QFile certificateFile(":/test.crt");
 	if (!certificateFile.open(QIODevice::ReadOnly))
 	{
 		qDebug() << "Could not open certificate file 'test.crt'";
@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
 	}
 	QSslCertificate certificate(&certificateFile);
 
-	QFile keyFile("test.key");
+	QFile keyFile(":/test.key");
 	if (!keyFile.open(QIODevice::ReadOnly)){
 		qDebug() << "Could not open key file 'test.key'";
 		exit(3);
@@ -37,6 +37,7 @@ int main(int argc, char *argv[])
 		new HttpHandler404(handler);
 	QObject::connect(&server, SIGNAL(requestReady(HttpRequest*)), handler, SLOT(handleRequest(HttpRequest*)));
 	
+//  Client socket example:
 //	QSslSocket sslSocket;
 //	sslSocket.setLocalCertificate(certificate);
 //	sslSocket.setPrivateKey(key);
