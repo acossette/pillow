@@ -16,5 +16,7 @@ SOURCES += qtscript.cpp
 
 OTHER_FILES += test.js
 
-#unix: QMAKE_POST_LINK = $(COPY_FILE) "$$PWD/*.js" "$$OUT_PWD"
-#win32: QMAKE_POST_LINK = xcopy /Y /D \"$$PWD/*.js\" \"$$OUT_PWD\"
+!contains(PWD, $$OUT_PWD) {
+	unix: QMAKE_POST_LINK = $(COPY_FILE) "$$PWD/test.js" "$$OUT_PWD"
+	win32: QMAKE_POST_LINK = xcopy /Y /D \"$$PWD/test.js\" \"$$OUT_PWD\"
+}
