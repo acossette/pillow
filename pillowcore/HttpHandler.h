@@ -36,7 +36,7 @@ namespace Pillow
 		Q_OBJECT
 		
 	public:
-		HttpHandlerStack(QObject* parent);
+		HttpHandlerStack(QObject* parent = 0);
 		
 		QList<HttpHandler*> GetHandlers() const;
 		
