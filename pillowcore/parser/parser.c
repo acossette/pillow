@@ -80,7 +80,7 @@ size_t thin_http_parser_execute(http_parser *parser, const char *buffer, size_t 
   pe = buffer+len;
 
   assert(*pe == '\0' && "pointer does not end on NUL");
-  assert(pe - p == len - off && "pointers aren't same distance");
+  assert((int)(pe - p) == (int)(len - off) && "pointers aren't same distance");
 
 
   
