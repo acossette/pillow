@@ -1,23 +1,22 @@
 # Pillow - A small, light and fluffy web server.
 
-Pillow is a small http server library built with Qt. It is meant to either be embedded in Qt apps, where it can assist in exposing an http interface to the app, or to be used as the basis for implementing a small web server app using Qt and/or QtScript.
+Pillow is a small http server library built with Qt. It is meant to be embedded in Qt apps, where it can assist in exposing an http interface to the app, or to be used as the basis for implementing a small web server app using Qt and/or QtScript.
 
 ## Pillow is 
 
-* Easy to integrate and use
+* An event based http server, not relying on worker threads to server requests
 * A simple code base, easy to work with, easy to extend
-* Fast, with very few or no memory allocations per request
-* Memory efficient, reusing existing buffers when possible
+* Fast, with very few memory allocations per request
+* Memory efficient, reusing and sharing existing buffers when possible
 * Portable, tested on Linux and Windows
 * IO channel independant, able to communicate through TCP sockets, SSL TCP sockets, Unix domain sockets, named pipes, memory buffers, etc.
-* Event based, not relying on worker threads to serve requests
 * Including a few useful middleware-like modules
 
 ## Pillow is not
 
-Pillow is not meant to be used in a hostile environment (such as a public server). While it contains a few basic mecanism to defend itself against malicious request, I did not develop Pillow with security as my main concern.
+Pillow is not a web application framework. Pillow does not provide a full framework to develop web applications; it only deals with receiving client requests, handling them to you and sending back your response. Whether you develop a C++ or QtScript/Javascript app framework, or integrate Ruby and a Rack interface to run Rails app on top of it is up to you. The Pillow core does not go there.
 
-Pillow is not a web application framework. Pillow does not provide a framework to develop web applications; it only deals with receiving client requests, handling them to you and sending back your response. Whether you develop a C++ or QtScript/Javascript app framework, or integrate Ruby and a Rack interface to run Rails app on top of it is up to you. The Pillow core does not go there.
+Pillow is not meant to be used in a hostile environment (such as a public server). While it contains a few basic mecanism to defend itself against malicious request, I did not develop Pillow with security as my main concern. Pillow requires the Qt event loop, which while not specifically optimized for networking code, allows for using all of Qt's asynchronous classes.
 
 ## Examples
 
