@@ -7,7 +7,7 @@
 #include <QFileInfo>
 using namespace Pillow;
 
-Q_DECLARE_METATYPE(Pillow::HttpHeaderCollection)
+Q_DECLARE_METATYPE(HttpHeaderCollection)
 
 static QScriptValue toScriptValue(QScriptEngine *engine, const HttpHeaderCollection &headers)
 {
@@ -109,6 +109,9 @@ bool HttpHandlerQtScript::handleRequest(HttpRequest *request)
 		engine->clearExceptions();
 		return true;
 	}
+	
+	QString s = result.toString();
+	s;
 
 	return result.toBool();
 }
