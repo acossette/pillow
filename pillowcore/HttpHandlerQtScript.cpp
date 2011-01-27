@@ -110,9 +110,6 @@ bool HttpHandlerQtScript::handleRequest(HttpRequest *request)
 		return true;
 	}
 	
-	QString s = result.toString();
-	s;
-
 	return result.toBool();
 }
 
