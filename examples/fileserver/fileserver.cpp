@@ -26,11 +26,11 @@ public:
 			QByteArray result;
 			if (server != NULL)
 			{
-				result.append("Alive connections: ").append(QByteArray::number(server->findChildren<HttpRequest*>().size())).append("\n");
+				result.append("Alive connections: ").append(QByteArray::number(server->findChildren<Pillow::HttpRequest*>().size())).append("\n");
 			}
 			if (handler != NULL)
 			{
-				result.append("Alive big file transfers: ").append(QByteArray::number(handler->findChildren<HttpHandlerFileTransfer*>().size())).append("\n");
+				result.append("Alive big file transfers: ").append(QByteArray::number(handler->findChildren<Pillow::HttpHandlerFileTransfer*>().size())).append("\n");
 			}
 			
 			rq->writeResponse(200, HttpHeaderCollection(), result);

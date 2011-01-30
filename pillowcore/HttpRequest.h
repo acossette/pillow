@@ -78,7 +78,8 @@ namespace Pillow
 
 		QHostAddress remoteAddress() const;
 
-		// Request members.
+		// Request members. Note: the underlying shared QByteArray data remains valid until the completed() signal
+		// is emitted. Call detach() on the QByteArrays if you wish to create a deep copy of the data and keep it longer.
 		inline const QByteArray& requestMethod() const { return _requestMethod; }
 		inline const QByteArray& requestUri() const { return _requestUri; }
 		inline const QByteArray& requestFragment() const { return _requestFragment; }
@@ -94,16 +95,16 @@ namespace Pillow
 		qint64 responseContentLength() const { return _responseContentLength; }
 
 	public slots:
-		void writeResponse(int statusCode = 200, const HttpHeaderCollection& headers = HttpHeaderCollection(), const QByteArray& content = QByteArray());
-		void writeResponseString(int statusCode = 200, const HttpHeaderCollection& headers = HttpHeaderCollection(), const QString& content = QString());
-		void writeHeaders(int statusCode = 200, const HttpHeaderCollection& headers = HttpHeaderCollection());
+		void writeResponse(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QByteArray& content = QByteArray());
+		void writeResponseString(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QString& content = QString());
+		void writeHeaders(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection());
 		void writeContent(const QByteArray& content);
 		void close(); // Close communication channels right away, no matter if a response was sent or not.
 
 	signals:
-		void ready(Pillow::HttpRequest* self);		// The request is ready to be processed, all request headers and content have been received.
-		void completed(Pillow::HttpRequest* self);	// The response is completed, all response headers and content have been sent.
-		void closed(Pillow::HttpRequest* self);	// The connection is closing, no further requests will arrive on this object.
+		void ready(Pillow::HttpRequest* self);     // The request is ready to be processed, all request headers and content have been received.
+		void completed(Pillow::HttpRequest* self); // The response is completed, all response headers and content have been sent.
+		void closed(Pillow::HttpRequest* self);    // The connection is closing, no further requests will arrive on this object.
 	};
 }
 

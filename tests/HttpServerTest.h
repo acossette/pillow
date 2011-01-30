@@ -19,7 +19,7 @@ class HttpRequest;
 //	QList<HttpRequest*> requests;
 
 //protected slots:
-//	void server_requestReady(HttpRequest* request);
+//	void server_requestReady(Pillow::HttpRequest* request);
 
 //};
 

@@ -24,8 +24,8 @@ Pillow is not meant to be used in a hostile environment (such as a public server
 	
 	HttpServer* server = new HttpServer(QHostAddress::Any, 4567);
 	HttpHandlerFile* handler = new HttpHandlerFile("/some/public/path");
-	connect(server, SIGNAL(requestReady(HttpRequest*)),
-	        handler, SLOT(handleRequest(HttpRequest*)));
+	connect(server, SIGNAL(requestReady(Pillow::HttpRequest*)),
+	        handler, SLOT(handleRequest(Pillow::HttpRequest*)));
 
 ### A simple QtScript/Javascript web application:
 	
@@ -35,8 +35,8 @@ Pillow is not meant to be used in a hostile environment (such as a public server
 		new HttpHandlerLog(handler);
 		new HttpHandlerQtScriptFile(scriptEngine, "test.js", "handleRequest", true, handler);
 		new HttpHandler404(handler);
-	connect(server, SIGNAL(requestReady(HttpRequest*)), 
-	        handler, SLOT(handleRequest(HttpRequest*)));
+	connect(server, SIGNAL(requestReady(Pillow::HttpRequest*)),
+	        handler, SLOT(handleRequest(Pillow::HttpRequest*)));
 
 ## Building
 

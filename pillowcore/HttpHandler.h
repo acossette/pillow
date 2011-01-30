@@ -84,10 +84,10 @@ namespace Pillow
 	class HttpHandlerLog : public HttpHandler
 	{
 		Q_OBJECT
-		QHash<HttpRequest*, QElapsedTimer*> requestTimerMap;
+		QHash<Pillow::HttpRequest*, QElapsedTimer*> requestTimerMap;
 	
 	private slots:
-		void requestCompleted(HttpRequest* request);
+		void requestCompleted(Pillow::HttpRequest* request);
 		void requestDestroyed(QObject* request);
 	
 	public:
@@ -131,7 +131,7 @@ namespace Pillow
 		int _bufferSize;
 	
 	public:
-		HttpHandlerFileTransfer(QIODevice* sourceDevice, HttpRequest* targetRequest, int bufferSize = HttpHandlerFile::DefaultBufferSize);
+		HttpHandlerFileTransfer(QIODevice* sourceDevice, Pillow::HttpRequest* targetRequest, int bufferSize = HttpHandlerFile::DefaultBufferSize);
 	
 	public slots:
 		void writeNextPayload();

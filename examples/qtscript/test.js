@@ -1,3 +1,5 @@
+// Very miniature Sinatra-like DSL support.
+
 var Sinatra = {};
 Sinatra.App = function(setupFunc)
 {
@@ -63,7 +65,7 @@ Sinatra.App.prototype =
 				else if (typeof result == "string")
 					request.nativeRequest.writeResponseString(200, {}, result);					
 				else if (typeof result == "number")
-					request.nativeRequest.writeResponseString(result);					
+					request.nativeRequest.writeResponseString(result);
 
 				return true;
 			}
@@ -95,7 +97,12 @@ var sinatraApp = new Sinatra.App(function()
 		return [200, {}, "Hello there!"];
 	});
 
-	this.get('/world/:id/:other/:another', function()
+	this.get('/goodbye', function()
+	{
+		return [302, {'Location': '/hello'}, ""];
+	});
+
+	this.get('/withparam/:id/:other/:another', function()
 	{
 		var output = "";
 		for (var p in this.params)
@@ -103,18 +110,12 @@ var sinatraApp = new Sinatra.App(function()
 		return [200, {}, output];
 	});
 	
-	this.get('/world/:id', function()
+	this.get('/withparam/:id', function()
 	{
 		return [200, {}, "World with id:" + this.params['id']];
-	});
+	});	
 
-	
-	this.get('/world', function()
-	{
-		return [302, {'Location': '/hello'}, ""];
-	});
-
-	this.get('/splatted/*yeah', function()
+	this.get('/onesplat/*firstsplat', function()
 	{
 		var output = "";
 		for (var p in this.params)
@@ -122,7 +123,7 @@ var sinatraApp = new Sinatra.App(function()
 		return [200, {}, output];
 	});	
 
-	this.get('/doublesplat/*yeah/*hehe', function()
+	this.get('/twosplat/*firstsplat/*secondsplat', function()
 	{
 		var output = "";
 		for (var p in this.params)
@@ -131,7 +132,9 @@ var sinatraApp = new Sinatra.App(function()
 	});	
 });
 
+
 function handleRequest(request)
 {
+	// This is the method that actually gets called by the QtScript handler.
 	return sinatraApp.handleRequest(request);
 }

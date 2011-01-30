@@ -7,9 +7,9 @@
 #include <QFileInfo>
 using namespace Pillow;
 
-Q_DECLARE_METATYPE(HttpHeaderCollection)
+Q_DECLARE_METATYPE(Pillow::HttpHeaderCollection)
 
-static QScriptValue toScriptValue(QScriptEngine *engine, const HttpHeaderCollection &headers)
+static QScriptValue toScriptValue(QScriptEngine *engine, const Pillow::HttpHeaderCollection &headers)
 {
 	QScriptValue result = engine->newObject();
 
@@ -19,7 +19,7 @@ static QScriptValue toScriptValue(QScriptEngine *engine, const HttpHeaderCollect
 	return result;
 }
 
-static void fromScriptValue(const QScriptValue &obj, HttpHeaderCollection &headers)
+static void fromScriptValue(const QScriptValue &obj, Pillow::HttpHeaderCollection &headers)
 {
 	for (QScriptValueIterator it(obj); it.hasNext();)
 	{
@@ -34,7 +34,7 @@ static void registerMarshallers(QScriptEngine* engine)
 	if (engine->property("_HttpHandlerQtScript_registered").toBool() == true) return;
 	engine->setProperty("_HttpHandlerQtScript_registered", true);
 
-	qScriptRegisterMetaType<HttpHeaderCollection>(engine, toScriptValue, fromScriptValue);
+	qScriptRegisterMetaType<Pillow::HttpHeaderCollection>(engine, toScriptValue, fromScriptValue);
 }
 
 static QString objectToString(const QScriptValue &object)
@@ -77,7 +77,7 @@ void HttpHandlerQtScript::setScriptFunction(const QScriptValue &scriptFunction)
 		registerMarshallers(scriptFunction.engine());
 }
 
-bool HttpHandlerQtScript::handleRequest(HttpRequest *request)
+bool HttpHandlerQtScript::handleRequest(Pillow::HttpRequest *request)
 {
 	if (!_scriptFunction.isFunction()) return false;
 
@@ -147,7 +147,7 @@ void HttpHandlerQtScriptFile::setAutoReload(bool autoReload)
 	_autoReload = autoReload;
 }
 
-bool HttpHandlerQtScriptFile::handleRequest(HttpRequest *request)
+bool HttpHandlerQtScriptFile::handleRequest(Pillow::HttpRequest *request)
 {
 	if (!_lastModified.isValid() || (_autoReload && QFileInfo(_fileName).lastModified() > _lastModified))
 	{

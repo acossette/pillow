@@ -4,7 +4,7 @@
 //void HttpServerTest::initTestCase()
 //{
 //	server = new HttpServer(QHostAddress::Any, 39261);
-//	connect(server, SIGNAL(requestReady(HttpRequest*)), this, SLOT(server_requestReady(HttpRequest*)));
+//	connect(server, SIGNAL(requestReady(Pillow::HttpRequest*)), this, SLOT(server_requestReady(Pillow::HttpRequest*)));
 //}
 
 //void HttpServerTest::cleanupTestCase()
@@ -13,7 +13,7 @@
 //	requests.clear();
 //}
 
-//void HttpServerTest::server_requestReady(HttpRequest* request)
+//void HttpServerTest::server_requestReady(Pillow::HttpRequest* request)
 //{
 //	requests.push_back(request);
 //}

@@ -27,7 +27,7 @@ HttpHandlerStack::HttpHandlerStack(QObject *parent)
 {
 }
 
-bool HttpHandlerStack::handleRequest(HttpRequest *request)
+bool HttpHandlerStack::handleRequest(Pillow::HttpRequest *request)
 {
 	foreach (QObject* object, children())
 	{
@@ -77,7 +77,7 @@ HttpHandler404::HttpHandler404(QObject *parent)
 {
 }
 
-bool HttpHandler404::handleRequest(HttpRequest *request)
+bool HttpHandler404::handleRequest(Pillow::HttpRequest *request)
 {
 	request->writeResponseString(404, HttpHeaderCollection(), QString("The requested resource '%1' does not exist on this server").arg(QString(request->requestPath())));
 	return true;
@@ -98,13 +98,13 @@ HttpHandlerLog::~HttpHandlerLog()
 		delete timer;
 }
 
-bool HttpHandlerLog::handleRequest(HttpRequest *request)
+bool HttpHandlerLog::handleRequest(Pillow::HttpRequest *request)
 {
 	QElapsedTimer* timer = requestTimerMap.value(request, NULL);
 	if (timer == NULL)
 	{
 		timer = requestTimerMap[request] = new QElapsedTimer();
-		connect(request, SIGNAL(completed(HttpRequest*)), this, SLOT(requestCompleted(HttpRequest*)));
+		connect(request, SIGNAL(completed(Pillow::HttpRequest*)), this, SLOT(requestCompleted(Pillow::HttpRequest*)));
 		connect(request, SIGNAL(destroyed(QObject*)), this, SLOT(requestDestroyed(QObject*)));
 	}
 	timer->start();
@@ -112,7 +112,7 @@ bool HttpHandlerLog::handleRequest(HttpRequest *request)
 	return false;
 }
 
-void HttpHandlerLog::requestCompleted(HttpRequest *request)
+void HttpHandlerLog::requestCompleted(Pillow::HttpRequest *request)
 {
 	QElapsedTimer* timer = requestTimerMap.value(request, NULL);
 	if (timer)
@@ -167,7 +167,7 @@ void HttpHandlerFile::setBufferSize(int bytes)
 	_bufferSize = bytes;
 }
 
-bool HttpHandlerFile::handleRequest(HttpRequest *request)
+bool HttpHandlerFile::handleRequest(Pillow::HttpRequest *request)
 {	
 	if (_publicPath.isEmpty()) { return false; } // Just don't allow access to the root filesystem unless really configured for it.
 
@@ -247,8 +247,8 @@ HttpHandlerFileTransfer::HttpHandlerFileTransfer(QIODevice *sourceDevice, HttpRe
 	}
 
 	connect(sourceDevice, SIGNAL(destroyed()), this, SLOT(deleteLater()));
-	connect(targetRequest, SIGNAL(completed(HttpRequest*)), this, SLOT(deleteLater()));
-	connect(targetRequest, SIGNAL(closed(HttpRequest*)), this, SLOT(deleteLater()));
+	connect(targetRequest, SIGNAL(completed(Pillow::HttpRequest*)), this, SLOT(deleteLater()));
+	connect(targetRequest, SIGNAL(closed(Pillow::HttpRequest*)), this, SLOT(deleteLater()));
 	connect(targetRequest, SIGNAL(destroyed()), this, SLOT(deleteLater()));
 	connect(targetRequest->outputDevice(), SIGNAL(bytesWritten(qint64)), this, SLOT(writeNextPayload()));
 }

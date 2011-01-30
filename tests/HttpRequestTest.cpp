@@ -26,7 +26,7 @@ static void wait(int milliseconds = 5)
 HttpRequestTest::HttpRequestTest()
     : request(NULL), readySpy(NULL), completedSpy(NULL), closedSpy(NULL)
 {
-	qRegisterMetaType<HttpRequest*>("HttpRequest*");
+	qRegisterMetaType<Pillow::HttpRequest*>("Pillow::HttpRequest*");
 }
 
 void HttpRequestTest::init()
@@ -669,9 +669,9 @@ void HttpRequestTcpSocketTest::init()
 	QVERIFY(client->waitForConnected(1000));
 	while (request == NULL)
 		QCoreApplication::processEvents();
-	readySpy = new QSignalSpy(request, SIGNAL(ready(HttpRequest*)));
-	completedSpy = new QSignalSpy(request, SIGNAL(completed(HttpRequest*)));
-	closedSpy = new QSignalSpy(request, SIGNAL(closed(HttpRequest*)));
+	readySpy = new QSignalSpy(request, SIGNAL(ready(Pillow::HttpRequest*)));
+	completedSpy = new QSignalSpy(request, SIGNAL(completed(Pillow::HttpRequest*)));
+	closedSpy = new QSignalSpy(request, SIGNAL(closed(Pillow::HttpRequest*)));
 }
 
 void HttpRequestTcpSocketTest::cleanup()
@@ -790,9 +790,9 @@ void HttpRequestSslSocketTest::init()
 	QVERIFY(client->isEncrypted());
 
 	while (request == NULL) QCoreApplication::processEvents();
-	readySpy = new QSignalSpy(request, SIGNAL(ready(HttpRequest*)));
-	completedSpy = new QSignalSpy(request, SIGNAL(completed(HttpRequest*)));
-	closedSpy = new QSignalSpy(request, SIGNAL(closed(HttpRequest*)));
+	readySpy = new QSignalSpy(request, SIGNAL(ready(Pillow::HttpRequest*)));
+	completedSpy = new QSignalSpy(request, SIGNAL(completed(Pillow::HttpRequest*)));
+	closedSpy = new QSignalSpy(request, SIGNAL(closed(Pillow::HttpRequest*)));
 }
 
 void HttpRequestSslSocketTest::cleanup()
@@ -859,9 +859,9 @@ void HttpRequestLocalSocketTest::init()
 	QVERIFY(client->waitForConnected(1000));
 	while (request == NULL)
 		QCoreApplication::processEvents();
-	readySpy = new QSignalSpy(request, SIGNAL(ready(HttpRequest*)));
-	completedSpy = new QSignalSpy(request, SIGNAL(completed(HttpRequest*)));
-	closedSpy = new QSignalSpy(request, SIGNAL(closed(HttpRequest*)));
+	readySpy = new QSignalSpy(request, SIGNAL(ready(Pillow::HttpRequest*)));
+	completedSpy = new QSignalSpy(request, SIGNAL(completed(Pillow::HttpRequest*)));
+	closedSpy = new QSignalSpy(request, SIGNAL(closed(Pillow::HttpRequest*)));
 }
 
 void HttpRequestLocalSocketTest::cleanup()
@@ -919,9 +919,9 @@ void HttpRequestBufferTest::init()
 		
 	request = new HttpRequest(inputBuffer, outputBuffer, NULL);
 	
-	readySpy = new QSignalSpy(request, SIGNAL(ready(HttpRequest*)));
-	completedSpy = new QSignalSpy(request, SIGNAL(completed(HttpRequest*)));
-	closedSpy = new QSignalSpy(request, SIGNAL(closed(HttpRequest*)));
+	readySpy = new QSignalSpy(request, SIGNAL(ready(Pillow::HttpRequest*)));
+	completedSpy = new QSignalSpy(request, SIGNAL(completed(Pillow::HttpRequest*)));
+	closedSpy = new QSignalSpy(request, SIGNAL(closed(Pillow::HttpRequest*)));
 }
 
 void HttpRequestBufferTest::cleanup()
