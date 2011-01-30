@@ -55,8 +55,8 @@ void HttpServer::this_newConnection()
 	}
 
 	HttpRequest* request = new HttpRequest(nextPendingConnection(), this);
-	connect(request, SIGNAL(ready(HttpRequest*)), this, SIGNAL(requestReady(HttpRequest*)));
-	connect(request, SIGNAL(closed(HttpRequest*)), request, SLOT(deleteLater()));
+	connect(request, SIGNAL(ready(Pillow::HttpRequest*)), this, SIGNAL(requestReady(Pillow::HttpRequest*)));
+	connect(request, SIGNAL(closed(Pillow::HttpRequest*)), request, SLOT(deleteLater()));
 }
 
 //
@@ -136,6 +136,6 @@ HttpLocalServer::HttpLocalServer(const QString& serverName, QObject *parent /*= 
 void HttpLocalServer::this_newConnection()
 {
 	HttpRequest* request = new HttpRequest(nextPendingConnection(), this);
-	connect(request, SIGNAL(ready(HttpRequest*)), this, SIGNAL(requestReady(HttpRequest*)));
-	connect(request, SIGNAL(closed(HttpRequest*)), request, SLOT(deleteLater()));
+	connect(request, SIGNAL(ready(Pillow::HttpRequest*)), this, SIGNAL(requestReady(Pillow::HttpRequest*)));
+	connect(request, SIGNAL(closed(Pillow::HttpRequest*)), request, SLOT(deleteLater()));
 }

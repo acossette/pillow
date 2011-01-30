@@ -20,10 +20,10 @@ namespace Pillow
 	
 		const QScriptValue& scriptFunction() const { return _scriptFunction; }
 	
-	public slots:
+	public:
 		void setScriptFunction(const QScriptValue& scriptFunction);
 	
-		virtual bool handleRequest(HttpRequest *request);
+		virtual bool handleRequest(Pillow::HttpRequest *request);
 	};
 	
 	class HttpHandlerQtScriptFile : public HttpHandlerQtScript
@@ -43,12 +43,12 @@ namespace Pillow
 		const QString& functionName() const { return _functionName; }
 		bool autoReload() const { return _autoReload; }
 	
-	public slots:
+	public:
 		void setFileName(const QString& fileName);
 		void setFunctionName(const QString& functionName);
 		void setAutoReload(bool autoReload);
 	
-		virtual bool handleRequest(HttpRequest *request);	
+		virtual bool handleRequest(Pillow::HttpRequest *request);
 	};
 }
 

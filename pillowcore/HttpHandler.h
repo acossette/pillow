@@ -24,7 +24,7 @@ namespace Pillow
 		HttpHandler(QObject *parent = 0);
 	
 	public slots:
-		virtual bool handleRequest(HttpRequest* request) = 0;
+		virtual bool handleRequest(Pillow::HttpRequest* request) = 0;
 	};
 	
 	//
@@ -40,8 +40,8 @@ namespace Pillow
 		
 		QList<HttpHandler*> GetHandlers() const;
 		
-	public slots:
-		virtual bool handleRequest(HttpRequest *request);
+	public:
+		virtual bool handleRequest(Pillow::HttpRequest *request);
 	};
 
 	//
@@ -57,8 +57,8 @@ namespace Pillow
 	public:
 		HttpHandlerFixed(int statusCode = 200, const QByteArray& content = QByteArray(), QObject* parent = 0);
 
-	public slots:
-		virtual bool handleRequest(HttpRequest* request);
+	public:
+		virtual bool handleRequest(Pillow::HttpRequest* request);
 	};
 
 	
@@ -73,8 +73,8 @@ namespace Pillow
 	public:
 		HttpHandler404(QObject* parent = 0);
 		
-	public slots:
-		virtual bool handleRequest(HttpRequest* request);
+	public:
+		virtual bool handleRequest(Pillow::HttpRequest* request);
 	};
 	
 	//
@@ -94,8 +94,8 @@ namespace Pillow
 		HttpHandlerLog(QObject* parent = 0);
 		~HttpHandlerLog();
 	
-	public slots:
-		virtual bool handleRequest(HttpRequest* request);
+	public:
+		virtual bool handleRequest(Pillow::HttpRequest* request);
 	};
 	
 	//
@@ -116,11 +116,11 @@ namespace Pillow
 	
 		enum { DefaultBufferSize = 512 * 1024 };
 	
-	public slots:
+	public:
 		void setPublicPath(const QString& publicPath);
 		void setBufferSize(int bytes);
 		
-		virtual bool handleRequest(HttpRequest* request);
+		virtual bool handleRequest(Pillow::HttpRequest* request);
 	};
 	
 	class HttpHandlerFileTransfer : public QObject

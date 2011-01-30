@@ -34,7 +34,7 @@ namespace Pillow
 		HttpServer(const QHostAddress& serverAddress, quint16 serverPort, QObject *parent = 0);
 		
 	signals:
-		void requestReady(HttpRequest* request);
+		void requestReady(Pillow::HttpRequest* request);
 	};
 	
 	//
@@ -82,7 +82,7 @@ namespace Pillow
 		HttpLocalServer(const QString& serverName, QObject *parent = 0);
 		
 	signals:
-		void requestReady(HttpRequest* request);	
+		void requestReady(Pillow::HttpRequest* request);	
 	};	
 }
 

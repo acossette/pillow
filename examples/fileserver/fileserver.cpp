@@ -10,7 +10,7 @@ class HttpHandlerStats : public HttpHandler
 public:
 	HttpHandlerStats(QObject* parent = 0) : HttpHandler(parent) {}
 
-	virtual bool handleRequest(HttpRequest* rq)
+	virtual bool handleRequest(Pillow::HttpRequest* rq)
 	{
 		HttpServer* server = NULL;
 		HttpHandler* handler = NULL;
@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 		new HttpHandlerStats(handler);
 		new HttpHandlerFile("/home/alcos/public", handler);
 		new HttpHandler404(handler);
-	QObject::connect(&server, SIGNAL(requestReady(HttpRequest*)), handler, SLOT(handleRequest(HttpRequest*)));
+	QObject::connect(&server, SIGNAL(requestReady(Pillow::HttpRequest*)), handler, SLOT(handleRequest(Pillow::HttpRequest*)));
 
     return a.exec();
 }

@@ -101,9 +101,9 @@ namespace Pillow
 		void close(); // Close communication channels right away, no matter if a response was sent or not.
 
 	signals:
-		void ready(HttpRequest* self);		// The request is ready to be processed, all request headers and content have been received.
-		void completed(HttpRequest* self);	// The response is completed, all response headers and content have been sent.
-		void closed(HttpRequest* self);	// The connection is closing, no further requests will arrive on this object.
+		void ready(Pillow::HttpRequest* self);		// The request is ready to be processed, all request headers and content have been received.
+		void completed(Pillow::HttpRequest* self);	// The response is completed, all response headers and content have been sent.
+		void closed(Pillow::HttpRequest* self);	// The connection is closing, no further requests will arrive on this object.
 	};
 }
 
