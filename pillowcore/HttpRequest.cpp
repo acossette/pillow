@@ -10,6 +10,11 @@ using namespace Pillow;
 
 inline void setFromRawDataAndNullterm(QByteArray& target, char* data, int start, int length)
 {
+	// Reminder: switching between a deep copy/unshared target QByteArray and a shared data QByteArray
+	// will *not* cause memory leaks as Qt allocates and frees the QByteArray control data+buffer in one block.
+	// So the only downside that will happen if an unshared QByteArray is altered to share data is a few bytes wasted
+	// until the QByteArray control block releases the control data + the unshared buffer at some point in the future.
+
 	if (target.data_ptr()) target.data_ptr()->alloc = 0;
 	if (length == 0)
 		target.setRawData("", 0);
@@ -233,7 +238,6 @@ void HttpRequest::transitionToCompleted()
 
 	if (_requestHeadersRef.capacity() > 16)_requestHeadersRef.clear();
 	else while (!_requestHeadersRef.isEmpty()) _requestHeadersRef.pop_back();
-//	while (!_requestHeaders.isEmpty()) _requestHeaders.pop_back();
 
 	if (_responseConnectionKeepAlive)
 	{
