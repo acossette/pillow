@@ -9,17 +9,57 @@ using namespace Pillow;
 // HttpServer
 //
 
-HttpServer::HttpServer(QObject *parent)
-: QTcpServer(parent)
+namespace Pillow
 {
-	connect(this, SIGNAL(newConnection()), this, SLOT(this_newConnection()));
+	class HttpServerPrivate
+	{
+	public:
+		enum { MaximumReserveCount = 50 };
+		
+	public:
+		HttpServer* q_ptr;
+		Q_DECLARE_PUBLIC(HttpServer)
+		QList<HttpRequest*> reservedRequests;
+		
+	public:
+		HttpServerPrivate(HttpServer* server) 
+			: q_ptr(server)
+		{}
+		
+		HttpRequest* takeRequest()
+		{
+			HttpRequest* request = NULL;
+			
+			if (reservedRequests.isEmpty())
+			{
+				request = new HttpRequest(q_ptr);
+				QObject::connect(request, SIGNAL(ready(Pillow::HttpRequest*)), q_ptr, SIGNAL(requestReady(Pillow::HttpRequest*)));
+				QObject::connect(request, SIGNAL(closed(Pillow::HttpRequest*)), q_ptr, SLOT(request_closed(Pillow::HttpRequest*)));
+			}
+			else
+				request = reservedRequests.takeLast();
+			
+			return request;
+		}
+		
+		void putRequest(HttpRequest* request)
+		{
+			while (reservedRequests.size() >= MaximumReserveCount)
+				delete reservedRequests.takeLast();
+
+			reservedRequests.append(request);
+		}
+	};
+}
+
+HttpServer::HttpServer(QObject *parent)
+: QTcpServer(parent), d_ptr(new HttpServerPrivate(this))
+{
 }
 
 HttpServer::HttpServer(const QHostAddress &serverAddress, quint16 serverPort, QObject *parent)
-:	QTcpServer(parent)
+:	QTcpServer(parent), d_ptr(new HttpServerPrivate(this))
 {
-	connect(this, SIGNAL(newConnection()), this, SLOT(this_newConnection()));
-
 	if (!listen(serverAddress, serverPort))
 		qWarning() << QString("HttpServer::HttpServer: could not bind to %1:%2 for listening: %3").arg(serverAddress.toString()).arg(serverPort).arg(errorString());
 }
@@ -28,7 +68,11 @@ void HttpServer::incomingConnection(int socketDescriptor)
 {
 	QTcpSocket* socket = new QTcpSocket();
 	if (socket->setSocketDescriptor(socketDescriptor))
+	{
 		addPendingConnection(socket);
+		nextPendingConnection();
+		createHttpRequest()->initialize(socket, socket);		
+	}
 	else
 	{
 		qWarning() << "HttpServer::incomingConnection: failed to set socket descriptor '" << socketDescriptor << "' on socket.";
@@ -36,27 +80,15 @@ void HttpServer::incomingConnection(int socketDescriptor)
 	}
 }
 
-void HttpServer::this_newConnection()
+void HttpServer::request_closed(Pillow::HttpRequest *request)
 {
-	// Fix for Windows:
-	// Try to destroy existing connections that are closed and that are pending deferred deletion.
-	// This avoids deferring deletions for too long when the server is swamped with new connections,
-	// because on Windows new connections seem to have priority over the deferred deletes..
+	request->inputDevice()->deleteLater();
+	d_ptr->putRequest(request);
+}
 
-	const QList<QObject*>& children = this->children();
-	for (int i = children.size() - 1; i >= 0; --i)
-	{
-		if (qobject_cast<HttpRequest*>(children.at(i)))
-		{
-			HttpRequest* request = static_cast<HttpRequest*>(children.at(i));
-			if (request->state() == HttpRequest::Closed)
-				delete request;
-		}
-	}
-
-	HttpRequest* request = new HttpRequest(nextPendingConnection(), this);
-	connect(request, SIGNAL(ready(Pillow::HttpRequest*)), this, SIGNAL(requestReady(Pillow::HttpRequest*)));
-	connect(request, SIGNAL(closed(Pillow::HttpRequest*)), request, SLOT(deleteLater()));
+HttpRequest* Pillow::HttpServer::createHttpRequest()
+{
+	return d_ptr->takeRequest();
 }
 
 //
@@ -94,6 +126,8 @@ void HttpsServer::incomingConnection(int socketDescriptor)
 		connect(sslSocket, SIGNAL(sslErrors(QList<QSslError>)), this, SLOT(sslSocket_sslErrors(QList<QSslError>)));
 		connect(sslSocket, SIGNAL(encrypted()), this, SLOT(sslSocket_encrypted()));
 		addPendingConnection(sslSocket);
+		nextPendingConnection();
+		createHttpRequest()->initialize(sslSocket, sslSocket);
 	}
 	else
 	{
@@ -122,6 +156,7 @@ void HttpsServer::sslSocket_encrypted()
 HttpLocalServer::HttpLocalServer(QObject *parent)
 	: QLocalServer(parent)
 {
+	connect(this, SIGNAL(newConnection()), this, SLOT(this_newConnection()));
 }
 
 HttpLocalServer::HttpLocalServer(const QString& serverName, QObject *parent /*= 0*/)
@@ -135,7 +170,15 @@ HttpLocalServer::HttpLocalServer(const QString& serverName, QObject *parent /*= 
 
 void HttpLocalServer::this_newConnection()
 {
-	HttpRequest* request = new HttpRequest(nextPendingConnection(), this);
+	QIODevice* device = nextPendingConnection();
+	HttpRequest* request = new HttpRequest(device, this);
+	device->setParent(request);
 	connect(request, SIGNAL(ready(Pillow::HttpRequest*)), this, SIGNAL(requestReady(Pillow::HttpRequest*)));
-	connect(request, SIGNAL(closed(Pillow::HttpRequest*)), request, SLOT(deleteLater()));
+	connect(request, SIGNAL(closed(Pillow::HttpRequest*)), this, SLOT(request_closed(Pillow::HttpRequest*)));
 }
+
+void HttpLocalServer::request_closed(Pillow::HttpRequest *request)
+{
+	request->deleteLater();
+}
+

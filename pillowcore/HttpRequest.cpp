@@ -58,37 +58,46 @@ static const QByteArray expectToken("expect");
 static const QByteArray hundredDashContinueToken("100-continue");
 static const QByteArray keepAliveToken("keep-alive");
 
-HttpRequest::HttpRequest(QIODevice* inputOutputDevice, QObject* parent /* = 0 */)
-	: QObject(parent), _inputDevice(inputOutputDevice), _outputDevice(inputOutputDevice), _state(Uninitialized)
+HttpRequest::HttpRequest(QObject* parent /*= 0*/)
+	: QObject(parent), _inputDevice(NULL), _outputDevice(NULL), _state(Uninitialized)
 {
-	initialize();
+}
+
+HttpRequest::HttpRequest(QIODevice* inputOutputDevice, QObject* parent /* = 0 */)
+	: QObject(parent), _inputDevice(NULL), _outputDevice(NULL), _state(Uninitialized)
+{
+	initialize(inputOutputDevice, inputOutputDevice);
 }
 
 HttpRequest::HttpRequest(QIODevice* inputDevice, QIODevice* outputDevice, QObject* parent /*= 0*/)
-	: QObject(parent), _inputDevice(inputDevice), _outputDevice(outputDevice), _state(Uninitialized)
+	: QObject(parent), _inputDevice(NULL), _outputDevice(NULL), _state(Uninitialized)
 {
-	initialize();
+	initialize(inputDevice, outputDevice);
 }
 
 HttpRequest::~HttpRequest()
-{
-	delete _inputDevice;
-}
+{}
 
-void HttpRequest::initialize()
-{
+void HttpRequest::initialize(QIODevice* inputDevice, QIODevice* outputDevice)
+{		
 	memset(&_parser, 0, sizeof(http_parser));
 	_parser.data = this;
 	_parser.http_field = &HttpRequest::parser_http_field;
-
-	connect(_inputDevice, SIGNAL(readyRead()), this, SLOT(processInput()));
-
-	if (qobject_cast<QAbstractSocket*>(_inputDevice) || qobject_cast<QLocalSocket*>(_inputDevice))
-		connect(_inputDevice, SIGNAL(disconnected()), this, SLOT(close()));
-	else
-		connect(_inputDevice, SIGNAL(aboutToClose()), this, SLOT(close()));
-	
 	_requestHeadersRef.reserve(16);
+
+	if (inputDevice != _inputDevice)
+	{
+		_inputDevice = inputDevice;
+
+		connect(_inputDevice, SIGNAL(readyRead()), this, SLOT(processInput()));
+	
+		if (qobject_cast<QAbstractSocket*>(_inputDevice) || qobject_cast<QLocalSocket*>(_inputDevice))
+			connect(_inputDevice, SIGNAL(disconnected()), this, SLOT(close()));
+		else
+			connect(_inputDevice, SIGNAL(aboutToClose()), this, SLOT(close()));
+	}
+	
+	_outputDevice = outputDevice;
 
 	// Enter the initial working state and schedule processing of any data already available on the device.
 	transitionToReceivingHeaders();
@@ -267,8 +276,12 @@ void HttpRequest::transitionToClosed()
 	_state = Closed;
 
 	if (_inputDevice && _inputDevice->isOpen()) _inputDevice->close();
-	if (_outputDevice && _outputDevice->isOpen()) _outputDevice->close();
+	if (_outputDevice && (_inputDevice != _outputDevice) && _outputDevice->isOpen()) _outputDevice->close();
 	emit closed(this);
+	
+	disconnect(_inputDevice, NULL, this, NULL);
+	_inputDevice = NULL;
+	_outputDevice = NULL;
 }
 
 void HttpRequest::flush()

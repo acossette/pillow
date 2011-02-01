@@ -29,7 +29,7 @@ namespace Pillow
 		http_parser _parser;
 
 	public:
-		enum State { Uninitialized, Initializing, ReceivingHeaders, ReceivingContent, SendingHeaders, SendingContent, Completed, Flushing, Closed };
+		enum State { Uninitialized, ReceivingHeaders, ReceivingContent, SendingHeaders, SendingContent, Completed, Flushing, Closed };
 		enum { MaximumRequestHeaderLength = 32 * 1024 };
 		enum { MaximumRequestContentLength = 128 * 1024 * 1024 };
 		Q_ENUMS(State);
@@ -51,7 +51,6 @@ namespace Pillow
 		bool _responseConnectionKeepAlive;
 
 	private:
-		void initialize();
 		void transitionToReceivingHeaders();
 		void transitionToReceivingContent();
 		void transitionToSendingHeaders();
@@ -68,10 +67,13 @@ namespace Pillow
 		void drain();
 
 	public:
+		HttpRequest(QObject* parent = 0);
 		HttpRequest(QIODevice* inputOutputDevice, QObject* parent = 0);
 		HttpRequest(QIODevice* inputDevice, QIODevice* outputDevice, QObject* parent = 0);
 		~HttpRequest();
 
+		void initialize(QIODevice* inputDevice, QIODevice* outputDevice);
+		
 		inline QIODevice* inputDevice() const { return _inputDevice; }
 		inline QIODevice* outputDevice() const { return _outputDevice; }
 		inline State state() const { return _state; }

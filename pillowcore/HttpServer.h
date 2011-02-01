@@ -16,18 +16,23 @@ namespace Pillow
 	// HttpServer
 	//
 	
+	class HttpServerPrivate;
+	
 	class HttpServer : public QTcpServer
 	{
 		Q_OBJECT
 		Q_PROPERTY(QHostAddress serverAddress READ serverAddress)
 		Q_PROPERTY(int serverPort READ serverPort)
 		Q_PROPERTY(bool listening READ isListening)
+		HttpServerPrivate* d_ptr;
+		Q_DECLARE_PRIVATE(HttpServer)
 		
 	private slots:
-		void this_newConnection();
+		void request_closed(Pillow::HttpRequest* request);
 		
 	protected:
 		virtual void incomingConnection(int socketDescriptor);
+		HttpRequest* createHttpRequest();
 	
 	public:
 		HttpServer(QObject* parent = 0);
@@ -76,6 +81,7 @@ namespace Pillow
 		
 	private slots:
 		void this_newConnection();
+		void request_closed(Pillow::HttpRequest* request);
 		
 	public:
 		HttpLocalServer(QObject* parent = 0);

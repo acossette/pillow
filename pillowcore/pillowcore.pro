@@ -25,4 +25,4 @@ HEADERS += \
     HttpRequest.h \
     HttpHelpers.h
 
-QMAKE_CXXFLAGS = -O1
+#QMAKE_CXXFLAGS = -O1
