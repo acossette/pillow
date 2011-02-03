@@ -1,6 +1,7 @@
 #include <QtCore/QtCore>
 #include <QtTest/QTest>
 #include "HttpRequestTest.h"
+#include "HttpServerTest.h"
 
 template<class T> int execTest()
 {
@@ -16,5 +17,8 @@ int main(int argc, char *argv[])
 	result += execTest<HttpRequestSslSocketTest>();
 	result += execTest<HttpRequestLocalSocketTest>();
 	result += execTest<HttpRequestBufferTest>();
+	result += execTest<HttpServerTest>();
+	result += execTest<HttpsServerTest>();
+	result += execTest<HttpLocalServerTest>();
 	return result;
 }

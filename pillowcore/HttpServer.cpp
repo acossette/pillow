@@ -17,14 +17,19 @@ namespace Pillow
 		enum { MaximumReserveCount = 50 };
 		
 	public:
-		HttpServer* q_ptr;
-		Q_DECLARE_PUBLIC(HttpServer)
+		QObject* q_ptr;
 		QList<HttpRequest*> reservedRequests;
 		
 	public:
-		HttpServerPrivate(HttpServer* server) 
+		HttpServerPrivate(QObject* server) 
 			: q_ptr(server)
 		{}
+		
+		~HttpServerPrivate()
+		{
+			while (!reservedRequests.isEmpty())
+				delete reservedRequests.takeLast();
+		}
 		
 		HttpRequest* takeRequest()
 		{
@@ -62,6 +67,11 @@ HttpServer::HttpServer(const QHostAddress &serverAddress, quint16 serverPort, QO
 {
 	if (!listen(serverAddress, serverPort))
 		qWarning() << QString("HttpServer::HttpServer: could not bind to %1:%2 for listening: %3").arg(serverAddress.toString()).arg(serverPort).arg(errorString());
+}
+
+HttpServer::~HttpServer()
+{
+	delete d_ptr;
 }
 
 void HttpServer::incomingConnection(int socketDescriptor)
@@ -154,13 +164,13 @@ void HttpsServer::sslSocket_encrypted()
 //
 
 HttpLocalServer::HttpLocalServer(QObject *parent)
-	: QLocalServer(parent)
+	: QLocalServer(parent), d_ptr(new HttpServerPrivate(this))
 {
 	connect(this, SIGNAL(newConnection()), this, SLOT(this_newConnection()));
 }
 
 HttpLocalServer::HttpLocalServer(const QString& serverName, QObject *parent /*= 0*/)
-	: QLocalServer(parent)
+	: QLocalServer(parent), d_ptr(new HttpServerPrivate(this))
 {
 	connect(this, SIGNAL(newConnection()), this, SLOT(this_newConnection()));
 
@@ -171,14 +181,12 @@ HttpLocalServer::HttpLocalServer(const QString& serverName, QObject *parent /*= 
 void HttpLocalServer::this_newConnection()
 {
 	QIODevice* device = nextPendingConnection();
-	HttpRequest* request = new HttpRequest(device, this);
-	device->setParent(request);
-	connect(request, SIGNAL(ready(Pillow::HttpRequest*)), this, SIGNAL(requestReady(Pillow::HttpRequest*)));
-	connect(request, SIGNAL(closed(Pillow::HttpRequest*)), this, SLOT(request_closed(Pillow::HttpRequest*)));
+	d_ptr->takeRequest()->initialize(device, device);
 }
 
 void HttpLocalServer::request_closed(Pillow::HttpRequest *request)
 {
-	request->deleteLater();
+	request->inputDevice()->deleteLater();
+	d_ptr->putRequest(request);
 }
 
