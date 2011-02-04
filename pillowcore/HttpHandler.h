@@ -85,15 +85,20 @@ namespace Pillow
 	{
 		Q_OBJECT
 		QHash<Pillow::HttpRequest*, QElapsedTimer*> requestTimerMap;
-	
+		QPointer<QIODevice> _device;
+		
 	private slots:
 		void requestCompleted(Pillow::HttpRequest* request);
 		void requestDestroyed(QObject* request);
 	
 	public:
 		HttpHandlerLog(QObject* parent = 0);
+		HttpHandlerLog(QIODevice* device, QObject* parent = 0);
 		~HttpHandlerLog();
-	
+		
+		QIODevice* device() const;
+		void setDevice(QIODevice* device);
+		
 	public:
 		virtual bool handleRequest(Pillow::HttpRequest* request);
 	};

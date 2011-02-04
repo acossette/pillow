@@ -13,6 +13,11 @@ int main(int argc, char *argv[])
 	qDebug() << "Ready";
 
 	Pillow::HttpHandler* handler = new Pillow::HttpHandlerFixed(200, "Hello from pillow!", &server);
+	
+//	Pillow::HttpHandler* handler = new Pillow::HttpHandlerStack(&server);
+//		new Pillow::HttpHandlerLog(handler);
+//		new Pillow::HttpHandlerFixed(200, "Hello from pillow!", handler);
+	
 	QObject::connect(&server, SIGNAL(requestReady(Pillow::HttpRequest*)), handler, SLOT(handleRequest(Pillow::HttpRequest*)));
 
     return a.exec();

@@ -13,10 +13,12 @@ LIBS += -L../lib -lpillowcore
 SOURCES += main.cpp \
     HttpServerTest.cpp \
     HttpRequestTest.cpp \
+    HttpHandlerTest.cpp
 
 HEADERS += \
     HttpServerTest.h \
-    HttpRequestTest.h
+    HttpRequestTest.h \
+    HttpHandlerTest.h
 
 RESOURCES += tests.qrc
 

@@ -23,7 +23,10 @@ namespace Pillow
 	public:
 		HttpServerPrivate(QObject* server) 
 			: q_ptr(server)
-		{}
+		{
+			for (int i = 0; i < MaximumReserveCount; ++i)
+				reservedRequests << createRequest();
+		}
 		
 		~HttpServerPrivate()
 		{
@@ -31,20 +34,20 @@ namespace Pillow
 				delete reservedRequests.takeLast();
 		}
 		
+		HttpRequest* createRequest()
+		{
+			HttpRequest* request = new HttpRequest(q_ptr);
+			QObject::connect(request, SIGNAL(ready(Pillow::HttpRequest*)), q_ptr, SIGNAL(requestReady(Pillow::HttpRequest*)));
+			QObject::connect(request, SIGNAL(closed(Pillow::HttpRequest*)), q_ptr, SLOT(request_closed(Pillow::HttpRequest*)));
+			return request;
+		}
+		
 		HttpRequest* takeRequest()
 		{
-			HttpRequest* request = NULL;
-			
 			if (reservedRequests.isEmpty())
-			{
-				request = new HttpRequest(q_ptr);
-				QObject::connect(request, SIGNAL(ready(Pillow::HttpRequest*)), q_ptr, SIGNAL(requestReady(Pillow::HttpRequest*)));
-				QObject::connect(request, SIGNAL(closed(Pillow::HttpRequest*)), q_ptr, SLOT(request_closed(Pillow::HttpRequest*)));
-			}
+				return createRequest();
 			else
-				request = reservedRequests.takeLast();
-			
-			return request;
+				return reservedRequests.takeLast();
 		}
 		
 		void putRequest(HttpRequest* request)

@@ -6,6 +6,7 @@
 #include <QtCore/QCryptographicHash>
 #include <QtCore/QElapsedTimer>
 #include <QtCore/QDateTime>
+#include <QtCore/QStringBuilder>
 #include <QtNetwork/QTcpSocket>
 using namespace Pillow;
 
@@ -92,6 +93,11 @@ HttpHandlerLog::HttpHandlerLog(QObject *parent)
 {
 }
 
+HttpHandlerLog::HttpHandlerLog(QIODevice *device, QObject *parent)
+	: HttpHandler(parent), _device(device)
+{	
+}
+
 HttpHandlerLog::~HttpHandlerLog()
 {
 	foreach (QElapsedTimer* timer, requestTimerMap)
@@ -117,14 +123,29 @@ void HttpHandlerLog::requestCompleted(Pillow::HttpRequest *request)
 	QElapsedTimer* timer = requestTimerMap.value(request, NULL);
 	if (timer)
 	{
-		qint64 elapsed = timer->elapsed();
+		qint64 elapsed = timer->elapsed(); elapsed;
 		QString logEntry = QString("%1 - - [%2] \"%3 %4 %5\" %6 %7 %8")
 		        .arg(request->remoteAddress().toString())
 		        .arg(QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss"))
 		        .arg(QString(request->requestMethod())).arg(QString(request->requestUri())).arg(QString(request->requestHttpVersion()))
 		        .arg(request->responseStatusCode()).arg(request->responseContentLength())
 		        .arg(elapsed / 1000.0, 3, 'f', 3);
-		qDebug() << logEntry;
+
+//		QString logEntry = QString()
+//				% request->remoteAddress().toString()
+//				% " - - [" % QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss") % "] \""
+//				% request->requestMethod() % ' ' % request->requestUri() % ' ' % request->requestHttpVersion() % "\" "
+//				% QString::number(request->responseStatusCode()) % ' ' 
+//				% QString::number(request->responseContentLength()) % ' '
+//				% QString::number(elapsed / 1000.0, 'f', 3);
+
+		if (_device == NULL)
+			qDebug() << logEntry;
+		else
+		{
+			logEntry.append('\n');
+			_device->write(logEntry.toUtf8());
+ 		}
 	}
 }
 
@@ -133,6 +154,17 @@ void HttpHandlerLog::requestDestroyed(QObject *r)
 	HttpRequest* request = static_cast<HttpRequest*>(r);
 	delete requestTimerMap.value(request, NULL);
 	requestTimerMap.remove(request);
+}
+
+QIODevice * HttpHandlerLog::device() const
+{
+	return _device;
+}
+
+void Pillow::HttpHandlerLog::setDevice(QIODevice *device)
+{
+	if (_device == device) return;
+	_device = device;
 }
 
 //
