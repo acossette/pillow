@@ -1,3 +1,4 @@
+include(../config.pri)
 TEMPLATE = app
 
 QT       += core network testlib script
@@ -13,12 +14,14 @@ LIBS += -L../lib -lpillowcore
 SOURCES += main.cpp \
     HttpServerTest.cpp \
     HttpRequestTest.cpp \
-    HttpHandlerTest.cpp
+    HttpHandlerTest.cpp \
+    HttpsServerTest.cpp
 
 HEADERS += \
     HttpServerTest.h \
     HttpRequestTest.h \
-    HttpHandlerTest.h
+    HttpHandlerTest.h \
+    HttpsServerTest.h
 
 RESOURCES += tests.qrc
 

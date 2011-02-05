@@ -1,7 +1,6 @@
 #include "HttpServer.h"
 #include "HttpRequest.h"
 #include <QtNetwork/QTcpSocket>
-#include <QtNetwork/QSslSocket>
 #include <QtNetwork/QLocalSocket>
 using namespace Pillow;
 
@@ -102,64 +101,6 @@ void HttpServer::request_closed(Pillow::HttpRequest *request)
 HttpRequest* Pillow::HttpServer::createHttpRequest()
 {
 	return d_ptr->takeRequest();
-}
-
-//
-// HttpsServer
-//
-
-HttpsServer::HttpsServer(QObject *parent)
-	: HttpServer(parent)
-{
-}
-
-HttpsServer::HttpsServer(const QSslCertificate& certificate, const QSslKey& privateKey, const QHostAddress &serverAddress, quint16 serverPort, QObject *parent)
-	: HttpServer(serverAddress, serverPort, parent), _certificate(certificate), _privateKey(privateKey)
-{
-}
-
-void HttpsServer::setCertificate(const QSslCertificate &certificate)
-{
-	_certificate = certificate;
-}
-
-void HttpsServer::setPrivateKey(const QSslKey &privateKey)
-{
-	_privateKey = privateKey;
-}
-
-void HttpsServer::incomingConnection(int socketDescriptor)
-{
-	QSslSocket* sslSocket = new QSslSocket(this);
-	if (sslSocket->setSocketDescriptor(socketDescriptor))
-	{
-		sslSocket->setPrivateKey(privateKey());
-		sslSocket->setLocalCertificate(certificate());
-		sslSocket->startServerEncryption();
-		connect(sslSocket, SIGNAL(sslErrors(QList<QSslError>)), this, SLOT(sslSocket_sslErrors(QList<QSslError>)));
-		connect(sslSocket, SIGNAL(encrypted()), this, SLOT(sslSocket_encrypted()));
-		addPendingConnection(sslSocket);
-		nextPendingConnection();
-		createHttpRequest()->initialize(sslSocket, sslSocket);
-	}
-	else
-	{
-		qWarning() << "HttpsServer::incomingConnection: failed to set socket descriptor '" << socketDescriptor << "' on ssl socket.";
-		delete sslSocket;
-	}
-}
-
-void HttpsServer::sslSocket_sslErrors(const QList<QSslError>&)
-{
-//	foreach (const QSslError& sslError, sslErrors)
-//	{
-//		qDebug() << sender() << "SSL error:" << sslError.errorString();
-//	}
-}
-
-void HttpsServer::sslSocket_encrypted()
-{
-//	qDebug() << sender() << "SSL encrypted";
 }
 
 //

@@ -8,7 +8,6 @@ class QTcpServer;
 class QTcpSocket;
 class QLocalServer;
 class QLocalSocket;
-class QSslSocket;
 class QSignalSpy;
 class QBuffer;
 namespace Pillow { class HttpRequest; }
@@ -107,7 +106,10 @@ private slots: // Test methods.
 	void benchmarkSimpleGetKeepAlive() { HttpRequestTest::benchmarkSimpleGetKeepAlive(); }
 };
 
+#ifndef PILLOW_NO_SSL
+
 class SslTestServer;
+class QSslSocket;
 class HttpRequestSslSocketTest : public HttpRequestTest
 {
     Q_OBJECT
@@ -159,6 +161,14 @@ private slots: // Test methods.
 	void benchmarkSimpleGetKeepAlive() { HttpRequestTest::benchmarkSimpleGetKeepAlive(); }
 };
 
+#else
+
+class HttpRequestSslSocketTest : public QObject
+{
+	Q_OBJECT
+};
+
+#endif // !PILLOW_NO_SSL
 
 class HttpRequestLocalSocketTest : public HttpRequestTest
 {

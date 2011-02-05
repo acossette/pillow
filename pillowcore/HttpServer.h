@@ -4,9 +4,6 @@
 #include <QtNetwork/QTcpServer>
 #include <QtNetwork/QLocalServer>
 #include <QtNetwork/QHostAddress>
-#include <QtNetwork/QSslCertificate>
-#include <QtNetwork/QSslKey>
-#include <QtNetwork/QSslError>
 
 namespace Pillow
 {
@@ -42,36 +39,7 @@ namespace Pillow
 	signals:
 		void requestReady(Pillow::HttpRequest* request);
 	};
-	
-	//
-	// HttpsServer
-	//
-	
-	class HttpsServer : public HttpServer
-	{
-		Q_OBJECT
-		QSslCertificate _certificate;
-		QSslKey _privateKey;
-	
-	public slots:
-		void sslSocket_encrypted();
-		void sslSocket_sslErrors(const QList<QSslError>& sslErrors);
 		
-	protected:
-		virtual void incomingConnection(int socketDescriptor);
-	
-	public:
-		HttpsServer(QObject* parent = 0);
-		HttpsServer(const QSslCertificate& certificate, const QSslKey& privateKey, const QHostAddress& serverAddress, quint16 serverPort, QObject *parent = 0);	
-		
-		const QSslCertificate& certificate() const { return _certificate; }
-		const QSslKey& privateKey() const { return _privateKey; }
-		
-	public slots:
-		void setCertificate(const QSslCertificate& certificate);
-		void setPrivateKey(const QSslKey& privateKey);
-	};
-	
 	//
 	// HttpLocalServer
 	//

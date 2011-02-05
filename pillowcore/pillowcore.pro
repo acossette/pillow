@@ -1,3 +1,5 @@
+include(../config.pri)
+
 TEMPLATE = lib
 DESTDIR = ../lib
 
@@ -15,7 +17,8 @@ SOURCES += \
     HttpHandler.cpp \
     HttpHandlerQtScript.cpp \
     HttpRequest.cpp \
-    HttpHelpers.cpp
+    HttpHelpers.cpp \
+    HttpsServer.cpp
 
 HEADERS += \
 	parser/parser.h \
@@ -23,6 +26,5 @@ HEADERS += \
     HttpHandler.h \
     HttpHandlerQtScript.h \
     HttpRequest.h \
-    HttpHelpers.h
-
-#QMAKE_CXXFLAGS = -O1
+    HttpHelpers.h \
+    HttpsServer.h

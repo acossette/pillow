@@ -63,25 +63,6 @@ protected:
 	virtual QIODevice* createClientConnection();
 };
 
-class HttpsServerTest : public HttpServerTestBase
-{
-	Q_OBJECT
-	
-private slots: // Test slots.
-	void init() { HttpServerTestBase::init(); }
-	void cleanup() { HttpServerTestBase::cleanup(); }
-	
-	void testInit() { HttpServerTestBase::testInit(); }
-	void testHandlesConnectionsAsRequests() { HttpServerTestBase::testHandlesConnectionsAsRequests(); }
-	void testHandlesConcurrentConnections() { HttpServerTestBase::testHandlesConcurrentConnections(); }
-	void testReusesRequests() { HttpServerTestBase::testReusesRequests(); }
-	void testDestroysRequests() { HttpServerTestBase::testDestroysRequests(); }
-
-protected:
-	virtual QObject* createServer();
-	virtual QIODevice* createClientConnection();
-};
-
 class HttpLocalServerTest : public HttpServerTestBase
 {
 	Q_OBJECT

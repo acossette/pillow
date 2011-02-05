@@ -6,9 +6,6 @@
 #include <QtNetwork/QLocalServer>
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QLocalSocket>
-#include <QtNetwork/QSslSocket>
-#include <QtNetwork/QSslKey>
-#include <QtNetwork/QSslCertificate>
 #include <QtCore/QFile>
 #include <QtCore/QBuffer>
 using namespace Pillow;
@@ -713,9 +710,15 @@ void HttpRequestTcpSocketTest::clientClose()
 	while (client->state() == QAbstractSocket::ConnectedState) wait();
 }
 
+#ifndef PILLOW_NO_SSL
+
 //
 // HttpRequestSslSocketTest
 //
+
+#include <QtNetwork/QSslSocket>
+#include <QtNetwork/QSslKey>
+#include <QtNetwork/QSslCertificate>
 
 class SslTestServer : public QTcpServer
 {
@@ -833,6 +836,8 @@ void HttpRequestSslSocketTest::clientClose()
 	client->close();
 	while (client->state() == QAbstractSocket::ConnectedState) wait();
 }
+
+#endif // !PILLOW_NO_SSL
 
 //
 // HttpRequestLocalSocketTest

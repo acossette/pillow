@@ -123,7 +123,7 @@ void HttpHandlerLog::requestCompleted(Pillow::HttpRequest *request)
 	QElapsedTimer* timer = requestTimerMap.value(request, NULL);
 	if (timer)
 	{
-		qint64 elapsed = timer->elapsed(); elapsed;
+		qint64 elapsed = timer->elapsed();
 		QString logEntry = QString("%1 - - [%2] \"%3 %4 %5\" %6 %7 %8")
 		        .arg(request->remoteAddress().toString())
 		        .arg(QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss"))

@@ -1,6 +1,6 @@
 #include <QtCore/QtCore>
 
-#include "HttpServer.h"
+#include "HttpsServer.h"
 #include "HttpHandler.h"
 #include <QtNetwork/QSslCertificate>
 #include <QtNetwork/QSslKey>

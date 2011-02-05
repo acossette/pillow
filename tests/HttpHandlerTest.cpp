@@ -44,7 +44,7 @@ class MockHandler : public Pillow::HttpHandler
 {
 public:
 	MockHandler(const QByteArray& acceptPath, int statusCode, QObject* parent)
-		: Pillow::HttpHandler(parent), acceptPath(acceptPath), statusCode(statusCode)
+		: Pillow::HttpHandler(parent), acceptPath(acceptPath), statusCode(statusCode), handleRequestCount(0)
 	{}
 	
 	QByteArray acceptPath;

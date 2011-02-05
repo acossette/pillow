@@ -1,7 +1,7 @@
 #ifndef HTTPHANDLERTEST_H
 #define HTTPHANDLERTEST_H
 
-#include <QObject>
+#include <QtCore/QObject>
 
 namespace Pillow { class HttpRequest; }
 
