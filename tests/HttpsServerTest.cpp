@@ -13,7 +13,7 @@ static QSslCertificate sslCertificate()
 	static QSslCertificate certificate;
 	if (certificate.isNull())
 	{
-		QFile file("test.crt");
+		QFile file(":/test.crt");
 		if (file.open(QIODevice::ReadOnly))
 			certificate = QSslCertificate(&file);
 		else
@@ -27,7 +27,7 @@ static QSslKey sslPrivateKey()
 	static QSslKey key;
 	if (key.isNull())
 	{
-		QFile file("test.key");
+		QFile file(":/test.key");
 		if (file.open(QIODevice::ReadOnly))
 			key = QSslKey(&file, QSsl::Rsa);
 		else

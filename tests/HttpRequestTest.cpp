@@ -683,6 +683,7 @@ QByteArray HttpRequestTcpSocketTest::clientReadAll()
 
 bool HttpRequestTcpSocketTest::isClientConnected()
 {
+	wait();
 	return client->state() == QAbstractSocket::ConnectedState && client->isOpen();
 }
 
@@ -812,6 +813,7 @@ QByteArray HttpRequestSslSocketTest::clientReadAll()
 
 bool HttpRequestSslSocketTest::isClientConnected()
 {
+	wait();
 	return client->state() == QAbstractSocket::ConnectedState && client->isOpen();
 }
 
