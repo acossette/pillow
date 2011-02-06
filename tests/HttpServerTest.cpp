@@ -5,16 +5,6 @@
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QLocalSocket>
 
-static void wait(int milliseconds = 5)
-{
-	QElapsedTimer t; t.start();
-	do
-	{
-		QCoreApplication::processEvents(QEventLoop::AllEvents, 1);
-	} 
-	while (t.elapsed() < milliseconds);
-}
-
 uint qHash(const QPointer<Pillow::HttpRequest>& ptr)
 {
 	return qHash(uint(static_cast<Pillow::HttpRequest*>(ptr)));
@@ -41,12 +31,16 @@ void HttpServerTestBase::requestReady(Pillow::HttpRequest *request)
 
 void HttpServerTestBase::sendRequest(QIODevice *device, const QByteArray &content)
 {
+	int oldHandledRequestsCount = handledRequests.size();
+
 	QByteArray request;
 	request.append("GET / HTTP/1.0\r\nContent-Length: ")
 			.append(QByteArray::number(content.size()))
 			.append("\r\n\r\n").append(content);
-	
 	device->write(request);
+
+	while(oldHandledRequestsCount == handledRequests.size())
+		QCoreApplication::processEvents();
 }
 
 void HttpServerTestBase::sendResponses()
@@ -59,7 +53,6 @@ void HttpServerTestBase::sendResponses()
 			request->writeResponse(200, Pillow::HttpHeaderCollection(), request->requestContent());
 		}
 	}
-	wait();
 }
 
 void HttpServerTestBase::sendConcurrentRequests(int concurrencyLevel)
@@ -73,20 +66,21 @@ void HttpServerTestBase::sendConcurrentRequests(int concurrencyLevel)
 	while (handledRequests.size() < startingHandledRequests + concurrencyLevel)
 		QCoreApplication::processEvents();
 	
-	wait(10);
 	sendResponses();
-	wait(10);	
 	
-	foreach (QIODevice* client, clients) { client->readAll(), delete client; }
+	foreach (QIODevice* client, clients)
+	{
+		while (client->bytesAvailable() == 0) QCoreApplication::processEvents();
+		client->readAll(), delete client;
+	}
 }
 
 void HttpServerTestBase::testHandlesConnectionsAsRequests()
 {
 	QIODevice* client = createClientConnection();
 	sendRequest(client, "Hello");
-	client->write("GET / HTTP/1.0\r\n\r\n");
-	wait();
 	sendResponses();
+	while (client->bytesAvailable() == 0) QCoreApplication::processEvents();
 	QCOMPARE(handledRequests.size(), 1);
 	QByteArray response = client->readAll();
 	QVERIFY(response.startsWith("HTTP/1.0 200 OK"));
@@ -95,25 +89,21 @@ void HttpServerTestBase::testHandlesConnectionsAsRequests()
 
 void HttpServerTestBase::testHandlesConcurrentConnections()
 {
-	const int clientCount = 100;
+	const int clientCount = 30; // Note: on Windows the maximum number of concurrent QLocalSocket clients is 62, so putting this below the limit.
 	QVector<QIODevice*> clients;
 	for (int i = 0; i < clientCount; ++i)
 		clients << createClientConnection();
 
 	for (int i = 0; i < clientCount; ++i)
-	{
 		sendRequest(clients.at(i), QByteArray("Hello").append(QByteArray::number(i)));
-		QVERIFY(handledRequests.isEmpty());
-	}
-	
-	wait(100);
+
 	sendResponses();
-	wait(100);
 	QCOMPARE(handledRequests.size(), clientCount);
 	
 	for (int i = 0; i < clientCount; ++i)
 	{
 		QIODevice* client = clients.at(i);
+		while (client->bytesAvailable() == 0) QCoreApplication::processEvents();
 		QByteArray response = client->readAll();
 		QVERIFY(response.startsWith("HTTP/1.0 200 OK"));
 		QVERIFY(response.endsWith(QByteArray("Hello").append(QByteArray::number(i))));
@@ -122,31 +112,31 @@ void HttpServerTestBase::testHandlesConcurrentConnections()
 
 void HttpServerTestBase::testReusesRequests()
 {
-	const int iterations = 5;
-	const int clientCount = 50;
+	const int iterations = 3;
+	const int clientCount = 25;
 	for (int i = 0; i < iterations; ++i) sendConcurrentRequests(clientCount);
 
 	QCOMPARE(handledRequests.size(), iterations * clientCount);
-	QCOMPARE(handledRequests.toSet().size(), 50);
+	QCOMPARE(handledRequests.toSet().size(), 25);
 	
 	// Handling way more request should reuse those unique requests.
 	handledRequests.clear();
 	guardedHandledRequests.clear();
-	for (int i = 0; i < iterations * 2; ++i) sendConcurrentRequests(clientCount * 2);
-	QCOMPARE(handledRequests.size(), iterations * clientCount * 4);
+	for (int i = 0; i < iterations * 2; ++i) sendConcurrentRequests(clientCount + 5);
+	QCOMPARE(handledRequests.size(), iterations * 2 * (clientCount + 5));
 	QVERIFY(handledRequests.toSet().size() > guardedHandledRequests.toSet().size());
-	QCOMPARE(guardedHandledRequests.toSet().size(), 51); // The 50 request objects still alive + a NULL pointer for all requests that were collected.
+	QCOMPARE(guardedHandledRequests.toSet().size(), 26); // The pooled request objects still alive + a NULL pointer for all requests that were collected.
 }
 
 void HttpServerTestBase::testDestroysRequests()
 {
-	const int iterations = 5;
-	const int clientCount = 52;
+	const int iterations = 2;
+	const int clientCount = 27;
 	for (int i = 0; i < iterations; ++i) sendConcurrentRequests(clientCount);
 
 	QCOMPARE(handledRequests.size(), iterations * clientCount);
 	QVERIFY(handledRequests.toSet().size() >= guardedHandledRequests.toSet().size());
-	QCOMPARE(guardedHandledRequests.toSet().size(), 51); // There should remain the internally pooled objects. + 1 for the NULL pointer.
+	QCOMPARE(guardedHandledRequests.toSet().size(), 26); // There should remain the internally pooled objects. + 1 for the NULL pointer.
 
 	delete server; server = NULL;
 	QCOMPARE(guardedHandledRequests.toSet().size(), 1); // All requests should now have been destroyed. Only NULL is remaining.
@@ -165,7 +155,7 @@ QIODevice * HttpServerTest::createClientConnection()
 {
 	QTcpSocket* socket = new QTcpSocket(server);
 	socket->connectToHost(QHostAddress::LocalHost, 4577);
-	while (socket->state() != QAbstractSocket::ConnectedState)
+	while (socket->state() != QAbstractSocket::ConnectedState && socket->error() == QAbstractSocket::UnknownSocketError)
 		QCoreApplication::processEvents();
 	return socket;
 }
@@ -181,10 +171,15 @@ QObject* HttpLocalServerTest::createServer()
 
 QIODevice * HttpLocalServerTest::createClientConnection()
 {
+	QSignalSpy spy(server, SIGNAL(newConnection()));
 	QLocalSocket* socket = new QLocalSocket(server);
 	socket->connectToServer("Pillow_HttpLocalServerTest");
-	while (socket->state() != QLocalSocket::ConnectedState)
-		wait(10);
+	while (spy.isEmpty() && socket->error() == QLocalSocket::UnknownSocketError)
+		QCoreApplication::processEvents();
+
+	if (socket->error() != QLocalSocket::UnknownSocketError)
+		qDebug() << "Unexpected QLocalSocket error:" << socket->errorString();
+
 	return socket;
 }
 

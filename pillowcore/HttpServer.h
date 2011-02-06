@@ -53,7 +53,10 @@ namespace Pillow
 	private slots:
 		void this_newConnection();
 		void request_closed(Pillow::HttpRequest* request);
-		
+
+	protected:
+		virtual void incomingConnection(quintptr socketDescriptor);
+
 	public:
 		HttpLocalServer(QObject* parent = 0);
 		HttpLocalServer(const QString& serverName, QObject *parent = 0);

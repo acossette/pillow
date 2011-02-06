@@ -13,7 +13,7 @@ namespace Pillow
 	class HttpServerPrivate
 	{
 	public:
-		enum { MaximumReserveCount = 50 };
+		enum { MaximumReserveCount = 25 };
 		
 	public:
 		QObject* q_ptr;
@@ -134,3 +134,19 @@ void HttpLocalServer::request_closed(Pillow::HttpRequest *request)
 	d_ptr->putRequest(request);
 }
 
+void Pillow::HttpLocalServer::incomingConnection(quintptr socketDescriptor)
+{
+	QLocalServer::incomingConnection(socketDescriptor);
+//	QLocalSocket* socket = new QLocalSocket();
+//	if (socket->setSocketDescriptor(socketDescriptor))
+//	{
+////		addPendingConnection(socket);
+////		nextPendingConnection();
+//		d_ptr->takeRequest()->initialize(socket, socket);
+//	}
+//	else
+//	{
+//		qWarning() << "HttpServer::incomingConnection: failed to set socket descriptor '" << socketDescriptor << "' on socket.";
+//		delete socket;
+//	}
+}
