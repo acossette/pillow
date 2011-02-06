@@ -81,7 +81,7 @@ namespace Pillow
 
 		namespace Dates
 		{
-			QByteArray GetHttpDate(const QDateTime& dateTime /*= QDateTime::currentDateTime()*/)
+			QByteArray getHttpDate(const QDateTime& dateTime /*= QDateTime::currentDateTime()*/)
 			{
 				static const char* dayNames[] = {NULL, "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 				static const char* monthNames[] = {NULL, "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};

@@ -28,7 +28,7 @@ namespace Pillow
 
 		namespace Dates
 		{
-			QByteArray GetHttpDate(const QDateTime& dateTime = QDateTime::currentDateTime());
+			QByteArray getHttpDate(const QDateTime& dateTime = QDateTime::currentDateTime());
 		}
 	}
 }

@@ -34,7 +34,7 @@ namespace Pillow
 	public:
 		HttpServer(QObject* parent = 0);
 		HttpServer(const QHostAddress& serverAddress, quint16 serverPort, QObject *parent = 0);
-		~HttpServer();
+		~HttpServer();		
 		
 	signals:
 		void requestReady(Pillow::HttpRequest* request);
@@ -53,9 +53,6 @@ namespace Pillow
 	private slots:
 		void this_newConnection();
 		void request_closed(Pillow::HttpRequest* request);
-
-	protected:
-		virtual void incomingConnection(quintptr socketDescriptor);
 
 	public:
 		HttpLocalServer(QObject* parent = 0);

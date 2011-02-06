@@ -133,20 +133,3 @@ void HttpLocalServer::request_closed(Pillow::HttpRequest *request)
 	request->inputDevice()->deleteLater();
 	d_ptr->putRequest(request);
 }
-
-void Pillow::HttpLocalServer::incomingConnection(quintptr socketDescriptor)
-{
-	QLocalServer::incomingConnection(socketDescriptor);
-//	QLocalSocket* socket = new QLocalSocket();
-//	if (socket->setSocketDescriptor(socketDescriptor))
-//	{
-////		addPendingConnection(socket);
-////		nextPendingConnection();
-//		d_ptr->takeRequest()->initialize(socket, socket);
-//	}
-//	else
-//	{
-//		qWarning() << "HttpServer::incomingConnection: failed to set socket descriptor '" << socketDescriptor << "' on socket.";
-//		delete socket;
-//	}
-}
