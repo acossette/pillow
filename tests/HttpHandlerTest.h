@@ -42,4 +42,18 @@ private slots:
 	void testServesFiles();
 };
 
+class HttpHandlerSimpleRouterTest : public HttpHandlerTestBase
+{
+	Q_OBJECT
+	
+protected slots:
+	void handleRequest1(Pillow::HttpRequest* request);
+	void handleRequest2(Pillow::HttpRequest* request);
+	
+private slots:
+	void testHandlerRoute();
+	void testQObjectMetaCallRoute();
+	void testStaticRoute();
+};
+
 #endif // HTTPHANDLERTEST_H

@@ -18,7 +18,8 @@ SOURCES += \
     HttpHandlerQtScript.cpp \
     HttpRequest.cpp \
     HttpHelpers.cpp \
-    HttpsServer.cpp
+    HttpsServer.cpp \
+    HttpHandlerSimpleRouter.cpp
 
 HEADERS += \
 	parser/parser.h \
@@ -27,4 +28,5 @@ HEADERS += \
     HttpHandlerQtScript.h \
     HttpRequest.h \
     HttpHelpers.h \
-    HttpsServer.h
+    HttpsServer.h \
+    HttpHandlerSimpleRouter.h

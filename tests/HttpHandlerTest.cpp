@@ -1,5 +1,6 @@
 #include "HttpHandlerTest.h"
 #include "HttpHandler.h"
+#include "HttpHandlerSimpleRouter.h"
 #include "HttpRequest.h"
 #include <QtCore/QBuffer>
 #include <QtCore/QCoreApplication>
@@ -172,5 +173,82 @@ void HttpHandlerFileTest::testServesFiles()
 	QVERIFY(response.size() > 16 * 1024 * 1024);
 	QVERIFY(response.startsWith("HTTP/1.0 200 OK"));
 	QVERIFY(response.endsWith(QByteArray(16 * 1024 * 1024, '-')));
+}
+
+void HttpHandlerSimpleRouterTest::testHandlerRoute()
+{
+	HttpHandlerSimpleRouter handler;
+	handler.addRoute("/some_path", new HttpHandlerFixed(303, "Hello"));
+	handler.addRoute("/other/path", new HttpHandlerFixed(404, "World"));
+	handler.addRoute("/some_path/even/deeper", new HttpHandlerFixed(200, "!"));
+	
+	QVERIFY(!handler.handleRequest(createGetRequest("/should_not_match")));	
+	QVERIFY(!handler.handleRequest(createGetRequest("/should/not/match/either")));	
+	QVERIFY(!handler.handleRequest(createGetRequest("/some_path/should_not_match")));
+	
+	QVERIFY(handler.handleRequest(createGetRequest("/other/path")));
+	QVERIFY(response.startsWith("HTTP/1.0 404"));
+	QVERIFY(response.endsWith("World"));
+	response.clear();
+
+	QVERIFY(handler.handleRequest(createGetRequest("/some_path/even/deeper?with=query_string")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("!"));
+	response.clear();
+}
+
+void HttpHandlerSimpleRouterTest::testQObjectMetaCallRoute()
+{
+	HttpHandlerSimpleRouter handler;
+	handler.addRoute("/first", this, "handleRequest1");
+	handler.addRoute("/first/second", this, "handleRequest2");
+	
+	QVERIFY(!handler.handleRequest(createGetRequest("/should_not_match")));	
+	QVERIFY(!handler.handleRequest(createGetRequest("/should/not/match/either")));	
+	QVERIFY(!handler.handleRequest(createGetRequest("/first/should_not_match")));
+	QVERIFY(!handler.handleRequest(createGetRequest("/first/second/should_not_match")));
+	
+	QVERIFY(handler.handleRequest(createGetRequest("/first")));
+	QVERIFY(response.startsWith("HTTP/1.0 403"));
+	QVERIFY(response.endsWith("Hello"));
+	response.clear();
+
+	QVERIFY(handler.handleRequest(createGetRequest("/first/second?with=query_string")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("World"));
+	response.clear();
+}
+
+void HttpHandlerSimpleRouterTest::testStaticRoute()
+{
+	HttpHandlerSimpleRouter handler;
+	handler.addRoute("/first", 200, Pillow::HttpHeaderCollection(), "First Route");
+	handler.addRoute("/first/second", 404, Pillow::HttpHeaderCollection(), "Second Route");
+	handler.addRoute("/third", 500, Pillow::HttpHeaderCollection(), "Third Route");
+	
+	QVERIFY(!handler.handleRequest(createGetRequest("/should_not_match")));	
+	QVERIFY(!handler.handleRequest(createGetRequest("/should/not/match/either")));	
+	QVERIFY(!handler.handleRequest(createGetRequest("/first/should_not_match")));
+	QVERIFY(!handler.handleRequest(createGetRequest("/first/second/should_not_match")));
+	
+	QVERIFY(handler.handleRequest(createGetRequest("/first")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("First Route"));
+	response.clear();
+
+	QVERIFY(handler.handleRequest(createGetRequest("/third?with=query_string#and_fragment")));
+	QVERIFY(response.startsWith("HTTP/1.0 500"));
+	QVERIFY(response.endsWith("Third Route"));
+	response.clear();
+}
+
+void HttpHandlerSimpleRouterTest::handleRequest1(Pillow::HttpRequest *request)
+{
+	request->writeResponse(403, Pillow::HttpHeaderCollection(), "Hello");
+}
+
+void HttpHandlerSimpleRouterTest::handleRequest2(Pillow::HttpRequest *request)
+{
+	request->writeResponse(200, Pillow::HttpHeaderCollection(), "World");
 }
 

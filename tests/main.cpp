@@ -24,5 +24,6 @@ int main(int argc, char *argv[])
 	result += execTest<HttpLocalServerTest>();
 	result += execTest<HttpHandlerTest>();
 	result += execTest<HttpHandlerFileTest>();
+	result += execTest<HttpHandlerSimpleRouterTest>();
 	return result;
 }
