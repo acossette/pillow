@@ -76,7 +76,7 @@ void HttpHandlerTest::testHandlerStack()
 	MockHandler* mock3 = new MockHandler("/", 500, &handler);
 	MockHandler* mock4 = new MockHandler("/", 200, &handler);
 	
-	bool handled = handler.handleRequest(createGetRequest("/")); wait();
+	bool handled = handler.handleRequest(createGetRequest("/"));
 	QVERIFY(handled);
 	QVERIFY(response.startsWith("HTTP/1.0 500"));
 	QCOMPARE(mock1->handleRequestCount, 1);
