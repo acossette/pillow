@@ -11,6 +11,7 @@ Pillow::HttpRequest * HttpHandlerTestBase::createGetRequest(const QByteArray &pa
 	QByteArray data = QByteArray().append("GET ").append(path).append(" HTTP/1.0\r\n\r\n");
 	QBuffer* inputBuffer = new QBuffer(); inputBuffer->open(QIODevice::ReadWrite);
 	QBuffer* outputBuffer = new QBuffer(); outputBuffer->open(QIODevice::ReadWrite);
+	connect(outputBuffer, SIGNAL(bytesWritten(qint64)), this, SLOT(outputBuffer_bytesWritten()));
 	
 	Pillow::HttpRequest* request = new Pillow::HttpRequest(inputBuffer, outputBuffer, this);
 	connect(request, SIGNAL(completed(Pillow::HttpRequest*)), this, SLOT(requestCompleted(Pillow::HttpRequest*)));
@@ -26,18 +27,18 @@ Pillow::HttpRequest * HttpHandlerTestBase::createGetRequest(const QByteArray &pa
 	return request;
 }
 
-void HttpHandlerTestBase::requestCompleted(Pillow::HttpRequest *request)
+void HttpHandlerTestBase::requestCompleted(Pillow::HttpRequest *)
 {
-	response = readResponse(request);
+	QCoreApplication::processEvents();
+	response = responseBuffer;
+	responseBuffer = QByteArray();
 }
 
-QByteArray HttpHandlerTestBase::readResponse(Pillow::HttpRequest *request)
+void HttpHandlerTestBase::outputBuffer_bytesWritten()
 {
-	QBuffer* buffer = static_cast<QBuffer*>(request->outputDevice());
-	buffer->seek(0);
-	QByteArray data = buffer->buffer();
-	buffer->buffer().clear();
-	return data;	
+	QBuffer* buffer = static_cast<QBuffer*>(sender());
+	responseBuffer.append(buffer->data());
+	if (buffer->isOpen()) buffer->seek(0);
 }
 
 class MockHandler : public Pillow::HttpHandler
@@ -74,7 +75,7 @@ void HttpHandlerTest::testHandlerStack()
 	MockHandler* mock3 = new MockHandler("/", 500, &handler);
 	MockHandler* mock4 = new MockHandler("/", 200, &handler);
 	
-	bool handled = handler.handleRequest(createGetRequest("/"));
+	bool handled = handler.handleRequest(createGetRequest("/")); wait();
 	QVERIFY(handled);
 	QVERIFY(response.startsWith("HTTP/1.0 500"));
 	QCOMPARE(mock1->handleRequestCount, 1);
@@ -133,4 +134,43 @@ void HttpHandlerTest::testHandlerLog()
 	QVERIFY(buffer.readLine().isEmpty());
 }
 
+void HttpHandlerFileTest::initTestCase()
+{
+	testPath = QDir::tempPath() + "/HttpHandlerFileTest";
+	QDir(testPath).mkpath(".");
+	QVERIFY(QFile::exists(testPath));
+	
+	QByteArray bigData(16 * 1024 * 1024, '-');
+	
+	{ QFile f(testPath + "/first"); f.open(QIODevice::WriteOnly); f.write("first content"); f.flush(); f.close(); }
+	{ QFile f(testPath + "/second"); f.open(QIODevice::WriteOnly); f.write("second content"); f.flush(); f.close(); }
+	{ QFile f(testPath + "/large"); f.open(QIODevice::WriteOnly); f.write(bigData); f.flush(); f.close(); }
+	{ QFile f(testPath + "/first"); f.open(QIODevice::ReadOnly); QCOMPARE(f.readAll(), QByteArray("first content")); }
+	{ QFile f(testPath + "/second"); f.open(QIODevice::ReadOnly); QCOMPARE(f.readAll(), QByteArray("second content")); }
+	{ QFile f(testPath + "/large"); f.open(QIODevice::ReadOnly); QCOMPARE(f.readAll(), bigData); }
+}
+
+void HttpHandlerFileTest::testServesFiles()
+{
+	HttpHandlerFile handler(testPath);
+	QVERIFY(!handler.handleRequest(createGetRequest("/")));
+	QVERIFY(!handler.handleRequest(createGetRequest("/bad_path")));
+	QVERIFY(!handler.handleRequest(createGetRequest("/another_bad")));
+	
+	Pillow::HttpRequest* request = createGetRequest("/first");
+	QVERIFY(handler.handleRequest(request));
+	QVERIFY(response.startsWith("HTTP/1.0 200 OK"));
+	QVERIFY(response.endsWith("first content"));
+
+	response.clear();
+	
+	// Note: the large files test currently fails when the output device is a QBuffer.
+	request = createGetRequest("/large");
+	QVERIFY(handler.handleRequest(request));
+	while (response.isEmpty())
+		QCoreApplication::processEvents();	
+	QVERIFY(response.size() > 16 * 1024 * 1024);
+	QVERIFY(response.startsWith("HTTP/1.0 200 OK"));
+	QVERIFY(response.endsWith(QByteArray(16 * 1024 * 1024, '-')));
+}
 

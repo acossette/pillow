@@ -282,7 +282,7 @@ HttpHandlerFileTransfer::HttpHandlerFileTransfer(QIODevice *sourceDevice, HttpRe
 	connect(targetRequest, SIGNAL(completed(Pillow::HttpRequest*)), this, SLOT(deleteLater()));
 	connect(targetRequest, SIGNAL(closed(Pillow::HttpRequest*)), this, SLOT(deleteLater()));
 	connect(targetRequest, SIGNAL(destroyed()), this, SLOT(deleteLater()));
-	connect(targetRequest->outputDevice(), SIGNAL(bytesWritten(qint64)), this, SLOT(writeNextPayload()));
+	connect(targetRequest->outputDevice(), SIGNAL(bytesWritten(qint64)), this, SLOT(writeNextPayload()), Qt::QueuedConnection);
 }
 
 void HttpHandlerFileTransfer::writeNextPayload()

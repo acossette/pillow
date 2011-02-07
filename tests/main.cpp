@@ -23,5 +23,6 @@ int main(int argc, char *argv[])
 	result += execTest<HttpsServerTest>();
 	result += execTest<HttpLocalServerTest>();
 	result += execTest<HttpHandlerTest>();
+	result += execTest<HttpHandlerFileTest>();
 	return result;
 }

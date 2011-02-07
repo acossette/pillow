@@ -10,14 +10,15 @@ class HttpHandlerTestBase : public QObject
     Q_OBJECT
 
 protected slots:
+	void outputBuffer_bytesWritten();
 	void requestCompleted(Pillow::HttpRequest* request);
 	
 protected:
+	QByteArray responseBuffer;
 	QByteArray response;	
 	
 protected:
 	Pillow::HttpRequest* createGetRequest(const QByteArray& path = "/");
-	QByteArray readResponse(Pillow::HttpRequest* request);
 };
 
 class HttpHandlerTest : public HttpHandlerTestBase
@@ -29,6 +30,16 @@ private slots:
 	void testHandlerFixed();
 	void testHandler404();
 	void testHandlerLog();
+};
+
+class HttpHandlerFileTest : public HttpHandlerTestBase
+{
+	Q_OBJECT
+	QString testPath;
+	
+private slots:
+	void initTestCase();
+	void testServesFiles();
 };
 
 #endif // HTTPHANDLERTEST_H
