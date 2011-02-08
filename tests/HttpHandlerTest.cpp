@@ -252,3 +252,68 @@ void HttpHandlerSimpleRouterTest::handleRequest2(Pillow::HttpRequest *request)
 	request->writeResponse(200, Pillow::HttpHeaderCollection(), "World");
 }
 
+void HttpHandlerSimpleRouterTest::testPathParams()
+{
+	HttpHandlerSimpleRouter handler;
+	handler.addRoute("/first/:with_param", 200, Pillow::HttpHeaderCollection(), "First Route"); 
+	handler.addRoute("/second/:with_param/and/:another", 200, Pillow::HttpHeaderCollection(), "Second Route");
+	handler.addRoute("/third/:with_param/:many/:params", 200, Pillow::HttpHeaderCollection(), "Third Route");
+	
+	QVERIFY(handler.handleRequest(createGetRequest("/first/some_param-value")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("First Route"));
+	response.clear();	
+
+	QVERIFY(handler.handleRequest(createGetRequest("/second/some_param-value/and/another_value")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("Second Route"));
+	response.clear();	
+
+	QVERIFY(handler.handleRequest(createGetRequest("/third/some_param-value/another_value/and_a_last_one")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("Third Route"));
+	response.clear();
+	
+	QVERIFY(!handler.handleRequest(createGetRequest("/first/some_param-value/and_extra_stuff")));
+	QVERIFY(!handler.handleRequest(createGetRequest("/second/some_param-value/bad_part/another_value")));
+	QVERIFY(!handler.handleRequest(createGetRequest("/third/some_param-value/another_value/and_a_last_one/and_extra_stuff")));
+}
+
+void HttpHandlerSimpleRouterTest::testPathSplats()
+{
+	HttpHandlerSimpleRouter handler;
+	handler.addRoute("/first/*with_splat", 200, Pillow::HttpHeaderCollection(), "First Route");
+	handler.addRoute("/second/:with_param/and/*splat", 200, Pillow::HttpHeaderCollection(), "Second Route");
+	handler.addRoute("/third/*with/two/*splats", 200, Pillow::HttpHeaderCollection(), "Third Route");
+	
+	QVERIFY(handler.handleRequest(createGetRequest("/first/")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("First Route"));
+	response.clear();		
+
+	QVERIFY(handler.handleRequest(createGetRequest("/first/with/anything-after.that/really_I_tell_you.html")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("First Route"));
+	response.clear();		
+
+	QVERIFY(handler.handleRequest(createGetRequest("/second/some-param-value/and/")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("Second Route"));
+	response.clear();			
+
+	QVERIFY(handler.handleRequest(createGetRequest("/second/some-param-value/and/extra/stuff/splatted.at/the.end")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("Second Route"));
+	response.clear();
+	
+	QVERIFY(handler.handleRequest(createGetRequest("/third/some/path/two/and/another/path.txt")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("Third Route"));
+	response.clear();				
+
+	QVERIFY(!handler.handleRequest(createGetRequest("/first")));
+	QVERIFY(!handler.handleRequest(createGetRequest("/second/some_param-value/")));
+	QVERIFY(!handler.handleRequest(createGetRequest("/second/some_param-value/and")));
+	QVERIFY(!handler.handleRequest(createGetRequest("/second/some_param-value/bad_part/splat/splat/splat")));	
+}
+

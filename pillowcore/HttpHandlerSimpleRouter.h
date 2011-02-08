@@ -4,6 +4,7 @@
 #include "HttpHandler.h"
 #include "HttpRequest.h"
 #include <QtCore/QRegExp>
+#include <QtCore/QStringList>
 
 namespace Pillow
 {
@@ -22,7 +23,7 @@ namespace Pillow
 		void addRoute(const QString& path, QObject* object, const char* member);
 		void addRoute(const QString& path, int statusCode, const Pillow::HttpHeaderCollection& headers, const QByteArray& content = QByteArray());
 		
-		QRegExp pathToRegExp(const QString& path);
+		QRegExp pathToRegExp(const QString& path, QStringList* outParamNames = NULL);
 		
 	public:
 		bool handleRequest(Pillow::HttpRequest *request);

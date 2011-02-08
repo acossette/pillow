@@ -54,6 +54,8 @@ private slots:
 	void testHandlerRoute();
 	void testQObjectMetaCallRoute();
 	void testStaticRoute();
+	void testPathParams();
+	void testPathSplats();
 };
 
 #endif // HTTPHANDLERTEST_H

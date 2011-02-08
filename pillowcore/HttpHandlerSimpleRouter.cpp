@@ -9,6 +9,7 @@ namespace Pillow
 	struct Route
 	{
 		QRegExp regExp;
+		QStringList paramNames;
 		
 		virtual bool invoke(Pillow::HttpRequest* request) = 0;
 	};
@@ -79,7 +80,7 @@ HttpHandlerSimpleRouter::~HttpHandlerSimpleRouter()
 void HttpHandlerSimpleRouter::addRoute(const QString &path, Pillow::HttpHandler *handler)
 {
 	HandlerRoute* route = new HandlerRoute();
-	route->regExp = pathToRegExp(path);
+	route->regExp = pathToRegExp(path, &route->paramNames);
 	route->handler = handler;
 	d_ptr->routes.append(route);
 }
@@ -87,7 +88,7 @@ void HttpHandlerSimpleRouter::addRoute(const QString &path, Pillow::HttpHandler 
 void HttpHandlerSimpleRouter::addRoute(const QString& path, QObject* object, const char* member)
 {
 	QObjectMetaCallRoute* route = new QObjectMetaCallRoute();
-	route->regExp = pathToRegExp(path);
+	route->regExp = pathToRegExp(path, &route->paramNames);
 	route->object = object;
 	route->member = member;
 	d_ptr->routes.append(route);
@@ -96,16 +97,49 @@ void HttpHandlerSimpleRouter::addRoute(const QString& path, QObject* object, con
 void HttpHandlerSimpleRouter::addRoute(const QString& path, int statusCode, const Pillow::HttpHeaderCollection& headers, const QByteArray& content /*= QByteArray()*/)
 {
 	StaticRoute* route = new StaticRoute();
-	route->regExp = pathToRegExp(path);
+	route->regExp = pathToRegExp(path, &route->paramNames);
 	route->statusCode = statusCode;
 	route->headers = headers;
 	route->content = content;
 	d_ptr->routes.append(route);
 }
 
-QRegExp Pillow::HttpHandlerSimpleRouter::pathToRegExp(const QString &path)
+QRegExp Pillow::HttpHandlerSimpleRouter::pathToRegExp(const QString &p, QStringList* outParamNames)
 {
-	return QRegExp("^" + path + "$");
+	QString path = p;
+
+	QRegExp paramRegex(":(\\w+)"); QString paramReplacement("([\\w_-]+)");
+	QStringList paramNames;
+	int pos = 0;
+	while (pos >= 0)
+	{
+		pos = paramRegex.indexIn(path, pos);
+		if (pos >= 0)
+		{
+			paramNames << paramRegex.cap(1);
+			pos += paramRegex.matchedLength();
+		}
+	}
+	path.replace(paramRegex, paramReplacement);
+
+	QRegExp splatRegex("\\*(\\w+)"); QString splatReplacement("(.*)");
+	pos = 0;
+	while (pos >= 0)
+	{
+		pos = splatRegex.indexIn(path, pos);
+		if (pos >= 0)
+		{
+			paramNames << splatRegex.cap(1);
+			pos += splatRegex.matchedLength();
+		}
+	}
+	path.replace(splatRegex, splatReplacement);
+
+	if (outParamNames)
+		*outParamNames = paramNames;
+	
+	path = "^" + path + "$";
+	return QRegExp(path);
 }
 
 bool HttpHandlerSimpleRouter::handleRequest(Pillow::HttpRequest *request)
