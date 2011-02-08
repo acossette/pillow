@@ -14,16 +14,29 @@ namespace Pillow
 		Q_OBJECT
 		Q_DECLARE_PRIVATE(HttpHandlerSimpleRouter)
 		HttpHandlerSimpleRouterPrivate* d_ptr;
+		Q_ENUMS(RoutingErrorAction)
 		
+	public:
+		enum RoutingErrorAction { Return4xxResponse, Passthrough };
+				
 	public:
 		HttpHandlerSimpleRouter(QObject* parent = 0);
 		~HttpHandlerSimpleRouter();
 		
-		void addRoute(const QString& path, Pillow::HttpHandler* handler);
-		void addRoute(const QString& path, QObject* object, const char* member);
-		void addRoute(const QString& path, int statusCode, const Pillow::HttpHeaderCollection& headers, const QByteArray& content = QByteArray());
+		void addRoute(const QString& path, Pillow::HttpHandler* handler) { addRoute(QByteArray(), path, handler); }
+		void addRoute(const QString& path, QObject* object, const char* member) { addRoute(QByteArray(), path, object, member); }
+		void addRoute(const QString& path, int statusCode, const Pillow::HttpHeaderCollection& headers, const QByteArray& content = QByteArray()) { addRoute(QByteArray(), path, statusCode, headers, content); }
+		void addRoute(const QByteArray& method, const QString& path, Pillow::HttpHandler* handler);
+		void addRoute(const QByteArray& method, const QString& path, QObject* object, const char* member);
+		void addRoute(const QByteArray& method, const QString& path, int statusCode, const Pillow::HttpHeaderCollection& headers, const QByteArray& content = QByteArray());
 		
 		QRegExp pathToRegExp(const QString& path, QStringList* outParamNames = NULL);
+		
+		RoutingErrorAction unmatchedRequestAction() const;
+		void setUnmatchedRequestAction(RoutingErrorAction action);
+		
+		RoutingErrorAction methodMismatchAction() const;		
+		void setMethodMismatchAction(RoutingErrorAction action);
 		
 	public:
 		bool handleRequest(Pillow::HttpRequest *request);

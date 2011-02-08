@@ -2,12 +2,14 @@
 #include "HttpRequest.h"
 #include <QtCore/QPointer>
 #include <QtCore/QRegExp>
+#include <QtCore/QVarLengthArray>
 using namespace Pillow;
 
 namespace Pillow
 {
 	struct Route
 	{
+		QByteArray method;
 		QRegExp regExp;
 		QStringList paramNames;
 		
@@ -58,6 +60,8 @@ namespace Pillow
 	{
 	public:
 		QList<Route*> routes;
+		HttpHandlerSimpleRouter::RoutingErrorAction methodMismatchAction;
+		HttpHandlerSimpleRouter::RoutingErrorAction unmatchedRequestAction;
 	};
 }
 
@@ -68,6 +72,8 @@ namespace Pillow
 HttpHandlerSimpleRouter::HttpHandlerSimpleRouter(QObject* parent /* = 0 */)
 	: Pillow::HttpHandler(parent), d_ptr(new HttpHandlerSimpleRouterPrivate)
 {
+	d_ptr->methodMismatchAction = Passthrough;
+	d_ptr->unmatchedRequestAction = Passthrough;
 }
 
 HttpHandlerSimpleRouter::~HttpHandlerSimpleRouter()
@@ -77,26 +83,29 @@ HttpHandlerSimpleRouter::~HttpHandlerSimpleRouter()
 	delete d_ptr;
 }
 
-void HttpHandlerSimpleRouter::addRoute(const QString &path, Pillow::HttpHandler *handler)
+void HttpHandlerSimpleRouter::addRoute(const QByteArray& method, const QString &path, Pillow::HttpHandler *handler)
 {
 	HandlerRoute* route = new HandlerRoute();
+	route->method = method;
 	route->regExp = pathToRegExp(path, &route->paramNames);
 	route->handler = handler;
 	d_ptr->routes.append(route);
 }
 
-void HttpHandlerSimpleRouter::addRoute(const QString& path, QObject* object, const char* member)
+void HttpHandlerSimpleRouter::addRoute(const QByteArray& method, const QString& path, QObject* object, const char* member)
 {
 	QObjectMetaCallRoute* route = new QObjectMetaCallRoute();
+	route->method = method;
 	route->regExp = pathToRegExp(path, &route->paramNames);
 	route->object = object;
 	route->member = member;
 	d_ptr->routes.append(route);
 }
 
-void HttpHandlerSimpleRouter::addRoute(const QString& path, int statusCode, const Pillow::HttpHeaderCollection& headers, const QByteArray& content /*= QByteArray()*/)
+void HttpHandlerSimpleRouter::addRoute(const QByteArray& method, const QString& path, int statusCode, const Pillow::HttpHeaderCollection& headers, const QByteArray& content /*= QByteArray()*/)
 {
 	StaticRoute* route = new StaticRoute();
+	route->method = method;
 	route->regExp = pathToRegExp(path, &route->paramNames);
 	route->statusCode = statusCode;
 	route->headers = headers;
@@ -144,14 +153,62 @@ QRegExp Pillow::HttpHandlerSimpleRouter::pathToRegExp(const QString &p, QStringL
 
 bool HttpHandlerSimpleRouter::handleRequest(Pillow::HttpRequest *request)
 {
+	QVarLengthArray<Route*, 16> matchedRoutes;
 	foreach (Route* route, d_ptr->routes) 
 	{
 		if (route->regExp.indexIn(request->requestPath()) != -1)
 		{
-			route->invoke(request);
+			matchedRoutes.append(route);
+			if (route->method.isEmpty() || route->method == request->requestMethod())
+			{
+				route->invoke(request);
+				return true;
+			}
+		}
+	}
+	
+	if (matchedRoutes.isEmpty())
+	{
+		if (unmatchedRequestAction() == Return4xxResponse)
+		{
+			request->writeResponse(404);
+			return true;
+		}
+	}
+	else
+	{
+		if (methodMismatchAction() == Return4xxResponse)
+		{
+			QByteArray allowedMethods;
+			for (int i = 0, iE = matchedRoutes.size(); i < iE; ++i)
+			{
+				if (i > 0) allowedMethods.append(", ");
+				allowedMethods.append(matchedRoutes.at(i)->method);
+			}
+			request->writeResponse(405, HttpHeaderCollection() << HttpHeader("Allow", allowedMethods));
 			return true;
 		}
 	}
 	
 	return false;
+}
+
+Pillow::HttpHandlerSimpleRouter::RoutingErrorAction Pillow::HttpHandlerSimpleRouter::unmatchedRequestAction() const
+{
+	return d_ptr->unmatchedRequestAction;
+}
+
+void Pillow::HttpHandlerSimpleRouter::setUnmatchedRequestAction(Pillow::HttpHandlerSimpleRouter::RoutingErrorAction action)
+{
+	d_ptr->unmatchedRequestAction = action;
+}
+
+Pillow::HttpHandlerSimpleRouter::RoutingErrorAction Pillow::HttpHandlerSimpleRouter::methodMismatchAction() const
+{
+	return d_ptr->methodMismatchAction;
+}
+
+void Pillow::HttpHandlerSimpleRouter::setMethodMismatchAction(Pillow::HttpHandlerSimpleRouter::RoutingErrorAction action)
+{
+	d_ptr->methodMismatchAction = action;
 }

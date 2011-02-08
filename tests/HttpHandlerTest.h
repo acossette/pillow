@@ -19,6 +19,7 @@ protected:
 	
 protected:
 	Pillow::HttpRequest* createGetRequest(const QByteArray& path = "/");
+	Pillow::HttpRequest* createPostRequest(const QByteArray& path = "/", const QByteArray& content = QByteArray());
 };
 
 class HttpHandlerTest : public HttpHandlerTestBase
@@ -56,6 +57,9 @@ private slots:
 	void testStaticRoute();
 	void testPathParams();
 	void testPathSplats();
+	void testMatchesMethod();
+	void testUnmatchedRequestAction();
+	void testMethodMismatchAction();
 };
 
 #endif // HTTPHANDLERTEST_H

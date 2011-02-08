@@ -19,7 +19,30 @@ Pillow::HttpRequest * HttpHandlerTestBase::createGetRequest(const QByteArray &pa
 	inputBuffer->setParent(request);
 	outputBuffer->setParent(request);
 	
-	inputBuffer->write(QByteArray().append("GET ").append(path).append(" HTTP/1.0\r\n\r\n"));
+	inputBuffer->write(data);
+	inputBuffer->seek(0);
+	
+	while (request->state() != Pillow::HttpRequest::SendingHeaders)
+		QCoreApplication::processEvents();
+	
+	return request;
+}
+
+Pillow::HttpRequest * HttpHandlerTestBase::createPostRequest(const QByteArray &path, const QByteArray &content)
+{
+	QByteArray data = QByteArray().append("POST ").append(path).append(" HTTP/1.0\r\n");
+	if (content.size() > 0) data.append("Content-Length: ").append(QByteArray::number(content.size())).append("\r\n");
+	data.append("\r\n").append(content);
+	QBuffer* inputBuffer = new QBuffer(); inputBuffer->open(QIODevice::ReadWrite);
+	QBuffer* outputBuffer = new QBuffer(); outputBuffer->open(QIODevice::ReadWrite);
+	connect(outputBuffer, SIGNAL(bytesWritten(qint64)), this, SLOT(outputBuffer_bytesWritten()));
+	
+	Pillow::HttpRequest* request = new Pillow::HttpRequest(inputBuffer, outputBuffer, this);
+	connect(request, SIGNAL(completed(Pillow::HttpRequest*)), this, SLOT(requestCompleted(Pillow::HttpRequest*)));
+	inputBuffer->setParent(request);
+	outputBuffer->setParent(request);
+	
+	inputBuffer->write(data);
 	inputBuffer->seek(0);
 	
 	while (request->state() != Pillow::HttpRequest::SendingHeaders)
@@ -315,5 +338,56 @@ void HttpHandlerSimpleRouterTest::testPathSplats()
 	QVERIFY(!handler.handleRequest(createGetRequest("/second/some_param-value/")));
 	QVERIFY(!handler.handleRequest(createGetRequest("/second/some_param-value/and")));
 	QVERIFY(!handler.handleRequest(createGetRequest("/second/some_param-value/bad_part/splat/splat/splat")));	
+}
+
+void HttpHandlerSimpleRouterTest::testMatchesMethod()
+{
+	HttpHandlerSimpleRouter handler;
+	handler.addRoute("GET", "/get", 200, Pillow::HttpHeaderCollection(), "First Route"); 
+	handler.addRoute("POST", "/post", 200, Pillow::HttpHeaderCollection(), "Second Route");
+	handler.addRoute("GET", "/both", 200, Pillow::HttpHeaderCollection(), "Third Route (GET)"); 
+	handler.addRoute("POST", "/both", 200, Pillow::HttpHeaderCollection(), "Third Route (POST)");
+	
+	QVERIFY(handler.handleRequest(createGetRequest("/get")));
+	QVERIFY(!handler.handleRequest(createPostRequest("/get")));
+	QVERIFY(!handler.handleRequest(createGetRequest("/post")));
+	QVERIFY(handler.handleRequest(createPostRequest("/post")));
+	
+	QVERIFY(handler.handleRequest(createGetRequest("/both")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("Third Route (GET)"));
+	response.clear();					
+
+	QVERIFY(handler.handleRequest(createPostRequest("/both")));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("Third Route (POST)"));
+	response.clear();
+}
+
+void HttpHandlerSimpleRouterTest::testUnmatchedRequestAction()
+{
+	HttpHandlerSimpleRouter handler;
+	QVERIFY(handler.unmatchedRequestAction() == HttpHandlerSimpleRouter::Passthrough);
+	handler.setUnmatchedRequestAction(HttpHandlerSimpleRouter::Return4xxResponse);
+	handler.addRoute("GET", "/a", 200, Pillow::HttpHeaderCollection(), "First Route (GET)");
+	handler.addRoute("DELETE", "/a", 200, Pillow::HttpHeaderCollection(), "First Route (DELETE)");
+
+	QVERIFY(handler.handleRequest(createGetRequest("/unmatched/route")));
+	QVERIFY(response.startsWith("HTTP/1.0 404"));
+	response.clear();	
+}
+
+void HttpHandlerSimpleRouterTest::testMethodMismatchAction()
+{
+	HttpHandlerSimpleRouter handler;
+	QVERIFY(handler.methodMismatchAction() == HttpHandlerSimpleRouter::Passthrough);
+	handler.setMethodMismatchAction(HttpHandlerSimpleRouter::Return4xxResponse);
+	handler.addRoute("GET", "/a", 200, Pillow::HttpHeaderCollection(), "First Route (GET)");
+	handler.addRoute("DELETE", "/a", 200, Pillow::HttpHeaderCollection(), "First Route (DELETE)");
+
+	QVERIFY(handler.handleRequest(createPostRequest("/a")));
+	QVERIFY(response.startsWith("HTTP/1.0 405"));
+	QVERIFY(response.contains("Allow: GET, DELETE"));
+	response.clear();	
 }
 
