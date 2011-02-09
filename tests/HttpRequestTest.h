@@ -52,6 +52,7 @@ protected slots: // Test methods.
 	void testWriteIncrementalResponseContent();
 	void testWriteResponseWithoutRequest();
 	void testMultipacketResponse();
+	void testReadsRequestParams();
 	
 	void benchmarkSimpleGetClose();
 	void benchmarkSimpleGetKeepAlive();
@@ -101,6 +102,7 @@ private slots: // Test methods.
 	void testWriteIncrementalResponseContent() { HttpRequestTest::testWriteIncrementalResponseContent(); }
 	void testWriteResponseWithoutRequest() { HttpRequestTest::testWriteResponseWithoutRequest(); }
 	void testMultipacketResponse() { HttpRequestTest::testMultipacketResponse(); }
+	void testReadsRequestParams() { HttpRequestTest::testReadsRequestParams(); }
 	
 	void benchmarkSimpleGetClose() { HttpRequestTest::benchmarkSimpleGetClose(); }
 	void benchmarkSimpleGetKeepAlive() { HttpRequestTest::benchmarkSimpleGetKeepAlive(); }
@@ -156,6 +158,7 @@ private slots: // Test methods.
 	void testWriteIncrementalResponseContent() { HttpRequestTest::testWriteIncrementalResponseContent(); }
 	void testWriteResponseWithoutRequest() { HttpRequestTest::testWriteResponseWithoutRequest(); }
 	void testMultipacketResponse() { HttpRequestTest::testMultipacketResponse(); }
+	void testReadsRequestParams() { HttpRequestTest::testReadsRequestParams(); }
 	
 	void benchmarkSimpleGetClose() { HttpRequestTest::benchmarkSimpleGetClose(); }
 	void benchmarkSimpleGetKeepAlive() { HttpRequestTest::benchmarkSimpleGetKeepAlive(); }
@@ -214,6 +217,7 @@ private slots: // Test methods.
 	void testWriteIncrementalResponseContent() { HttpRequestTest::testWriteIncrementalResponseContent(); }
 	void testWriteResponseWithoutRequest() { HttpRequestTest::testWriteResponseWithoutRequest(); }
 	void testMultipacketResponse() { HttpRequestTest::testMultipacketResponse(); }
+	void testReadsRequestParams() { HttpRequestTest::testReadsRequestParams(); }
 	
 	void benchmarkSimpleGetClose() { HttpRequestTest::benchmarkSimpleGetClose(); }
 	void benchmarkSimpleGetKeepAlive() { HttpRequestTest::benchmarkSimpleGetKeepAlive(); }
@@ -260,6 +264,7 @@ private slots: // Test methods.
 	void testWriteIncrementalResponseContent() { HttpRequestTest::testWriteIncrementalResponseContent(); }
 	void testWriteResponseWithoutRequest() { HttpRequestTest::testWriteResponseWithoutRequest(); }
 	void testMultipacketResponse() { HttpRequestTest::testMultipacketResponse(); }
+	void testReadsRequestParams() { HttpRequestTest::testReadsRequestParams(); }
 	
 	void benchmarkSimpleGetClose() { HttpRequestTest::benchmarkSimpleGetClose(); }
 	void benchmarkSimpleGetKeepAlive() { HttpRequestTest::benchmarkSimpleGetKeepAlive(); }

@@ -14,6 +14,9 @@ namespace Pillow
 
 	typedef QPair<QByteArray, QByteArray> HttpHeader;
 	typedef QVector<HttpHeader> HttpHeaderCollection;
+	typedef QPair<QString, QString> HttpParam;
+	typedef QVector<HttpParam> HttpParamCollection;
+
 	struct HttpHeaderRef 
 	{ 
 		int fieldPos, fieldLength, valuePos, valueLength; 
@@ -43,6 +46,7 @@ namespace Pillow
 		QVector<HttpHeaderRef> _requestHeadersRef;
 		HttpHeaderCollection _requestHeaders;
 		int _requestContentLength;
+		HttpParamCollection _requestParams;
 
 		// Response fields.
 		QByteArray _responseHeadersBuffer;
@@ -91,6 +95,10 @@ namespace Pillow
 		inline const HttpHeaderCollection& requestHeaders() const { return _requestHeaders; }
 		QByteArray getRequestHeaderValue(const QByteArray& field);
 		QByteArray requestContent() const;
+		
+		const HttpParamCollection& requestParams();
+		QString getRequestParam(const QString& name);
+		void setRequestParam(const QString& name, const QString& value);
 
 		// Response members.
 		int responseStatusCode() const { return _responseStatusCode; }

@@ -4,6 +4,7 @@
 #include <QtCore/QDateTime>
 #include <QtCore/QIODevice>
 #include <QtCore/QTimer>
+#include <QtCore/QUrl>
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QLocalSocket>
 using namespace Pillow;
@@ -234,7 +235,11 @@ void HttpRequest::transitionToSendingContent()
 
 void HttpRequest::transitionToCompleted()
 {
-	if (_state == Completed)	 return;
+	if (_state == Completed)  return;
+	if (_state == Closed)
+	{
+		qWarning() << "HttpRequest::transitionToCompleted called while the request is in the closed state.";
+	}
 	_state = Completed;
 	emit completed(this);
 	
@@ -245,8 +250,11 @@ void HttpRequest::transitionToCompleted()
 	else if (_requestBuffer.capacity() <= MaximumRequestHeaderLength) _requestBuffer.data_ptr()->size = 0;
 	else _requestBuffer.clear();
 
-	if (_requestHeadersRef.capacity() > 16)_requestHeadersRef.clear();
+	if (_requestHeadersRef.capacity() > 16) _requestHeadersRef.clear();
 	else while (!_requestHeadersRef.isEmpty()) _requestHeadersRef.pop_back();
+	
+	if (_requestParams.capacity() > 16) _requestParams.clear();
+	else while(!_requestParams.isEmpty()) _requestParams.pop_back();
 
 	if (_responseConnectionKeepAlive)
 	{
@@ -457,6 +465,48 @@ QByteArray HttpRequest::requestContent() const
 		return _requestBuffer.mid(_parser.body_start, _requestContentLength);
 
 	return QByteArray();
+}
+
+const Pillow::HttpParamCollection& Pillow::HttpRequest::requestParams()
+{
+	if (_requestParams.isEmpty() && !_requestQueryString.isEmpty())
+	{
+		// The params have not yet been initialized.
+		QUrl url; url.setEncodedQuery(_requestQueryString);
+		QList<HttpParam> params = url.queryItems();
+		if (_requestParams.capacity() < params.size()) _requestParams.reserve(params.size());
+		
+		foreach (const HttpParam& param, params)
+			_requestParams << param;
+	}	
+	return _requestParams;
+}
+
+QString Pillow::HttpRequest::getRequestParam(const QString &name)
+{
+	requestParams();
+	for (int i = 0, iE = _requestParams.size(); i < iE; ++i)
+	{
+		const HttpParam& param = _requestParams.at(i);
+		if (param.first.compare(name, Qt::CaseInsensitive) == 0)
+			return param.second;
+	}
+	return QString();
+}
+
+void Pillow::HttpRequest::setRequestParam(const QString &name, const QString &value)
+{
+	requestParams();
+	for (int i = 0, iE = _requestParams.size(); i < iE; ++i)
+	{
+		const HttpParam& param = _requestParams.at(i);
+		if (param.first.compare(name, Qt::CaseInsensitive) == 0)
+		{
+			_requestParams[i] = HttpParam(name, value);
+			return;
+		}
+	}
+	_requestParams << HttpParam(name, value);
 }
 
 QHostAddress HttpRequest::remoteAddress() const
