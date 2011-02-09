@@ -474,6 +474,7 @@ const Pillow::HttpParamCollection& Pillow::HttpRequest::requestParams()
 		// The params have not yet been initialized. Parse them.
 		QUrl url; url.setEncodedQuery(_requestQueryString);
 		QList<HttpParam> params = url.queryItems();
+		if (_requestParams.capacity() < params.size()) _requestParams.reserve(params.size());
 		for (int i = 0, iE = params.size(); i < iE; ++i)
 			_requestParams << params.at(i);		
 	}
