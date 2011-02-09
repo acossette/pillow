@@ -588,29 +588,36 @@ void HttpRequestTest::testReadsRequestParams()
 {
 	QVERIFY(request->requestParams().isEmpty());	
 
-	clientWrite("GET /path?first=value&second=other_value&composite[property]=another+value#fragment HTTP/1.1\r\n");
+	clientWrite("GET /path?first=value&second=other_value&composite[property]=another+value&without_value&=without_name&final=true#fragment HTTP/1.1\r\n");
 	clientWrite("\r\n"); clientFlush();
-
+	
 	QCOMPARE(request->getRequestParam("first"), QString("value"));
 	QCOMPARE(request->getRequestParam("fIRsT"), QString("value"));
 	QCOMPARE(request->getRequestParam("second"), QString("other_value"));
 	QCOMPARE(request->getRequestParam("composite[property]"), QString("another+value"));
 	QCOMPARE(request->getRequestParam("composITe[propERtY]"), QString("another+value"));
+	QCOMPARE(request->getRequestParam("final"), QString("true"));
 
 	Pillow::HttpParamCollection params = request->requestParams();
-	QCOMPARE(params.size(),  3);
+	QCOMPARE(params.size(),  6);
 	QCOMPARE(params.at(0).first, QString("first"));
 	QCOMPARE(params.at(0).second, QString("value"));
 	QCOMPARE(params.at(1).first, QString("second"));
 	QCOMPARE(params.at(1).second, QString("other_value"));
 	QCOMPARE(params.at(2).first, QString("composite[property]"));
 	QCOMPARE(params.at(2).second, QString("another+value"));
+	QCOMPARE(params.at(3).first, QString("without_value"));
+	QCOMPARE(params.at(3).second, QString(""));
+	QCOMPARE(params.at(4).first, QString(""));
+	QCOMPARE(params.at(4).second, QString("without_name"));
+	QCOMPARE(params.at(5).first, QString("final"));
+	QCOMPARE(params.at(5).second, QString("true"));
 	
 	request->setRequestParam("hello", "world");
-	QCOMPARE(request->requestParams().size(), 4);
+	QCOMPARE(request->requestParams().size(), 7);
 	QCOMPARE(request->getRequestParam("heLLo"), QString("world"));
 	request->setRequestParam("hello", "there");
-	QCOMPARE(request->requestParams().size(), 4);
+	QCOMPARE(request->requestParams().size(), 7);
 	QCOMPARE(request->getRequestParam("hEllo"), QString("there"));
 	
 	// They should be cleared between requests.
@@ -628,6 +635,24 @@ void HttpRequestTest::testReadsRequestParams()
 	clientWrite("\r\n"); clientFlush();
 	QCOMPARE(request->requestParams().size(), 1);
 	QCOMPARE(request->getRequestParam("a"), QString("b"));
+	
+	// Some edge cases
+	request->writeResponse(200); 
+	QVERIFY(clientReadAll().startsWith("HTTP/1.1 200"));
+	QCOMPARE(request->state(), HttpRequest::ReceivingHeaders);
+	clientWrite("GET /final?nameonly HTTP/1.1\r\n");
+	clientWrite("\r\n"); clientFlush();
+	QCOMPARE(request->requestParams().size(), 1);
+	QCOMPARE(request->getRequestParam("nameonly"), QString(""));
+
+	request->writeResponse(200); 
+	QVERIFY(clientReadAll().startsWith("HTTP/1.1 200"));
+	QCOMPARE(request->state(), HttpRequest::ReceivingHeaders);
+	clientWrite("GET /final?=valueonly HTTP/1.1\r\n");
+	clientWrite("\r\n"); clientFlush();
+	QCOMPARE(request->requestParams().size(), 1);
+	QCOMPARE(request->getRequestParam(""), QString("valueonly"));
+
 }
 
 void HttpRequestTest::benchmarkSimpleGetClose()

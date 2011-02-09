@@ -472,20 +472,10 @@ const Pillow::HttpParamCollection& Pillow::HttpRequest::requestParams()
 	if (_requestParams.isEmpty() && !_requestQueryString.isEmpty())
 	{
 		// The params have not yet been initialized. Parse them.
-		int nameStartPos = 0, valueStartPos = 0, valueEndPos = 0;
-		QByteArray name, value;
-		while ((valueStartPos = _requestQueryString.indexOf('=', nameStartPos + 1)) > 0)
-		{
-			valueEndPos = _requestQueryString.indexOf('&', valueStartPos + 1);
-			if (valueEndPos == -1) valueEndPos = _requestQueryString.size();
-			
-			name.setRawData(_requestQueryString.constData() + nameStartPos, valueStartPos - nameStartPos);
-			value.setRawData(_requestQueryString.constData() + valueStartPos + 1, valueEndPos - valueStartPos - 1);
-			_requestParams << HttpParam(QUrl::fromPercentEncoding(name), QUrl::fromPercentEncoding(value));
-			
-			nameStartPos = valueEndPos + 1;	
-			name.data_ptr()->alloc = 0; value.data_ptr()->alloc = 0;
-		}
+		QUrl url; url.setEncodedQuery(_requestQueryString);
+		QList<HttpParam> params = url.queryItems();
+		for (int i = 0, iE = params.size(); i < iE; ++i)
+			_requestParams << params.at(i);		
 	}
 	return _requestParams;
 }
