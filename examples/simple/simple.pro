@@ -8,8 +8,7 @@ QT       -= gui
 CONFIG   += console
 CONFIG   -= app_bundle
 
-INCLUDEPATH = . ../../pillowcore
-DEPENDPATH = . ../../pillowcore
-LIBS += -L../../lib -lpillowcore
+INCLUDEPATH += .
+DEPENDPATH += . 
 
 SOURCES += simple.cpp

@@ -9,7 +9,9 @@ CONFIG   -= app_bundle
 
 INCLUDEPATH = . ../pillowcore
 DEPENDPATH = . ../pillowcore
-LIBS += -L../lib -lpillowcore
+LIBS += -L../lib -l$${PILLOWCORE_LIB_NAME}
+unix: POST_TARGETDEPS += ../lib/lib$${PILLOWCORE_LIB_NAME}.a
+win32: POST_TARGETDEPS += ../lib/$${PILLOWCORE_LIB_NAME}.lib
 
 SOURCES += main.cpp \
     HttpServerTest.cpp \
@@ -25,5 +27,3 @@ HEADERS += \
 
 RESOURCES += tests.qrc
 
-unix: POST_TARGETDEPS += ../lib/libpillowcore.a
-win32: POST_TARGETDEPS += ../lib/pillowcore.lib
