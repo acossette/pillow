@@ -258,7 +258,7 @@ void HttpRequest::transitionToCompleted()
 
 	if (_responseConnectionKeepAlive)
 	{
-		flush(); // Done writing for this request, make sure the date is pushed right away to the client. 
+		flush(); // Done writing for this request, make sure the data is pushed right away to the client. 
 		transitionToReceivingHeaders();
 		processInput();
 	}
@@ -471,14 +471,22 @@ const Pillow::HttpParamCollection& Pillow::HttpRequest::requestParams()
 {
 	if (_requestParams.isEmpty() && !_requestQueryString.isEmpty())
 	{
-		// The params have not yet been initialized.
-		QUrl url; url.setEncodedQuery(_requestQueryString);
-		QList<HttpParam> params = url.queryItems();
-		if (_requestParams.capacity() < params.size()) _requestParams.reserve(params.size());
-		
-		foreach (const HttpParam& param, params)
-			_requestParams << param;
-	}	
+		// The params have not yet been initialized. Parse them.
+		int nameStartPos = 0, valueStartPos = 0, valueEndPos = 0;
+		QByteArray name, value;
+		while ((valueStartPos = _requestQueryString.indexOf('=', nameStartPos + 1)) > 0)
+		{
+			valueEndPos = _requestQueryString.indexOf('&', valueStartPos + 1);
+			if (valueEndPos == -1) valueEndPos = _requestQueryString.size();
+			
+			name.setRawData(_requestQueryString.constData() + nameStartPos, valueStartPos - nameStartPos);
+			value.setRawData(_requestQueryString.constData() + valueStartPos + 1, valueEndPos - valueStartPos - 1);
+			_requestParams << HttpParam(QUrl::fromPercentEncoding(name), QUrl::fromPercentEncoding(value));
+			
+			nameStartPos = valueEndPos + 1;	
+			name.data_ptr()->alloc = 0; value.data_ptr()->alloc = 0;
+		}
+	}
 	return _requestParams;
 }
 
