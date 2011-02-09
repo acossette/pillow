@@ -65,6 +65,7 @@ HttpHandlerFixed::HttpHandlerFixed(int statusCode, const QByteArray& content, QO
 
 bool HttpHandlerFixed::handleRequest(Pillow::HttpRequest *request)
 {
+	request->requestParams();
 	request->writeResponse(_statusCode, HttpHeaderCollection(), _content);
 	return true;
 }

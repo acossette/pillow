@@ -2,6 +2,7 @@
 #define HTTPHANDLERTEST_H
 
 #include <QtCore/QObject>
+#include <HttpRequest.h>
 
 namespace Pillow { class HttpRequest; }
 
@@ -15,7 +16,8 @@ protected slots:
 	
 protected:
 	QByteArray responseBuffer;
-	QByteArray response;	
+	QByteArray response;
+	Pillow::HttpParamCollection requestParams;
 	
 protected:
 	Pillow::HttpRequest* createGetRequest(const QByteArray& path = "/");

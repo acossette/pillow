@@ -51,11 +51,12 @@ Pillow::HttpRequest * HttpHandlerTestBase::createPostRequest(const QByteArray &p
 	return request;
 }
 
-void HttpHandlerTestBase::requestCompleted(Pillow::HttpRequest *)
+void HttpHandlerTestBase::requestCompleted(Pillow::HttpRequest* request)
 {
 	QCoreApplication::processEvents();
 	response = responseBuffer;
 	responseBuffer = QByteArray();
+	requestParams = request->requestParams();
 }
 
 void HttpHandlerTestBase::outputBuffer_bytesWritten()
@@ -280,21 +281,38 @@ void HttpHandlerSimpleRouterTest::testPathParams()
 	HttpHandlerSimpleRouter handler;
 	handler.addRoute("/first/:with_param", 200, Pillow::HttpHeaderCollection(), "First Route"); 
 	handler.addRoute("/second/:with_param/and/:another", 200, Pillow::HttpHeaderCollection(), "Second Route");
-	handler.addRoute("/third/:with_param/:many/:params", 200, Pillow::HttpHeaderCollection(), "Third Route");
+	handler.addRoute("/third/:with/:many/:params", 200, Pillow::HttpHeaderCollection(), "Third Route");
 	
 	QVERIFY(handler.handleRequest(createGetRequest("/first/some_param-value")));
 	QVERIFY(response.startsWith("HTTP/1.0 200"));
 	QVERIFY(response.endsWith("First Route"));
+	QCOMPARE(requestParams.size(), 1);
+	QCOMPARE(requestParams.at(0).first, QString("with_param"));
+	QCOMPARE(requestParams.at(0).second, QString("some_param-value"));
 	response.clear();	
 
 	QVERIFY(handler.handleRequest(createGetRequest("/second/some_param-value/and/another_value")));
 	QVERIFY(response.startsWith("HTTP/1.0 200"));
 	QVERIFY(response.endsWith("Second Route"));
+	QCOMPARE(requestParams.size(), 2);
+	QCOMPARE(requestParams.at(0).first, QString("with_param"));
+	QCOMPARE(requestParams.at(0).second, QString("some_param-value"));
+	QCOMPARE(requestParams.at(1).first, QString("another"));
+	QCOMPARE(requestParams.at(1).second, QString("another_value"));
 	response.clear();	
 
-	QVERIFY(handler.handleRequest(createGetRequest("/third/some_param-value/another_value/and_a_last_one")));
+	QVERIFY(handler.handleRequest(createGetRequest("/third/some_param-value/another_value/and_a_last_one?with=overriden&extra=bonus_query_param#and_fragment")));
 	QVERIFY(response.startsWith("HTTP/1.0 200"));
 	QVERIFY(response.endsWith("Third Route"));
+	QCOMPARE(requestParams.size(), 4);
+	QCOMPARE(requestParams.at(0).first, QString("with"));
+	QCOMPARE(requestParams.at(0).second, QString("some_param-value")); // The route param should have overriden the query string param.
+	QCOMPARE(requestParams.at(1).first, QString("extra"));
+	QCOMPARE(requestParams.at(1).second, QString("bonus_query_param"));
+	QCOMPARE(requestParams.at(2).first, QString("many"));
+	QCOMPARE(requestParams.at(2).second, QString("another_value"));
+	QCOMPARE(requestParams.at(3).first, QString("params"));
+	QCOMPARE(requestParams.at(3).second, QString("and_a_last_one"));
 	response.clear();
 	
 	QVERIFY(!handler.handleRequest(createGetRequest("/first/some_param-value/and_extra_stuff")));
@@ -312,26 +330,49 @@ void HttpHandlerSimpleRouterTest::testPathSplats()
 	QVERIFY(handler.handleRequest(createGetRequest("/first/")));
 	QVERIFY(response.startsWith("HTTP/1.0 200"));
 	QVERIFY(response.endsWith("First Route"));
+	QCOMPARE(requestParams.size(), 1);
+	QCOMPARE(requestParams.at(0).first, QString("with_splat"));
+	QCOMPARE(requestParams.at(0).second, QString(""));	
 	response.clear();		
 
 	QVERIFY(handler.handleRequest(createGetRequest("/first/with/anything-after.that/really_I_tell_you.html")));
 	QVERIFY(response.startsWith("HTTP/1.0 200"));
 	QVERIFY(response.endsWith("First Route"));
+	QCOMPARE(requestParams.size(), 1);
+	QCOMPARE(requestParams.at(0).first, QString("with_splat"));
+	QCOMPARE(requestParams.at(0).second, QString("with/anything-after.that/really_I_tell_you.html"));	
 	response.clear();		
 
 	QVERIFY(handler.handleRequest(createGetRequest("/second/some-param-value/and/")));
 	QVERIFY(response.startsWith("HTTP/1.0 200"));
 	QVERIFY(response.endsWith("Second Route"));
+	QCOMPARE(requestParams.size(), 2);
+	QCOMPARE(requestParams.at(0).first, QString("with_param"));
+	QCOMPARE(requestParams.at(0).second, QString("some-param-value"));	
+	QCOMPARE(requestParams.at(1).first, QString("splat"));
+	QCOMPARE(requestParams.at(1).second, QString(""));
 	response.clear();			
 
-	QVERIFY(handler.handleRequest(createGetRequest("/second/some-param-value/and/extra/stuff/splatted.at/the.end")));
+	QVERIFY(handler.handleRequest(createGetRequest("/second/some-param-value/and/extra/stuff/splatted.at/the.end?with=bonus_query_param#and_fragment")));
 	QVERIFY(response.startsWith("HTTP/1.0 200"));
 	QVERIFY(response.endsWith("Second Route"));
+	QCOMPARE(requestParams.size(), 3);
+	QCOMPARE(requestParams.at(0).first, QString("with"));
+	QCOMPARE(requestParams.at(0).second, QString("bonus_query_param"));	
+	QCOMPARE(requestParams.at(1).first, QString("with_param"));
+	QCOMPARE(requestParams.at(1).second, QString("some-param-value"));	
+	QCOMPARE(requestParams.at(2).first, QString("splat"));
+	QCOMPARE(requestParams.at(2).second, QString("extra/stuff/splatted.at/the.end"));
 	response.clear();
 	
-	QVERIFY(handler.handleRequest(createGetRequest("/third/some/path/two/and/another/path.txt")));
+	QVERIFY(handler.handleRequest(createGetRequest("/third/some/path/two/and/another/path%20with%20spaces.txt")));
 	QVERIFY(response.startsWith("HTTP/1.0 200"));
 	QVERIFY(response.endsWith("Third Route"));
+	QCOMPARE(requestParams.size(), 2);
+	QCOMPARE(requestParams.at(0).first, QString("with"));
+	QCOMPARE(requestParams.at(0).second, QString("some/path"));	
+	QCOMPARE(requestParams.at(1).first, QString("splats"));
+	QCOMPARE(requestParams.at(1).second, QString("and/another/path with spaces.txt"));
 	response.clear();				
 
 	QVERIFY(!handler.handleRequest(createGetRequest("/first")));

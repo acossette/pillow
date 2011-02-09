@@ -3,6 +3,7 @@
 #include <QtCore/QPointer>
 #include <QtCore/QRegExp>
 #include <QtCore/QVarLengthArray>
+#include <QtCore/QUrl>
 using namespace Pillow;
 
 namespace Pillow
@@ -156,11 +157,14 @@ bool HttpHandlerSimpleRouter::handleRequest(Pillow::HttpRequest *request)
 	QVarLengthArray<Route*, 16> matchedRoutes;
 	foreach (Route* route, d_ptr->routes) 
 	{
-		if (route->regExp.indexIn(request->requestPath()) != -1)
+		QString requestPath = QUrl::fromPercentEncoding(request->requestPath());
+		if (route->regExp.indexIn(requestPath) != -1)
 		{
 			matchedRoutes.append(route);
 			if (route->method.isEmpty() || route->method == request->requestMethod())
 			{
+				for (int i = 0, iE = route->paramNames.size(); i < iE; ++i)
+					request->setRequestParam(route->paramNames.at(i), route->regExp.cap(i + 1));
 				route->invoke(request);
 				return true;
 			}
