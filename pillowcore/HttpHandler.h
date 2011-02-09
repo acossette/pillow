@@ -132,7 +132,7 @@ namespace Pillow
 	{
 		Q_OBJECT;
 		QPointer<QIODevice> _sourceDevice;
-		HttpRequest* _targetRequest;
+		QPointer<HttpRequest> _targetRequest;
 		int _bufferSize;
 	
 	public:
