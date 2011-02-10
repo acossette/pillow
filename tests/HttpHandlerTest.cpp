@@ -432,3 +432,26 @@ void HttpHandlerSimpleRouterTest::testMethodMismatchAction()
 	response.clear();	
 }
 
+void HttpHandlerSimpleRouterTest::testSupportsMethodParam()
+{
+	HttpHandlerSimpleRouter handler;
+	handler.addRoute("POST", "/a", 200, Pillow::HttpHeaderCollection(), "Route");
+	handler.addRoute("DELETE", "/b", 200, Pillow::HttpHeaderCollection(), "Route");
+	
+	QVERIFY(handler.acceptsMethodParam() == false);	
+	QVERIFY(!handler.handleRequest(createGetRequest("/a")));
+	QVERIFY(handler.handleRequest(createPostRequest("/a")));
+	QVERIFY(!handler.handleRequest(createGetRequest("/a?_method=post")));
+	QVERIFY(!handler.handleRequest(createGetRequest("/b?_method=delete")));
+	QVERIFY(!handler.handleRequest(createPostRequest("/b?_method=delete")));
+	
+	handler.setAcceptsMethodParam(true);
+	QVERIFY(!handler.handleRequest(createGetRequest("/a")));
+	QVERIFY(handler.handleRequest(createPostRequest("/a")));
+	QVERIFY(handler.handleRequest(createGetRequest("/a?_method=POST")));
+	QVERIFY(handler.handleRequest(createGetRequest("/b?_method=DELETE")));
+	QVERIFY(handler.handleRequest(createPostRequest("/b?_method=DELETE")));
+	QVERIFY(handler.handleRequest(createGetRequest("/b?_method=delete")));
+	QVERIFY(handler.handleRequest(createPostRequest("/b?_method=delete")));
+}
+

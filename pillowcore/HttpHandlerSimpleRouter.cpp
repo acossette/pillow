@@ -6,6 +6,8 @@
 #include <QtCore/QUrl>
 using namespace Pillow;
 
+static const QString methodToken("_method");
+
 namespace Pillow
 {
 	struct Route
@@ -63,6 +65,7 @@ namespace Pillow
 		QList<Route*> routes;
 		HttpHandlerSimpleRouter::RoutingErrorAction methodMismatchAction;
 		HttpHandlerSimpleRouter::RoutingErrorAction unmatchedRequestAction;
+		bool acceptMethodParam;
 	};
 }
 
@@ -75,6 +78,7 @@ HttpHandlerSimpleRouter::HttpHandlerSimpleRouter(QObject* parent /* = 0 */)
 {
 	d_ptr->methodMismatchAction = Passthrough;
 	d_ptr->unmatchedRequestAction = Passthrough;
+	d_ptr->acceptMethodParam = false;
 }
 
 HttpHandlerSimpleRouter::~HttpHandlerSimpleRouter()
@@ -155,13 +159,23 @@ QRegExp Pillow::HttpHandlerSimpleRouter::pathToRegExp(const QString &p, QStringL
 bool HttpHandlerSimpleRouter::handleRequest(Pillow::HttpRequest *request)
 {
 	QVarLengthArray<Route*, 16> matchedRoutes;
+
+	QByteArray requestMethod = request->requestMethod();
+	if (d_ptr->acceptMethodParam)
+	{
+		QString methodParam = request->getRequestParam(methodToken);
+		if (!methodParam.isEmpty())
+			requestMethod = methodParam.toAscii();
+	}
+			
 	foreach (Route* route, d_ptr->routes) 
 	{
 		QString requestPath = QUrl::fromPercentEncoding(request->requestPath());
 		if (route->regExp.indexIn(requestPath) != -1)
 		{
 			matchedRoutes.append(route);
-			if (route->method.isEmpty() || route->method == request->requestMethod())
+			if (route->method.isEmpty() || 
+				(route->method.size() == requestMethod.size() && qstricmp(route->method, requestMethod) == 0))
 			{
 				for (int i = 0, iE = route->paramNames.size(); i < iE; ++i)
 					request->setRequestParam(route->paramNames.at(i), route->regExp.cap(i + 1));
@@ -215,4 +229,14 @@ Pillow::HttpHandlerSimpleRouter::RoutingErrorAction Pillow::HttpHandlerSimpleRou
 void Pillow::HttpHandlerSimpleRouter::setMethodMismatchAction(Pillow::HttpHandlerSimpleRouter::RoutingErrorAction action)
 {
 	d_ptr->methodMismatchAction = action;
+}
+
+bool Pillow::HttpHandlerSimpleRouter::acceptsMethodParam() const
+{
+	return d_ptr->acceptMethodParam;
+}
+
+void Pillow::HttpHandlerSimpleRouter::setAcceptsMethodParam(bool accept)
+{
+	d_ptr->acceptMethodParam = accept;
 }

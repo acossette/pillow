@@ -38,6 +38,9 @@ namespace Pillow
 		RoutingErrorAction methodMismatchAction() const;		
 		void setMethodMismatchAction(RoutingErrorAction action);
 		
+		bool acceptsMethodParam() const;
+		void setAcceptsMethodParam(bool accept);
+		
 	public:
 		bool handleRequest(Pillow::HttpRequest *request);
 	};

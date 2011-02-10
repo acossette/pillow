@@ -62,6 +62,7 @@ private slots:
 	void testMatchesMethod();
 	void testUnmatchedRequestAction();
 	void testMethodMismatchAction();
+	void testSupportsMethodParam();
 };
 
 #endif // HTTPHANDLERTEST_H
