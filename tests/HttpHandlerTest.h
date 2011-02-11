@@ -49,13 +49,16 @@ class HttpHandlerSimpleRouterTest : public HttpHandlerTestBase
 {
 	Q_OBJECT
 	
+protected:
+	Q_INVOKABLE void handleRequest1(Pillow::HttpRequest* request);
+	
 protected slots:
-	void handleRequest1(Pillow::HttpRequest* request);
 	void handleRequest2(Pillow::HttpRequest* request);
 	
 private slots:
 	void testHandlerRoute();
 	void testQObjectMetaCallRoute();
+	void testQObjectSlotCallRoute();
 	void testStaticRoute();
 	void testPathParams();
 	void testPathSplats();

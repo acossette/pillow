@@ -243,6 +243,17 @@ void HttpHandlerSimpleRouterTest::testQObjectMetaCallRoute()
 	response.clear();
 }
 
+void HttpHandlerSimpleRouterTest::testQObjectSlotCallRoute()
+{
+	HttpHandlerSimpleRouter handler;
+	handler.addRoute("/route", this, SLOT(handleRequest2(Pillow::HttpRequest*)));
+
+	QVERIFY(handler.handleRequest(createGetRequest("/route")));	
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("World"));
+	response.clear();
+}
+
 void HttpHandlerSimpleRouterTest::testStaticRoute()
 {
 	HttpHandlerSimpleRouter handler;

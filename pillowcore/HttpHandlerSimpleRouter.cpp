@@ -1,6 +1,7 @@
 #include "HttpHandlerSimpleRouter.h"
 #include "HttpRequest.h"
 #include <QtCore/QPointer>
+#include <QtCore/QMetaMethod>
 #include <QtCore/QRegExp>
 #include <QtCore/QVarLengthArray>
 #include <QtCore/QUrl>
@@ -33,12 +34,24 @@ namespace Pillow
 	struct QObjectMetaCallRoute : public Route
 	{
 		QPointer<QObject> object;
-		const char* member;
+		QByteArray member;
 		
 		virtual bool invoke(Pillow::HttpRequest *request)
 		{
 			if (!object) return false;
-			return QMetaObject::invokeMethod(object, member, Q_ARG(Pillow::HttpRequest*, request));
+			return QMetaObject::invokeMethod(object, member.constData(), Q_ARG(Pillow::HttpRequest*, request));
+		}
+	};
+
+	struct QObjectMethodCallRoute : public Route
+	{
+		QPointer<QObject> object;
+		QMetaMethod metaMethod;
+		
+		virtual bool invoke(Pillow::HttpRequest *request)
+		{
+			if (!object) return false;
+			return metaMethod.invoke(object, Q_ARG(Pillow::HttpRequest*, request));
 		}
 	};
 	
@@ -99,12 +112,44 @@ void HttpHandlerSimpleRouter::addRoute(const QByteArray& method, const QString &
 
 void HttpHandlerSimpleRouter::addRoute(const QByteArray& method, const QString& path, QObject* object, const char* member)
 {
-	QObjectMetaCallRoute* route = new QObjectMetaCallRoute();
-	route->method = method;
-	route->regExp = pathToRegExp(path, &route->paramNames);
-	route->object = object;
-	route->member = member;
-	d_ptr->routes.append(route);
+	if (object == NULL)
+	{
+		qWarning() << "HttpHandlerSimpleRouter::addRoute: NULL target object specified while adding route for" << path << "- not adding route";
+		return;
+	}
+	else if (member == NULL || member[0] == 0)
+	{
+		qWarning() << "HttpHandlerSimpleRouter::addRoute: NULL or empty member specified while adding route for" << path << "- not adding route";		
+		return;
+	}
+
+	if (member[0] == '1')
+	{
+		// This is a slot name produced with the SLOT() macro, skip the leading id.
+		member++;
+	}
+	int methodIndex = object->metaObject()->indexOfSlot(member);
+	if (methodIndex == -1) object->metaObject()->indexOfMethod(member);
+	
+	if (methodIndex == -1)
+	{
+		// Not a normalised method name. Still give a chance and invoke the member by name.
+		QObjectMetaCallRoute* route = new QObjectMetaCallRoute();
+		route->method = method;
+		route->regExp = pathToRegExp(path, &route->paramNames);
+		route->object = object;
+		route->member = member;
+		d_ptr->routes.append(route);
+	}
+	else
+	{
+		QObjectMethodCallRoute* route = new QObjectMethodCallRoute();
+		route->method = method;
+		route->regExp = pathToRegExp(path, &route->paramNames);
+		route->object = object;
+		route->metaMethod = object->metaObject()->method(methodIndex);
+		d_ptr->routes.append(route);
+	}
 }
 
 void HttpHandlerSimpleRouter::addRoute(const QByteArray& method, const QString& path, int statusCode, const Pillow::HttpHeaderCollection& headers, const QByteArray& content /*= QByteArray()*/)
