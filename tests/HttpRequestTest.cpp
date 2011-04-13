@@ -21,7 +21,7 @@ static void wait(int milliseconds = 10)
 }
 
 HttpRequestTest::HttpRequestTest()
-    : request(NULL), readySpy(NULL), completedSpy(NULL), closedSpy(NULL)
+    : request(NULL), readySpy(NULL), completedSpy(NULL), closedSpy(NULL), reuseRequest(false)
 {
 	qRegisterMetaType<Pillow::HttpRequest*>("Pillow::HttpRequest*");
 }
@@ -655,6 +655,55 @@ void HttpRequestTest::testReadsRequestParams()
 
 }
 
+void HttpRequestTest::testReuseRequest()
+{
+	reuseRequest = true;
+	QObject* firstRequest = request;
+
+	clientWrite("GET / HTTP/1.0\r\n");
+	clientWrite("\r\n"); clientFlush();
+	request->writeResponse(200, HttpHeaderCollection() << HttpHeader("Some-Header", "Some Value") << HttpHeader("Other-Header", "OtherValue"), "response content");
+	QCOMPARE(completedSpy->size(), 1);
+	
+	cleanup(); 
+	init();
+	
+	QCOMPARE(completedSpy->size(), 0);	
+	QVERIFY(request == firstRequest);
+	clientWrite("GET / HTTP/1.0\r\n");
+	clientWrite("\r\n"); clientFlush();
+	request->writeResponse(200, HttpHeaderCollection() << HttpHeader("Some-Header", "Some Value") << HttpHeader("Other-Header", "OtherValue"), "response content");
+	QCOMPARE(completedSpy->size(), 1);	
+
+	cleanup(); init();
+
+	clientWrite("INVALID REQUEST HEADERS\r\n");
+	clientWrite("Invalid headers\r\n");
+	clientWrite("Should close"); clientFlush();
+
+	QVERIFY(clientReadAll().startsWith("HTTP/1.0 400"));
+	QCOMPARE(request->state(), HttpRequest::Closed);
+	QCOMPARE(readySpy->size(), 0);
+	QCOMPARE(completedSpy->size(), 0);
+	QCOMPARE(closedSpy->size(), 1);
+	QVERIFY(!isClientConnected());
+
+	cleanup(); init();
+
+	QCOMPARE(completedSpy->size(), 0);	
+	QVERIFY(request == firstRequest);
+	clientWrite("GET / HTTP/1.0\r\n");
+	clientWrite("\r\n"); clientFlush();
+	request->writeResponse(200, HttpHeaderCollection() << HttpHeader("Some-Header", "Some Value") << HttpHeader("Other-Header", "OtherValue"), "response content");
+	QCOMPARE(completedSpy->size(), 1);	
+
+	cleanup(); init();
+
+	testInvalidRequestContent();
+	
+	QVERIFY(request == firstRequest);
+}
+
 void HttpRequestTest::benchmarkSimpleGetClose()
 {
 	cleanup();
@@ -719,7 +768,13 @@ HttpRequestTcpSocketTest::HttpRequestTcpSocketTest()
 
 void HttpRequestTcpSocketTest::server_newConnection()
 {
-	request = new HttpRequest(server->nextPendingConnection());
+	if (reuseRequest && request)
+	{
+		QIODevice* device = server->nextPendingConnection();
+		request->initialize(device, device);
+	}
+	else
+		request = new HttpRequest(server->nextPendingConnection());
 }
 
 void HttpRequestTcpSocketTest::init()
@@ -730,7 +785,7 @@ void HttpRequestTcpSocketTest::init()
 	client = new QTcpSocket();
 	client->connectToHost(QHostAddress::LocalHost, server->serverPort());
 	QVERIFY(client->waitForConnected(1000));
-	while (request == NULL)
+	while (request == NULL || request->inputDevice() == NULL)
 		QCoreApplication::processEvents();
 	readySpy = new QSignalSpy(request, SIGNAL(ready(Pillow::HttpRequest*)));
 	completedSpy = new QSignalSpy(request, SIGNAL(completed(Pillow::HttpRequest*)));
@@ -739,7 +794,7 @@ void HttpRequestTcpSocketTest::init()
 
 void HttpRequestTcpSocketTest::cleanup()
 {
-	if (request) delete request; request = NULL;
+	if (request && !reuseRequest) { delete request; request = NULL; }
 	if (server) delete server; server = NULL;
 	if (client) delete client; client = NULL;
 	if (readySpy) delete readySpy; readySpy = NULL;
@@ -1047,4 +1102,5 @@ bool HttpRequestBufferTest::isClientConnected()
 {
 	return inputBuffer->isOpen();
 }
+
 

@@ -21,6 +21,7 @@ public:
 protected:
 	Pillow::HttpRequest* request;
 	QSignalSpy* readySpy, *completedSpy, *closedSpy;
+	bool reuseRequest;
 	
 protected: // Helper methods.
 	virtual void clientWrite(const QByteArray& data) = 0;
@@ -53,6 +54,7 @@ protected slots: // Test methods.
 	void testWriteResponseWithoutRequest();
 	void testMultipacketResponse();
 	void testReadsRequestParams();
+	void testReuseRequest();
 	
 	void benchmarkSimpleGetClose();
 	void benchmarkSimpleGetKeepAlive();
@@ -103,6 +105,7 @@ private slots: // Test methods.
 	void testWriteResponseWithoutRequest() { HttpRequestTest::testWriteResponseWithoutRequest(); }
 	void testMultipacketResponse() { HttpRequestTest::testMultipacketResponse(); }
 	void testReadsRequestParams() { HttpRequestTest::testReadsRequestParams(); }
+	void testReuseRequest() { HttpRequestTest::testReuseRequest(); }
 	
 	void benchmarkSimpleGetClose() { HttpRequestTest::benchmarkSimpleGetClose(); }
 	void benchmarkSimpleGetKeepAlive() { HttpRequestTest::benchmarkSimpleGetKeepAlive(); }

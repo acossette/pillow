@@ -85,7 +85,15 @@ void HttpRequest::initialize(QIODevice* inputDevice, QIODevice* outputDevice)
 	_parser.data = this;
 	_parser.http_field = &HttpRequest::parser_http_field;
 	_requestHeadersRef.reserve(16);
-
+	
+	// Clear any leftover data from a previous potentially failed request (that would not have gone though "transitionToCompleted")
+	if (_requestBuffer.capacity() <= MaximumRequestHeaderLength) _requestBuffer.data_ptr()->size = 0;
+	else _requestBuffer.clear();
+	if (_requestHeadersRef.capacity() > 16) _requestHeadersRef.clear();
+	else while (!_requestHeadersRef.isEmpty()) _requestHeadersRef.pop_back();
+	if (_requestParams.capacity() > 16) _requestParams.clear();
+	else while(!_requestParams.isEmpty()) _requestParams.pop_back();
+	
 	if (inputDevice != _inputDevice)
 	{
 		_inputDevice = inputDevice;
