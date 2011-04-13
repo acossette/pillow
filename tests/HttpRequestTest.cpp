@@ -700,7 +700,11 @@ void HttpRequestTest::testReuseRequest()
 	cleanup(); init();
 
 	testInvalidRequestContent();
+	QVERIFY(request == firstRequest);
 	
+	cleanup(); init();
+	
+	testSimpleGet();
 	QVERIFY(request == firstRequest);
 }
 
