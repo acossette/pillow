@@ -7,11 +7,11 @@
 namespace Pillow
 {
 	class HttpServer;
-	class HttpRequest;
+	class HttpConnection;
 }
 class QIODevice;
 
-uint qHash(const QPointer<Pillow::HttpRequest>& ptr);
+uint qHash(const QPointer<Pillow::HttpConnection>& ptr);
 
 class HttpServerTestBase : public QObject
 {
@@ -29,15 +29,15 @@ protected slots: // Test slots.
 	
 protected:
 	QObject* server;
-	QList<Pillow::HttpRequest*> handledRequests;
-	QList<QPointer<Pillow::HttpRequest> > guardedHandledRequests;
+	QList<Pillow::HttpConnection*> handledRequests;
+	QList<QPointer<Pillow::HttpConnection> > guardedHandledRequests;
 
 	void sendRequest(QIODevice* device, const QByteArray& content);
 	void sendResponses();
 	void sendConcurrentRequests(int concurrencyLevel);
 	
 protected slots:
-	void requestReady(Pillow::HttpRequest* request);
+	void requestReady(Pillow::HttpConnection* request);
 	
 protected:
 	virtual QObject* createServer() = 0;

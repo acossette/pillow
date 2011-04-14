@@ -1,7 +1,7 @@
 #ifndef PILLOW_NO_SSL
 
 #include "HttpsServer.h"
-#include "HttpRequest.h"
+#include "HttpConnection.h"
 #include <QtNetwork/QSslSocket>
 using namespace Pillow;
 
@@ -41,7 +41,7 @@ void HttpsServer::incomingConnection(int socketDescriptor)
 		connect(sslSocket, SIGNAL(encrypted()), this, SLOT(sslSocket_encrypted()));
 		addPendingConnection(sslSocket);
 		nextPendingConnection();
-		createHttpRequest()->initialize(sslSocket, sslSocket);
+		createHttpConnection()->initialize(sslSocket, sslSocket);
 	}
 	else
 	{

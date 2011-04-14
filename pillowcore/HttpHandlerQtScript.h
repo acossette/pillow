@@ -23,7 +23,7 @@ namespace Pillow
 	public:
 		void setScriptFunction(const QScriptValue& scriptFunction);
 	
-		virtual bool handleRequest(Pillow::HttpRequest *request);
+		virtual bool handleRequest(Pillow::HttpConnection *request);
 	};
 	
 	class HttpHandlerQtScriptFile : public HttpHandlerQtScript
@@ -48,7 +48,7 @@ namespace Pillow
 		void setFunctionName(const QString& functionName);
 		void setAutoReload(bool autoReload);
 	
-		virtual bool handleRequest(Pillow::HttpRequest *request);
+		virtual bool handleRequest(Pillow::HttpConnection *request);
 	};
 }
 

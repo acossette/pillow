@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
 //		new Pillow::HttpHandlerLog(handler);
 //		new Pillow::HttpHandlerFixed(200, "Hello from pillow!", handler);
 	
-	QObject::connect(&server, SIGNAL(requestReady(Pillow::HttpRequest*)), handler, SLOT(handleRequest(Pillow::HttpRequest*)));
+	QObject::connect(&server, SIGNAL(requestReady(Pillow::HttpConnection*)), handler, SLOT(handleRequest(Pillow::HttpConnection*)));
 
     return a.exec();
 }

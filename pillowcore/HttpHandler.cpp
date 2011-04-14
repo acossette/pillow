@@ -1,5 +1,5 @@
 #include "HttpHandler.h"
-#include "HttpRequest.h"
+#include "HttpConnection.h"
 #include "HttpHelpers.h"
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
@@ -28,7 +28,7 @@ HttpHandlerStack::HttpHandlerStack(QObject *parent)
 {
 }
 
-bool HttpHandlerStack::handleRequest(Pillow::HttpRequest *request)
+bool HttpHandlerStack::handleRequest(Pillow::HttpConnection *request)
 {
 	foreach (QObject* object, children())
 	{
@@ -63,7 +63,7 @@ HttpHandlerFixed::HttpHandlerFixed(int statusCode, const QByteArray& content, QO
 {
 }
 
-bool HttpHandlerFixed::handleRequest(Pillow::HttpRequest *request)
+bool HttpHandlerFixed::handleRequest(Pillow::HttpConnection *request)
 {
 	request->requestParams();
 	request->writeResponse(_statusCode, HttpHeaderCollection(), _content);
@@ -79,7 +79,7 @@ HttpHandler404::HttpHandler404(QObject *parent)
 {
 }
 
-bool HttpHandler404::handleRequest(Pillow::HttpRequest *request)
+bool HttpHandler404::handleRequest(Pillow::HttpConnection *request)
 {
 	request->writeResponseString(404, HttpHeaderCollection(), QString("The requested resource '%1' does not exist on this server").arg(QString(request->requestPath())));
 	return true;
@@ -105,13 +105,13 @@ HttpHandlerLog::~HttpHandlerLog()
 		delete timer;
 }
 
-bool HttpHandlerLog::handleRequest(Pillow::HttpRequest *request)
+bool HttpHandlerLog::handleRequest(Pillow::HttpConnection *request)
 {
 	QElapsedTimer* timer = requestTimerMap.value(request, NULL);
 	if (timer == NULL)
 	{
 		timer = requestTimerMap[request] = new QElapsedTimer();
-		connect(request, SIGNAL(completed(Pillow::HttpRequest*)), this, SLOT(requestCompleted(Pillow::HttpRequest*)));
+		connect(request, SIGNAL(completed(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
 		connect(request, SIGNAL(destroyed(QObject*)), this, SLOT(requestDestroyed(QObject*)));
 	}
 	timer->start();
@@ -119,7 +119,7 @@ bool HttpHandlerLog::handleRequest(Pillow::HttpRequest *request)
 	return false;
 }
 
-void HttpHandlerLog::requestCompleted(Pillow::HttpRequest *request)
+void HttpHandlerLog::requestCompleted(Pillow::HttpConnection *request)
 {
 	QElapsedTimer* timer = requestTimerMap.value(request, NULL);
 	if (timer)
@@ -152,7 +152,7 @@ void HttpHandlerLog::requestCompleted(Pillow::HttpRequest *request)
 
 void HttpHandlerLog::requestDestroyed(QObject *r)
 {
-	HttpRequest* request = static_cast<HttpRequest*>(r);
+	HttpConnection* request = static_cast<HttpConnection*>(r);
 	delete requestTimerMap.value(request, NULL);
 	requestTimerMap.remove(request);
 }
@@ -200,7 +200,7 @@ void HttpHandlerFile::setBufferSize(int bytes)
 	_bufferSize = bytes;
 }
 
-bool HttpHandlerFile::handleRequest(Pillow::HttpRequest *request)
+bool HttpHandlerFile::handleRequest(Pillow::HttpConnection *request)
 {	
 	if (_publicPath.isEmpty()) { return false; } // Just don't allow access to the root filesystem unless really configured for it.
 
@@ -270,7 +270,7 @@ bool HttpHandlerFile::handleRequest(Pillow::HttpRequest *request)
 // HttpHandlerFile
 //
 
-HttpHandlerFileTransfer::HttpHandlerFileTransfer(QIODevice *sourceDevice, HttpRequest *targetRequest, int bufferSize)
+HttpHandlerFileTransfer::HttpHandlerFileTransfer(QIODevice *sourceDevice, HttpConnection *targetRequest, int bufferSize)
     : _sourceDevice(sourceDevice), _targetRequest(targetRequest), _bufferSize(bufferSize)
 {
 	if (bufferSize < 512)
@@ -280,8 +280,8 @@ HttpHandlerFileTransfer::HttpHandlerFileTransfer(QIODevice *sourceDevice, HttpRe
 	}
 
 	connect(sourceDevice, SIGNAL(destroyed()), this, SLOT(deleteLater()));
-	connect(targetRequest, SIGNAL(completed(Pillow::HttpRequest*)), this, SLOT(deleteLater()));
-	connect(targetRequest, SIGNAL(closed(Pillow::HttpRequest*)), this, SLOT(deleteLater()));
+	connect(targetRequest, SIGNAL(completed(Pillow::HttpConnection*)), this, SLOT(deleteLater()));
+	connect(targetRequest, SIGNAL(closed(Pillow::HttpConnection*)), this, SLOT(deleteLater()));
 	connect(targetRequest, SIGNAL(destroyed()), this, SLOT(deleteLater()));
 	connect(targetRequest->outputDevice(), SIGNAL(bytesWritten(qint64)), this, SLOT(writeNextPayload()), Qt::QueuedConnection);
 }

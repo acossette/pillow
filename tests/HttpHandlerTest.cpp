@@ -1,34 +1,34 @@
 #include "HttpHandlerTest.h"
 #include "HttpHandler.h"
 #include "HttpHandlerSimpleRouter.h"
-#include "HttpRequest.h"
+#include "HttpConnection.h"
 #include <QtCore/QBuffer>
 #include <QtCore/QCoreApplication>
 #include <QtTest/QtTest>
 using namespace Pillow;
 
-Pillow::HttpRequest * HttpHandlerTestBase::createGetRequest(const QByteArray &path)
+Pillow::HttpConnection * HttpHandlerTestBase::createGetRequest(const QByteArray &path)
 {
 	QByteArray data = QByteArray().append("GET ").append(path).append(" HTTP/1.0\r\n\r\n");
 	QBuffer* inputBuffer = new QBuffer(); inputBuffer->open(QIODevice::ReadWrite);
 	QBuffer* outputBuffer = new QBuffer(); outputBuffer->open(QIODevice::ReadWrite);
 	connect(outputBuffer, SIGNAL(bytesWritten(qint64)), this, SLOT(outputBuffer_bytesWritten()));
 	
-	Pillow::HttpRequest* request = new Pillow::HttpRequest(inputBuffer, outputBuffer, this);
-	connect(request, SIGNAL(completed(Pillow::HttpRequest*)), this, SLOT(requestCompleted(Pillow::HttpRequest*)));
+	Pillow::HttpConnection* request = new Pillow::HttpConnection(inputBuffer, outputBuffer, this);
+	connect(request, SIGNAL(completed(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
 	inputBuffer->setParent(request);
 	outputBuffer->setParent(request);
 	
 	inputBuffer->write(data);
 	inputBuffer->seek(0);
 	
-	while (request->state() != Pillow::HttpRequest::SendingHeaders)
+	while (request->state() != Pillow::HttpConnection::SendingHeaders)
 		QCoreApplication::processEvents();
 	
 	return request;
 }
 
-Pillow::HttpRequest * HttpHandlerTestBase::createPostRequest(const QByteArray &path, const QByteArray &content)
+Pillow::HttpConnection * HttpHandlerTestBase::createPostRequest(const QByteArray &path, const QByteArray &content)
 {
 	QByteArray data = QByteArray().append("POST ").append(path).append(" HTTP/1.0\r\n");
 	if (content.size() > 0) data.append("Content-Length: ").append(QByteArray::number(content.size())).append("\r\n");
@@ -37,21 +37,21 @@ Pillow::HttpRequest * HttpHandlerTestBase::createPostRequest(const QByteArray &p
 	QBuffer* outputBuffer = new QBuffer(); outputBuffer->open(QIODevice::ReadWrite);
 	connect(outputBuffer, SIGNAL(bytesWritten(qint64)), this, SLOT(outputBuffer_bytesWritten()));
 	
-	Pillow::HttpRequest* request = new Pillow::HttpRequest(inputBuffer, outputBuffer, this);
-	connect(request, SIGNAL(completed(Pillow::HttpRequest*)), this, SLOT(requestCompleted(Pillow::HttpRequest*)));
+	Pillow::HttpConnection* request = new Pillow::HttpConnection(inputBuffer, outputBuffer, this);
+	connect(request, SIGNAL(completed(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
 	inputBuffer->setParent(request);
 	outputBuffer->setParent(request);
 	
 	inputBuffer->write(data);
 	inputBuffer->seek(0);
 	
-	while (request->state() != Pillow::HttpRequest::SendingHeaders)
+	while (request->state() != Pillow::HttpConnection::SendingHeaders)
 		QCoreApplication::processEvents();
 	
 	return request;
 }
 
-void HttpHandlerTestBase::requestCompleted(Pillow::HttpRequest* request)
+void HttpHandlerTestBase::requestCompleted(Pillow::HttpConnection* request)
 {
 	QCoreApplication::processEvents();
 	response = responseBuffer;
@@ -77,7 +77,7 @@ public:
 	int statusCode;
 	int handleRequestCount;	
 	
-	bool handleRequest(Pillow::HttpRequest *request)
+	bool handleRequest(Pillow::HttpConnection *request)
 	{
 		++handleRequestCount;
 		
@@ -138,9 +138,9 @@ void HttpHandlerTest::testHandler404()
 void HttpHandlerTest::testHandlerLog()
 {
 	QBuffer buffer; buffer.open(QIODevice::ReadWrite);
-	Pillow::HttpRequest* request1 = createGetRequest("/first");
-	Pillow::HttpRequest* request2 = createGetRequest("/second");
-	Pillow::HttpRequest* request3 = createGetRequest("/third");
+	Pillow::HttpConnection* request1 = createGetRequest("/first");
+	Pillow::HttpConnection* request2 = createGetRequest("/second");
+	Pillow::HttpConnection* request3 = createGetRequest("/third");
 	
 	HttpHandlerLog handler(&buffer, &buffer);
 	QVERIFY(!handler.handleRequest(request1));
@@ -182,7 +182,7 @@ void HttpHandlerFileTest::testServesFiles()
 	QVERIFY(!handler.handleRequest(createGetRequest("/bad_path")));
 	QVERIFY(!handler.handleRequest(createGetRequest("/another_bad")));
 	
-	Pillow::HttpRequest* request = createGetRequest("/first");
+	Pillow::HttpConnection* request = createGetRequest("/first");
 	QVERIFY(handler.handleRequest(request));
 	QVERIFY(response.startsWith("HTTP/1.0 200 OK"));
 	QVERIFY(response.endsWith("first content"));
@@ -246,7 +246,7 @@ void HttpHandlerSimpleRouterTest::testQObjectMetaCallRoute()
 void HttpHandlerSimpleRouterTest::testQObjectSlotCallRoute()
 {
 	HttpHandlerSimpleRouter handler;
-	handler.addRoute("/route", this, SLOT(handleRequest2(Pillow::HttpRequest*)));
+	handler.addRoute("/route", this, SLOT(handleRequest2(Pillow::HttpConnection*)));
 
 	QVERIFY(handler.handleRequest(createGetRequest("/route")));	
 	QVERIFY(response.startsWith("HTTP/1.0 200"));
@@ -277,12 +277,12 @@ void HttpHandlerSimpleRouterTest::testStaticRoute()
 	response.clear();
 }
 
-void HttpHandlerSimpleRouterTest::handleRequest1(Pillow::HttpRequest *request)
+void HttpHandlerSimpleRouterTest::handleRequest1(Pillow::HttpConnection *request)
 {
 	request->writeResponse(403, Pillow::HttpHeaderCollection(), "Hello");
 }
 
-void HttpHandlerSimpleRouterTest::handleRequest2(Pillow::HttpRequest *request)
+void HttpHandlerSimpleRouterTest::handleRequest2(Pillow::HttpConnection *request)
 {
 	request->writeResponse(200, Pillow::HttpHeaderCollection(), "World");
 }

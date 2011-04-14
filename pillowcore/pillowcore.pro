@@ -16,17 +16,17 @@ SOURCES += \
     HttpServer.cpp \
     HttpHandler.cpp \
     HttpHandlerQtScript.cpp \
-    HttpRequest.cpp \
     HttpHelpers.cpp \
     HttpsServer.cpp \
-    HttpHandlerSimpleRouter.cpp
+    HttpHandlerSimpleRouter.cpp \
+    HttpConnection.cpp
 
 HEADERS += \
 	parser/parser.h \
     HttpServer.h \
     HttpHandler.h \
     HttpHandlerQtScript.h \
-    HttpRequest.h \
     HttpHelpers.h \
     HttpsServer.h \
-    HttpHandlerSimpleRouter.h
+    HttpHandlerSimpleRouter.h \
+    HttpConnection.h

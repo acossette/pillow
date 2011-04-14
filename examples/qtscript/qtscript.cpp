@@ -20,8 +20,8 @@ int main(int argc, char *argv[])
 		new HttpHandlerLog(handler);
 		new HttpHandlerQtScriptFile(scriptEngine, "test.js", "handleRequest", true, handler);
 		new HttpHandler404(handler);
-	QObject::connect(&server, SIGNAL(requestReady(Pillow::HttpRequest*)),
-	                 handler, SLOT(handleRequest(Pillow::HttpRequest*)));
+	QObject::connect(&server, SIGNAL(requestReady(Pillow::HttpConnection*)),
+	                 handler, SLOT(handleRequest(Pillow::HttpConnection*)));
 
     return a.exec();
 }

@@ -2,9 +2,9 @@
 #define HTTPHANDLERTEST_H
 
 #include <QtCore/QObject>
-#include <HttpRequest.h>
+#include <HttpConnection.h>
 
-namespace Pillow { class HttpRequest; }
+namespace Pillow { class HttpConnection; }
 
 class HttpHandlerTestBase : public QObject
 {
@@ -12,7 +12,7 @@ class HttpHandlerTestBase : public QObject
 
 protected slots:
 	void outputBuffer_bytesWritten();
-	void requestCompleted(Pillow::HttpRequest* request);
+	void requestCompleted(Pillow::HttpConnection* request);
 	
 protected:
 	QByteArray responseBuffer;
@@ -20,8 +20,8 @@ protected:
 	Pillow::HttpParamCollection requestParams;
 	
 protected:
-	Pillow::HttpRequest* createGetRequest(const QByteArray& path = "/");
-	Pillow::HttpRequest* createPostRequest(const QByteArray& path = "/", const QByteArray& content = QByteArray());
+	Pillow::HttpConnection* createGetRequest(const QByteArray& path = "/");
+	Pillow::HttpConnection* createPostRequest(const QByteArray& path = "/", const QByteArray& content = QByteArray());
 };
 
 class HttpHandlerTest : public HttpHandlerTestBase
@@ -50,10 +50,10 @@ class HttpHandlerSimpleRouterTest : public HttpHandlerTestBase
 	Q_OBJECT
 	
 protected:
-	Q_INVOKABLE void handleRequest1(Pillow::HttpRequest* request);
+	Q_INVOKABLE void handleRequest1(Pillow::HttpConnection* request);
 	
 protected slots:
-	void handleRequest2(Pillow::HttpRequest* request);
+	void handleRequest2(Pillow::HttpConnection* request);
 	
 private slots:
 	void testHandlerRoute();

@@ -10,7 +10,7 @@ class QLocalServer;
 class QLocalSocket;
 class QSignalSpy;
 class QBuffer;
-namespace Pillow { class HttpRequest; }
+namespace Pillow { class HttpConnection; }
 class HttpRequestTest : public QObject
 {
     Q_OBJECT
@@ -19,7 +19,7 @@ public:
 	HttpRequestTest();	
 	
 protected:
-	Pillow::HttpRequest* request;
+	Pillow::HttpConnection* request;
 	QSignalSpy* readySpy, *completedSpy, *closedSpy;
 	bool reuseRequest;
 	

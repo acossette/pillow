@@ -1,19 +1,19 @@
 #include "HttpServerTest.h"
 #include <HttpServer.h>
-#include <HttpRequest.h>
+#include <HttpConnection.h>
 #include <QtTest/QtTest>
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QLocalSocket>
 
-uint qHash(const QPointer<Pillow::HttpRequest>& ptr)
+uint qHash(const QPointer<Pillow::HttpConnection>& ptr)
 {
-	return qHash(uint(static_cast<Pillow::HttpRequest*>(ptr)));
+	return qHash(uint(static_cast<Pillow::HttpConnection*>(ptr)));
 }
 
 void HttpServerTestBase::init()
 {
 	server = createServer();
-	connect(server, SIGNAL(requestReady(Pillow::HttpRequest*)), this, SLOT(requestReady(Pillow::HttpRequest*)));
+	connect(server, SIGNAL(requestReady(Pillow::HttpConnection*)), this, SLOT(requestReady(Pillow::HttpConnection*)));
 }
 
 void HttpServerTestBase::cleanup()
@@ -23,7 +23,7 @@ void HttpServerTestBase::cleanup()
 	guardedHandledRequests.clear();
 }
 
-void HttpServerTestBase::requestReady(Pillow::HttpRequest *request)
+void HttpServerTestBase::requestReady(Pillow::HttpConnection *request)
 {
 	handledRequests << request;
 	guardedHandledRequests << request;
@@ -45,9 +45,9 @@ void HttpServerTestBase::sendRequest(QIODevice *device, const QByteArray &conten
 
 void HttpServerTestBase::sendResponses()
 {
-	foreach (Pillow::HttpRequest* request, guardedHandledRequests)
+	foreach (Pillow::HttpConnection* request, guardedHandledRequests)
 	{
-		if (request && request->state() == Pillow::HttpRequest::SendingHeaders)
+		if (request && request->state() == Pillow::HttpConnection::SendingHeaders)
 		{
 			// Echo the request content as the response content.			
 			request->writeResponse(200, Pillow::HttpHeaderCollection(), request->requestContent());

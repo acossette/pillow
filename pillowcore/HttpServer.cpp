@@ -1,5 +1,5 @@
 #include "HttpServer.h"
-#include "HttpRequest.h"
+#include "HttpConnection.h"
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QLocalSocket>
 using namespace Pillow;
@@ -17,44 +17,44 @@ namespace Pillow
 		
 	public:
 		QObject* q_ptr;
-		QList<HttpRequest*> reservedRequests;
+		QList<HttpConnection*> reservedConnections;
 		
 	public:
 		HttpServerPrivate(QObject* server) 
 			: q_ptr(server)
 		{
 			for (int i = 0; i < MaximumReserveCount; ++i)
-				reservedRequests << createRequest();
+				reservedConnections << createConnection();
 		}
 		
 		~HttpServerPrivate()
 		{
-			while (!reservedRequests.isEmpty())
-				delete reservedRequests.takeLast();
+			while (!reservedConnections.isEmpty())
+				delete reservedConnections.takeLast();
 		}
 		
-		HttpRequest* createRequest()
+		HttpConnection* createConnection()
 		{
-			HttpRequest* request = new HttpRequest(q_ptr);
-			QObject::connect(request, SIGNAL(ready(Pillow::HttpRequest*)), q_ptr, SIGNAL(requestReady(Pillow::HttpRequest*)));
-			QObject::connect(request, SIGNAL(closed(Pillow::HttpRequest*)), q_ptr, SLOT(request_closed(Pillow::HttpRequest*)));
-			return request;
+			HttpConnection* connection = new HttpConnection(q_ptr);
+			QObject::connect(connection, SIGNAL(ready(Pillow::HttpConnection*)), q_ptr, SIGNAL(requestReady(Pillow::HttpConnection*)));
+			QObject::connect(connection, SIGNAL(closed(Pillow::HttpConnection*)), q_ptr, SLOT(connection_closed(Pillow::HttpConnection*)));
+			return connection;
 		}
 		
-		HttpRequest* takeRequest()
+		HttpConnection* takeConnection()
 		{
-			if (reservedRequests.isEmpty())
-				return createRequest();
+			if (reservedConnections.isEmpty())
+				return createConnection();
 			else
-				return reservedRequests.takeLast();
+				return reservedConnections.takeLast();
 		}
 		
-		void putRequest(HttpRequest* request)
+		void putConnection(HttpConnection* connection)
 		{
-			while (reservedRequests.size() >= MaximumReserveCount)
-				delete reservedRequests.takeLast();
+			while (reservedConnections.size() >= MaximumReserveCount)
+				delete reservedConnections.takeLast();
 
-			reservedRequests.append(request);
+			reservedConnections.append(connection);
 		}
 	};
 }
@@ -83,7 +83,7 @@ void HttpServer::incomingConnection(int socketDescriptor)
 	{
 		addPendingConnection(socket);
 		nextPendingConnection();
-		createHttpRequest()->initialize(socket, socket);		
+		createHttpConnection()->initialize(socket, socket);		
 	}
 	else
 	{
@@ -92,15 +92,15 @@ void HttpServer::incomingConnection(int socketDescriptor)
 	}
 }
 
-void HttpServer::request_closed(Pillow::HttpRequest *request)
+void HttpServer::connection_closed(Pillow::HttpConnection *connection)
 {
-	request->inputDevice()->deleteLater();
-	d_ptr->putRequest(request);
+	connection->inputDevice()->deleteLater();
+	d_ptr->putConnection(connection);
 }
 
-HttpRequest* Pillow::HttpServer::createHttpRequest()
+HttpConnection* Pillow::HttpServer::createHttpConnection()
 {
-	return d_ptr->takeRequest();
+	return d_ptr->takeConnection();
 }
 
 //
@@ -125,11 +125,11 @@ HttpLocalServer::HttpLocalServer(const QString& serverName, QObject *parent /*= 
 void HttpLocalServer::this_newConnection()
 {
 	QIODevice* device = nextPendingConnection();
-	d_ptr->takeRequest()->initialize(device, device);
+	d_ptr->takeConnection()->initialize(device, device);
 }
 
-void HttpLocalServer::request_closed(Pillow::HttpRequest *request)
+void HttpLocalServer::connection_closed(Pillow::HttpConnection *connection)
 {
-	request->inputDevice()->deleteLater();
-	d_ptr->putRequest(request);
+	connection->inputDevice()->deleteLater();
+	d_ptr->putConnection(connection);
 }

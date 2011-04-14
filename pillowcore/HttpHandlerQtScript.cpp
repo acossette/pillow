@@ -1,5 +1,5 @@
 #include "HttpHandlerQtScript.h"
-#include "HttpRequest.h"
+#include "HttpConnection.h"
 #include <QtScript/QScriptEngine>
 #include <QtScript/QScriptValueIterator>
 #include <QtCore/QUrl>
@@ -77,7 +77,7 @@ void HttpHandlerQtScript::setScriptFunction(const QScriptValue &scriptFunction)
 		registerMarshallers(scriptFunction.engine());
 }
 
-bool HttpHandlerQtScript::handleRequest(Pillow::HttpRequest *request)
+bool HttpHandlerQtScript::handleRequest(Pillow::HttpConnection *request)
 {
 	if (!_scriptFunction.isFunction()) return false;
 
@@ -101,7 +101,7 @@ bool HttpHandlerQtScript::handleRequest(Pillow::HttpRequest *request)
 
 	if (result.isError())
 	{
-		if (request->state() == HttpRequest::SendingHeaders)
+		if (request->state() == HttpConnection::SendingHeaders)
 		{
 			// Nothing was sent yet... We have a chance to let the client know we had an error.
 			request->writeResponseString(500, HttpHeaderCollection(), objectToString(result));
@@ -147,7 +147,7 @@ void HttpHandlerQtScriptFile::setAutoReload(bool autoReload)
 	_autoReload = autoReload;
 }
 
-bool HttpHandlerQtScriptFile::handleRequest(Pillow::HttpRequest *request)
+bool HttpHandlerQtScriptFile::handleRequest(Pillow::HttpConnection *request)
 {
 	if (!_lastModified.isValid() || (_autoReload && QFileInfo(_fileName).lastModified() > _lastModified))
 	{

@@ -2,7 +2,7 @@
 #define _PILLOW_HTTPHANDLERSIMPLEROUTER_H_
 
 #include "HttpHandler.h"
-#include "HttpRequest.h"
+#include "HttpConnection.h"
 #include <QtCore/QRegExp>
 #include <QtCore/QStringList>
 
@@ -42,7 +42,7 @@ namespace Pillow
 		void setAcceptsMethodParam(bool accept);
 		
 	public:
-		bool handleRequest(Pillow::HttpRequest *request);
+		bool handleRequest(Pillow::HttpConnection *request);
 	};
 }
 

@@ -34,8 +34,8 @@ int main(int argc, char *argv[])
 	HttpHandler* handler = new HttpHandlerStack(&server);
 		new HttpHandlerLog(handler);
 		new HttpHandler404(handler);
-	QObject::connect(&server, SIGNAL(requestReady(Pillow::HttpRequest*)),
-	                 handler, SLOT(handleRequest(Pillow::HttpRequest*)));
+	QObject::connect(&server, SIGNAL(requestReady(Pillow::HttpConnection*)),
+	                 handler, SLOT(handleRequest(Pillow::HttpConnection*)));
 	
 //  Client socket example:
 //	QSslSocket sslSocket;

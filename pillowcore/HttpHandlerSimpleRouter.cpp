@@ -1,5 +1,5 @@
 #include "HttpHandlerSimpleRouter.h"
-#include "HttpRequest.h"
+#include "HttpConnection.h"
 #include <QtCore/QPointer>
 #include <QtCore/QMetaMethod>
 #include <QtCore/QRegExp>
@@ -17,14 +17,14 @@ namespace Pillow
 		QRegExp regExp;
 		QStringList paramNames;
 		
-		virtual bool invoke(Pillow::HttpRequest* request) = 0;
+		virtual bool invoke(Pillow::HttpConnection* request) = 0;
 	};
 	
 	struct HandlerRoute : public Route
 	{
 		QPointer<Pillow::HttpHandler> handler;
 		
-		virtual bool invoke(Pillow::HttpRequest *request)
+		virtual bool invoke(Pillow::HttpConnection *request)
 		{
 			if (!handler) return false;
 			return handler->handleRequest(request);
@@ -36,10 +36,10 @@ namespace Pillow
 		QPointer<QObject> object;
 		QByteArray member;
 		
-		virtual bool invoke(Pillow::HttpRequest *request)
+		virtual bool invoke(Pillow::HttpConnection *request)
 		{
 			if (!object) return false;
-			return QMetaObject::invokeMethod(object, member.constData(), Q_ARG(Pillow::HttpRequest*, request));
+			return QMetaObject::invokeMethod(object, member.constData(), Q_ARG(Pillow::HttpConnection*, request));
 		}
 	};
 
@@ -48,10 +48,10 @@ namespace Pillow
 		QPointer<QObject> object;
 		QMetaMethod metaMethod;
 		
-		virtual bool invoke(Pillow::HttpRequest *request)
+		virtual bool invoke(Pillow::HttpConnection *request)
 		{
 			if (!object) return false;
-			return metaMethod.invoke(object, Q_ARG(Pillow::HttpRequest*, request));
+			return metaMethod.invoke(object, Q_ARG(Pillow::HttpConnection*, request));
 		}
 	};
 	
@@ -61,7 +61,7 @@ namespace Pillow
 		Pillow::HttpHeaderCollection headers;
 		QByteArray content;
 		
-		virtual bool invoke(Pillow::HttpRequest *request)
+		virtual bool invoke(Pillow::HttpConnection *request)
 		{
 			request->writeResponse(statusCode, headers, content);
 			return true;
@@ -201,7 +201,7 @@ QRegExp Pillow::HttpHandlerSimpleRouter::pathToRegExp(const QString &p, QStringL
 	return QRegExp(path);
 }
 
-bool HttpHandlerSimpleRouter::handleRequest(Pillow::HttpRequest *request)
+bool HttpHandlerSimpleRouter::handleRequest(Pillow::HttpConnection *request)
 {
 	QVarLengthArray<Route*, 16> matchedRoutes;
 

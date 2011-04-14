@@ -25,7 +25,7 @@ namespace Pillow
 		HttpHeaderRef() {}
 	};
 
-	class HttpRequest : public QObject
+	class HttpConnection : public QObject
 	{
 		Q_OBJECT
 		QIODevice* _inputDevice,* _outputDevice;
@@ -71,10 +71,10 @@ namespace Pillow
 		void drain();
 
 	public:
-		HttpRequest(QObject* parent = 0);
-		HttpRequest(QIODevice* inputOutputDevice, QObject* parent = 0);
-		HttpRequest(QIODevice* inputDevice, QIODevice* outputDevice, QObject* parent = 0);
-		~HttpRequest();
+		HttpConnection(QObject* parent = 0);
+		HttpConnection(QIODevice* inputOutputDevice, QObject* parent = 0);
+		HttpConnection(QIODevice* inputDevice, QIODevice* outputDevice, QObject* parent = 0);
+		~HttpConnection();
 
 		void initialize(QIODevice* inputDevice, QIODevice* outputDevice);
 		
@@ -112,9 +112,9 @@ namespace Pillow
 		void close(); // Close communication channels right away, no matter if a response was sent or not.
 
 	signals:
-		void ready(Pillow::HttpRequest* self);     // The request is ready to be processed, all request headers and content have been received.
-		void completed(Pillow::HttpRequest* self); // The response is completed, all response headers and content have been sent.
-		void closed(Pillow::HttpRequest* self);    // The connection is closing, no further requests will arrive on this object.
+		void ready(Pillow::HttpConnection* self);     // The request is ready to be processed, all request headers and content have been received.
+		void completed(Pillow::HttpConnection* self); // The response is completed, all response headers and content have been sent.
+		void closed(Pillow::HttpConnection* self);    // The connection is closing, no further requests will arrive on this object.
 	};
 }
 

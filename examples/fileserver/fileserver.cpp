@@ -1,7 +1,7 @@
 #include <QtCore/QtCore>
 
 #include "HttpServer.h"
-#include "HttpRequest.h"
+#include "HttpConnection.h"
 #include "HttpHandler.h"
 using namespace Pillow;
 
@@ -10,7 +10,7 @@ class HttpHandlerStats : public HttpHandler
 public:
 	HttpHandlerStats(QObject* parent = 0) : HttpHandler(parent) {}
 
-	virtual bool handleRequest(Pillow::HttpRequest* rq)
+	virtual bool handleRequest(Pillow::HttpConnection* rq)
 	{
 		HttpServer* server = NULL;
 		HttpHandler* handler = NULL;
@@ -26,7 +26,7 @@ public:
 			QByteArray result;
 			if (server != NULL)
 			{
-				result.append("Alive connections: ").append(QByteArray::number(server->findChildren<Pillow::HttpRequest*>().size())).append("\n");
+				result.append("Alive connections: ").append(QByteArray::number(server->findChildren<Pillow::HttpConnection*>().size())).append("\n");
 			}
 			if (handler != NULL)
 			{
@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 		new HttpHandlerStats(handler);
 		new HttpHandlerFile("/home/alcos/public", handler);
 		new HttpHandler404(handler);
-	QObject::connect(&server, SIGNAL(requestReady(Pillow::HttpRequest*)), handler, SLOT(handleRequest(Pillow::HttpRequest*)));
+	QObject::connect(&server, SIGNAL(requestReady(Pillow::HttpConnection*)), handler, SLOT(handleRequest(Pillow::HttpConnection*)));
 
     return a.exec();
 }

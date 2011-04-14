@@ -7,7 +7,7 @@
 
 namespace Pillow
 {
-	class HttpRequest;
+	class HttpConnection;
 	
 	//
 	// HttpServer
@@ -25,11 +25,11 @@ namespace Pillow
 		HttpServerPrivate* d_ptr;
 		
 	private slots:
-		void request_closed(Pillow::HttpRequest* request);
+		void connection_closed(Pillow::HttpConnection* request);
 		
 	protected:
 		virtual void incomingConnection(int socketDescriptor);
-		HttpRequest* createHttpRequest();
+		HttpConnection* createHttpConnection();
 	
 	public:
 		HttpServer(QObject* parent = 0);
@@ -37,7 +37,7 @@ namespace Pillow
 		~HttpServer();		
 		
 	signals:
-		void requestReady(Pillow::HttpRequest* request);
+		void requestReady(Pillow::HttpConnection* connection); // There is a request ready to be handled on this connection.
 	};
 		
 	//
@@ -52,14 +52,14 @@ namespace Pillow
 		
 	private slots:
 		void this_newConnection();
-		void request_closed(Pillow::HttpRequest* request);
+		void connection_closed(Pillow::HttpConnection* request);
 
 	public:
 		HttpLocalServer(QObject* parent = 0);
 		HttpLocalServer(const QString& serverName, QObject *parent = 0);
 		
 	signals:
-		void requestReady(Pillow::HttpRequest* request);	
+		void requestReady(Pillow::HttpConnection* connection); // There is a request ready to be handled on this connection.
 	};	
 }
 

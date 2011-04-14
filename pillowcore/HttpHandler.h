@@ -10,7 +10,7 @@ class QElapsedTimer;
 
 namespace Pillow
 {
-	class HttpRequest;
+	class HttpConnection;
 	
 	//
 	// HttpHandler: abstract handler interface. Does nothing.
@@ -24,7 +24,7 @@ namespace Pillow
 		HttpHandler(QObject *parent = 0);
 	
 	public slots:
-		virtual bool handleRequest(Pillow::HttpRequest* request) = 0;
+		virtual bool handleRequest(Pillow::HttpConnection* request) = 0;
 	};
 	
 	//
@@ -41,7 +41,7 @@ namespace Pillow
 		QList<HttpHandler*> GetHandlers() const;
 		
 	public:
-		virtual bool handleRequest(Pillow::HttpRequest *request);
+		virtual bool handleRequest(Pillow::HttpConnection *request);
 	};
 
 	//
@@ -58,7 +58,7 @@ namespace Pillow
 		HttpHandlerFixed(int statusCode = 200, const QByteArray& content = QByteArray(), QObject* parent = 0);
 
 	public:
-		virtual bool handleRequest(Pillow::HttpRequest* request);
+		virtual bool handleRequest(Pillow::HttpConnection* request);
 	};
 
 	
@@ -74,7 +74,7 @@ namespace Pillow
 		HttpHandler404(QObject* parent = 0);
 		
 	public:
-		virtual bool handleRequest(Pillow::HttpRequest* request);
+		virtual bool handleRequest(Pillow::HttpConnection* request);
 	};
 	
 	//
@@ -84,11 +84,11 @@ namespace Pillow
 	class HttpHandlerLog : public HttpHandler
 	{
 		Q_OBJECT
-		QHash<Pillow::HttpRequest*, QElapsedTimer*> requestTimerMap;
+		QHash<Pillow::HttpConnection*, QElapsedTimer*> requestTimerMap;
 		QPointer<QIODevice> _device;
 		
 	private slots:
-		void requestCompleted(Pillow::HttpRequest* request);
+		void requestCompleted(Pillow::HttpConnection* request);
 		void requestDestroyed(QObject* request);
 	
 	public:
@@ -100,7 +100,7 @@ namespace Pillow
 		void setDevice(QIODevice* device);
 		
 	public:
-		virtual bool handleRequest(Pillow::HttpRequest* request);
+		virtual bool handleRequest(Pillow::HttpConnection* request);
 	};
 	
 	//
@@ -125,18 +125,18 @@ namespace Pillow
 		void setPublicPath(const QString& publicPath);
 		void setBufferSize(int bytes);
 		
-		virtual bool handleRequest(Pillow::HttpRequest* request);
+		virtual bool handleRequest(Pillow::HttpConnection* request);
 	};
 	
 	class HttpHandlerFileTransfer : public QObject
 	{
 		Q_OBJECT;
 		QPointer<QIODevice> _sourceDevice;
-		QPointer<HttpRequest> _targetRequest;
+		QPointer<HttpConnection> _targetRequest;
 		int _bufferSize;
 	
 	public:
-		HttpHandlerFileTransfer(QIODevice* sourceDevice, Pillow::HttpRequest* targetRequest, int bufferSize = HttpHandlerFile::DefaultBufferSize);
+		HttpHandlerFileTransfer(QIODevice* sourceDevice, Pillow::HttpConnection* targetRequest, int bufferSize = HttpHandlerFile::DefaultBufferSize);
 	
 	public slots:
 		void writeNextPayload();

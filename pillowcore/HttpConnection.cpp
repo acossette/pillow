@@ -1,4 +1,4 @@
-#include "HttpRequest.h"
+#include "HttpConnection.h"
 #include "HttpHelpers.h"
 #include <QtCore/QByteArray>
 #include <QtCore/QDateTime>
@@ -59,31 +59,31 @@ static const QByteArray expectToken("expect");
 static const QByteArray hundredDashContinueToken("100-continue");
 static const QByteArray keepAliveToken("keep-alive");
 
-HttpRequest::HttpRequest(QObject* parent /*= 0*/)
+HttpConnection::HttpConnection(QObject* parent /*= 0*/)
 	: QObject(parent), _inputDevice(NULL), _outputDevice(NULL), _state(Uninitialized)
 {
 }
 
-HttpRequest::HttpRequest(QIODevice* inputOutputDevice, QObject* parent /* = 0 */)
+HttpConnection::HttpConnection(QIODevice* inputOutputDevice, QObject* parent /* = 0 */)
 	: QObject(parent), _inputDevice(NULL), _outputDevice(NULL), _state(Uninitialized)
 {
 	initialize(inputOutputDevice, inputOutputDevice);
 }
 
-HttpRequest::HttpRequest(QIODevice* inputDevice, QIODevice* outputDevice, QObject* parent /*= 0*/)
+HttpConnection::HttpConnection(QIODevice* inputDevice, QIODevice* outputDevice, QObject* parent /*= 0*/)
 	: QObject(parent), _inputDevice(NULL), _outputDevice(NULL), _state(Uninitialized)
 {
 	initialize(inputDevice, outputDevice);
 }
 
-HttpRequest::~HttpRequest()
+HttpConnection::~HttpConnection()
 {}
 
-void HttpRequest::initialize(QIODevice* inputDevice, QIODevice* outputDevice)
+void HttpConnection::initialize(QIODevice* inputDevice, QIODevice* outputDevice)
 {		
 	memset(&_parser, 0, sizeof(http_parser));
 	_parser.data = this;
-	_parser.http_field = &HttpRequest::parser_http_field;
+	_parser.http_field = &HttpConnection::parser_http_field;
 	_requestHeadersRef.reserve(16);
 	
 	// Clear any leftover data from a previous potentially failed request (that would not have gone though "transitionToCompleted")
@@ -113,7 +113,7 @@ void HttpRequest::initialize(QIODevice* inputDevice, QIODevice* outputDevice)
 	if (_inputDevice->bytesAvailable() > 0) QTimer::singleShot(0, this, SLOT(processInput()));
 }
 
-void HttpRequest::processInput()
+void HttpConnection::processInput()
 {
 	if (_state != ReceivingHeaders && _state != ReceivingContent) return;
 	
@@ -149,7 +149,7 @@ void HttpRequest::processInput()
 	}
 }
 
-void HttpRequest::transitionToReceivingHeaders()
+void HttpConnection::transitionToReceivingHeaders()
 {
 	if (_state == ReceivingHeaders) return;
 	_state = ReceivingHeaders;
@@ -158,7 +158,7 @@ void HttpRequest::transitionToReceivingHeaders()
 	_requestContentLength = 0;
 }
 
-void HttpRequest::transitionToReceivingContent()
+void HttpConnection::transitionToReceivingContent()
 {
 	if (_state == ReceivingContent) return;
 	_state = ReceivingContent;
@@ -209,7 +209,7 @@ void HttpRequest::transitionToReceivingContent()
 	processInput();
 }
 
-void HttpRequest::transitionToSendingHeaders()
+void HttpConnection::transitionToSendingHeaders()
 {
 	if (_state == SendingHeaders) return;
 	_state = SendingHeaders;
@@ -221,7 +221,7 @@ void HttpRequest::transitionToSendingHeaders()
 	emit ready(this);
 }
 
-void HttpRequest::transitionToSendingContent()
+void HttpConnection::transitionToSendingContent()
 {
 	if (_state == SendingContent) return;
 	_state= SendingContent;
@@ -241,7 +241,7 @@ void HttpRequest::transitionToSendingContent()
 	}
 }
 
-void HttpRequest::transitionToCompleted()
+void HttpConnection::transitionToCompleted()
 {
 	if (_state == Completed)  return;
 	if (_state == Closed)
@@ -274,7 +274,7 @@ void HttpRequest::transitionToCompleted()
 		transitionToFlushing();
 }
 
-void HttpRequest::transitionToFlushing()
+void HttpConnection::transitionToFlushing()
 {
 	// This is a transient state that is meant to fully drain the write buffers and
 	// wait for all the data to make it to the kernel before closing the connection.
@@ -286,7 +286,7 @@ void HttpRequest::transitionToFlushing()
 		connect(_outputDevice, SIGNAL(bytesWritten(qint64)), this, SLOT(drain()));
 }
 
-void HttpRequest::transitionToClosed()
+void HttpConnection::transitionToClosed()
 {
 	if (_state == Closed) return;
 	_state = Closed;
@@ -300,7 +300,7 @@ void HttpRequest::transitionToClosed()
 	_outputDevice = NULL;
 }
 
-void HttpRequest::flush()
+void HttpConnection::flush()
 {
 	if (_outputDevice->bytesToWrite() > 0)
 	{
@@ -309,14 +309,14 @@ void HttpRequest::flush()
 	}
 }
 
-void HttpRequest::drain()
+void HttpConnection::drain()
 {
 	if (_state != Flushing) return;
 	flush();
 	if (_outputDevice->bytesToWrite() == 0) transitionToClosed();
 }
 
-void HttpRequest::writeRequestErrorResponse(int statusCode)
+void HttpConnection::writeRequestErrorResponse(int statusCode)
 {
 	if (_state == Closed)
 	{
@@ -334,7 +334,7 @@ void HttpRequest::writeRequestErrorResponse(int statusCode)
 	transitionToFlushing();
 }
 
-void HttpRequest::writeResponse(int statusCode, const HttpHeaderCollection& headers, const QByteArray& content)
+void HttpConnection::writeResponse(int statusCode, const HttpHeaderCollection& headers, const QByteArray& content)
 {
 	if (_state != SendingHeaders)
 	{
@@ -348,12 +348,12 @@ void HttpRequest::writeResponse(int statusCode, const HttpHeaderCollection& head
 	if (!content.isEmpty() && _requestMethod != "HEAD") writeContent(content);
 }
 
-void HttpRequest::writeResponseString(int statusCode, const HttpHeaderCollection& headers, const QString& content)
+void HttpConnection::writeResponseString(int statusCode, const HttpHeaderCollection& headers, const QString& content)
 {
 	writeResponse(statusCode, headers, content.toUtf8());
 }
 
-void HttpRequest::writeHeaders(int statusCode, const HttpHeaderCollection& headers)
+void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& headers)
 {
 	if (_state != SendingHeaders)
 	{
@@ -420,7 +420,7 @@ void HttpRequest::writeHeaders(int statusCode, const HttpHeaderCollection& heade
 	transitionToSendingContent();
 }
 
-void HttpRequest::writeContent(const QByteArray& content)
+void HttpConnection::writeContent(const QByteArray& content)
 {
 	if (_state != SendingContent)
 	{
@@ -448,13 +448,13 @@ void HttpRequest::writeContent(const QByteArray& content)
 	}
 }
 
-void Pillow::HttpRequest::close()
+void Pillow::HttpConnection::close()
 {
 	if (_state != Closed)
 		transitionToClosed();
 }
 
-QByteArray HttpRequest::getRequestHeaderValue(const QByteArray &field)
+QByteArray HttpConnection::getRequestHeaderValue(const QByteArray &field)
 {
 	for (int i = 0, iE = _requestHeaders.size(); i < iE; ++i)
 	{
@@ -465,7 +465,7 @@ QByteArray HttpRequest::getRequestHeaderValue(const QByteArray &field)
 	return QByteArray();
 }
 
-QByteArray HttpRequest::requestContent() const
+QByteArray HttpConnection::requestContent() const
 {
 	if (_requestContentLength == 0)
 		return QByteArray();
@@ -475,7 +475,7 @@ QByteArray HttpRequest::requestContent() const
 	return QByteArray();
 }
 
-const Pillow::HttpParamCollection& Pillow::HttpRequest::requestParams()
+const Pillow::HttpParamCollection& Pillow::HttpConnection::requestParams()
 {
 	if (_requestParams.isEmpty() && !_requestQueryString.isEmpty())
 	{
@@ -489,7 +489,7 @@ const Pillow::HttpParamCollection& Pillow::HttpRequest::requestParams()
 	return _requestParams;
 }
 
-QString Pillow::HttpRequest::getRequestParam(const QString &name)
+QString Pillow::HttpConnection::getRequestParam(const QString &name)
 {
 	requestParams();
 	for (int i = 0, iE = _requestParams.size(); i < iE; ++i)
@@ -501,7 +501,7 @@ QString Pillow::HttpRequest::getRequestParam(const QString &name)
 	return QString();
 }
 
-void Pillow::HttpRequest::setRequestParam(const QString &name, const QString &value)
+void Pillow::HttpConnection::setRequestParam(const QString &name, const QString &value)
 {
 	requestParams();
 	for (int i = 0, iE = _requestParams.size(); i < iE; ++i)
@@ -516,14 +516,14 @@ void Pillow::HttpRequest::setRequestParam(const QString &name, const QString &va
 	_requestParams << HttpParam(name, value);
 }
 
-QHostAddress HttpRequest::remoteAddress() const
+QHostAddress HttpConnection::remoteAddress() const
 {
 	return qobject_cast<QAbstractSocket*>(_inputDevice) ? static_cast<QAbstractSocket*>(_inputDevice)->peerAddress() : QHostAddress();
 }
 
-void HttpRequest::parser_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen)
+void HttpConnection::parser_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {	
-	HttpRequest* request = reinterpret_cast<HttpRequest*>(data);
+	HttpConnection* request = reinterpret_cast<HttpConnection*>(data);
 	const char* begin = request->_requestBuffer.constData();
 	request->_requestHeadersRef.append(HttpHeaderRef(field - begin, flen, value - begin, vlen));
 }
