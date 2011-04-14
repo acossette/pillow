@@ -111,7 +111,7 @@ bool HttpHandlerLog::handleRequest(Pillow::HttpConnection *request)
 	if (timer == NULL)
 	{
 		timer = requestTimerMap[request] = new QElapsedTimer();
-		connect(request, SIGNAL(completed(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
+		connect(request, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
 		connect(request, SIGNAL(destroyed(QObject*)), this, SLOT(requestDestroyed(QObject*)));
 	}
 	timer->start();
@@ -280,7 +280,7 @@ HttpHandlerFileTransfer::HttpHandlerFileTransfer(QIODevice *sourceDevice, HttpCo
 	}
 
 	connect(sourceDevice, SIGNAL(destroyed()), this, SLOT(deleteLater()));
-	connect(targetRequest, SIGNAL(completed(Pillow::HttpConnection*)), this, SLOT(deleteLater()));
+	connect(targetRequest, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(deleteLater()));
 	connect(targetRequest, SIGNAL(closed(Pillow::HttpConnection*)), this, SLOT(deleteLater()));
 	connect(targetRequest, SIGNAL(destroyed()), this, SLOT(deleteLater()));
 	connect(targetRequest->outputDevice(), SIGNAL(bytesWritten(qint64)), this, SLOT(writeNextPayload()), Qt::QueuedConnection);

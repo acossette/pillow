@@ -15,13 +15,13 @@ win32: POST_TARGETDEPS += ../lib/$${PILLOWCORE_LIB_NAME}.lib
 
 SOURCES += main.cpp \
     HttpServerTest.cpp \
-    HttpRequestTest.cpp \
+    HttpConnectionTest.cpp \
     HttpHandlerTest.cpp \
     HttpsServerTest.cpp
 
 HEADERS += \
     HttpServerTest.h \
-    HttpRequestTest.h \
+    HttpConnectionTest.h \
     HttpHandlerTest.h \
     HttpsServerTest.h
 

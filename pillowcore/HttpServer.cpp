@@ -36,7 +36,7 @@ namespace Pillow
 		HttpConnection* createConnection()
 		{
 			HttpConnection* connection = new HttpConnection(q_ptr);
-			QObject::connect(connection, SIGNAL(ready(Pillow::HttpConnection*)), q_ptr, SIGNAL(requestReady(Pillow::HttpConnection*)));
+			QObject::connect(connection, SIGNAL(requestReady(Pillow::HttpConnection*)), q_ptr, SIGNAL(requestReady(Pillow::HttpConnection*)));
 			QObject::connect(connection, SIGNAL(closed(Pillow::HttpConnection*)), q_ptr, SLOT(connection_closed(Pillow::HttpConnection*)));
 			return connection;
 		}

@@ -47,7 +47,7 @@ inline void appendNumber(QByteArray& target, const Integer number)
 }
 
 //
-// HttpRequest
+// HttpConnection
 //
 
 static const int responseHeadersBufferRecyclingCapacity = 4096; // The capacity above which the response buffer will not be preserved between requests.
@@ -218,7 +218,7 @@ void HttpConnection::transitionToSendingHeaders()
 	_responseContentLength = -1;   // The response content-length is initially unknown.
 	_responseContentBytesSent = 0; // No content bytes transfered yet.
 	_responseConnectionKeepAlive = true;
-	emit ready(this);
+	emit requestReady(this);
 }
 
 void HttpConnection::transitionToSendingContent()
@@ -246,10 +246,10 @@ void HttpConnection::transitionToCompleted()
 	if (_state == Completed)  return;
 	if (_state == Closed)
 	{
-		qWarning() << "HttpRequest::transitionToCompleted called while the request is in the closed state.";
+		qWarning() << "HttpConnection::transitionToCompleted called while the request is in the closed state.";
 	}
 	_state = Completed;
-	emit completed(this);
+	emit requestCompleted(this);
 	
 	// Preserve any existing data in the request buffer that did not belong to the completed request.
 	// Reuse the already allocated buffer if it is not too large.
@@ -320,11 +320,11 @@ void HttpConnection::writeRequestErrorResponse(int statusCode)
 {
 	if (_state == Closed)
 	{
-		qWarning() << "HttpRequest::writeRequestErrorResponse called while state is already 'Closed'";
+		qWarning() << "HttpConnection::writeRequestErrorResponse called while state is already 'Closed'";
 		return;
 	}
 
-	qDebug() << "HttpRequest: request error! (sending http status" << statusCode << "and closing connection.)";
+	qDebug() << "HttpConnection: request error! (sending http status" << statusCode << "and closing connection.)";
 
 	QByteArray _responseHeadersBuffer; _responseHeadersBuffer.reserve(1024);
 	_responseHeadersBuffer.append("HTTP/1.0 ").append(HttpProtocol::StatusCodes::getStatusCodeAndMessage(statusCode)).append(crLfToken);
@@ -338,7 +338,7 @@ void HttpConnection::writeResponse(int statusCode, const HttpHeaderCollection& h
 {
 	if (_state != SendingHeaders)
 	{
-		qWarning() << "HttpRequest::writeResponse called while state is not 'SendingHeaders', not proceeding with sending headers.";
+		qWarning() << "HttpConnection::writeResponse called while state is not 'SendingHeaders', not proceeding with sending headers.";
 		return;
 	}
 
@@ -357,7 +357,7 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 {
 	if (_state != SendingHeaders)
 	{
-		qWarning() << "HttpRequest::writeHeaders called while state is not 'SendingHeaders', not proceeding with sending headers.";
+		qWarning() << "HttpConnection::writeHeaders called while state is not 'SendingHeaders', not proceeding with sending headers.";
 		return;
 	}
 
@@ -365,7 +365,7 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 	if (statusCodeAndMessage == NULL)
 	{
 		// Huh? Trying to send a bad status code...
-		qWarning() << "HttpRequest::writeHeaders:" << statusCode << "is not a valid Http status code.";
+		qWarning() << "HttpConnection::writeHeaders:" << statusCode << "is not a valid Http status code.";
 		statusCodeAndMessage = HttpProtocol::StatusCodes::getStatusMessage(500); // Internal server error.
 	}
 	_responseStatusCode = statusCode;
@@ -424,17 +424,17 @@ void HttpConnection::writeContent(const QByteArray& content)
 {
 	if (_state != SendingContent)
 	{
-		qWarning() << "HttpRequest::writeContent called while state is not 'SendingContent'. Not proceeding with sending content of size" << content.size() << "bytes.";
+		qWarning() << "HttpConnection::writeContent called while state is not 'SendingContent'. Not proceeding with sending content of size" << content.size() << "bytes.";
 		return;
 	}
 	else if (_responseContentLength == 0)
 	{
-		qWarning() << "HttpRequest::writeContent called while the specified response content-length is 0. Not proceeding with sending content of size" << content.size() << "bytes.";
+		qWarning() << "HttpConnection::writeContent called while the specified response content-length is 0. Not proceeding with sending content of size" << content.size() << "bytes.";
 		return;
 	}
 	else if (_responseContentLength > 0 && content.size() + _responseContentBytesSent > _responseContentLength)
 	{
-		qWarning() << "HttpRequest::writeContent called trying to send more data (" << (content.size() + _responseContentBytesSent) << "bytes) than the specified response content-length of" << _responseContentLength << "bytes.";
+		qWarning() << "HttpConnection::writeContent called trying to send more data (" << (content.size() + _responseContentBytesSent) << "bytes) than the specified response content-length of" << _responseContentLength << "bytes.";
 		return;
 	}
 

@@ -1,5 +1,5 @@
-#ifndef _PILLOW_HTTPREQUEST_H_
-#define _PILLOW_HTTPREQUEST_H_
+#ifndef _PILLOW_HTTPCONNECTION_H_
+#define _PILLOW_HTTPCONNECTION_H_
 
 #include <QObject>
 #include "parser/parser.h"
@@ -9,7 +9,7 @@ class QIODevice;
 namespace Pillow
 {
 	//
-	// HttpRequest
+	// HttpConnection
 	//
 
 	typedef QPair<QByteArray, QByteArray> HttpHeader;
@@ -112,10 +112,10 @@ namespace Pillow
 		void close(); // Close communication channels right away, no matter if a response was sent or not.
 
 	signals:
-		void ready(Pillow::HttpConnection* self);     // The request is ready to be processed, all request headers and content have been received.
-		void completed(Pillow::HttpConnection* self); // The response is completed, all response headers and content have been sent.
-		void closed(Pillow::HttpConnection* self);    // The connection is closing, no further requests will arrive on this object.
+		void requestReady(Pillow::HttpConnection* self);     // The request is ready to be processed, all request headers and content have been received.
+		void requestCompleted(Pillow::HttpConnection* self); // The response is completed, all response headers and content have been sent.
+		void closed(Pillow::HttpConnection* self);			 // The connection is closing, no further requests will arrive on this object.
 	};
 }
 
-#endif // _PILLOW_HTTPREQUEST_H_
+#endif // _PILLOW_HTTPCONNECTION_H_

@@ -15,7 +15,7 @@ Pillow::HttpConnection * HttpHandlerTestBase::createGetRequest(const QByteArray 
 	connect(outputBuffer, SIGNAL(bytesWritten(qint64)), this, SLOT(outputBuffer_bytesWritten()));
 	
 	Pillow::HttpConnection* request = new Pillow::HttpConnection(inputBuffer, outputBuffer, this);
-	connect(request, SIGNAL(completed(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
+	connect(request, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
 	inputBuffer->setParent(request);
 	outputBuffer->setParent(request);
 	
@@ -38,7 +38,7 @@ Pillow::HttpConnection * HttpHandlerTestBase::createPostRequest(const QByteArray
 	connect(outputBuffer, SIGNAL(bytesWritten(qint64)), this, SLOT(outputBuffer_bytesWritten()));
 	
 	Pillow::HttpConnection* request = new Pillow::HttpConnection(inputBuffer, outputBuffer, this);
-	connect(request, SIGNAL(completed(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
+	connect(request, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
 	inputBuffer->setParent(request);
 	outputBuffer->setParent(request);
 	

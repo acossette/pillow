@@ -1,6 +1,6 @@
 #include <QtCore/QtCore>
 #include <QtTest/QTest>
-#include "HttpRequestTest.h"
+#include "HttpConnectionTest.h"
 #include "HttpServerTest.h"
 #include "HttpsServerTest.h"
 #include "HttpHandlerTest.h"
@@ -15,10 +15,10 @@ int main(int argc, char *argv[])
 	QCoreApplication a(argc, argv);
 
 	int result = 0;
-	result += execTest<HttpRequestTcpSocketTest>();
-	result += execTest<HttpRequestSslSocketTest>();
-	result += execTest<HttpRequestLocalSocketTest>();
-	result += execTest<HttpRequestBufferTest>();
+	result += execTest<HttpConnectionTcpSocketTest>();
+	result += execTest<HttpConnectionSslSocketTest>();
+	result += execTest<HttpConnectionLocalSocketTest>();
+	result += execTest<HttpConnectionBufferTest>();
 	result += execTest<HttpServerTest>();
 	result += execTest<HttpsServerTest>();
 	result += execTest<HttpLocalServerTest>();
