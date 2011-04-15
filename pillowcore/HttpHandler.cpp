@@ -28,13 +28,13 @@ HttpHandlerStack::HttpHandlerStack(QObject *parent)
 {
 }
 
-bool HttpHandlerStack::handleRequest(Pillow::HttpConnection *request)
+bool HttpHandlerStack::handleRequest(Pillow::HttpConnection *connection)
 {
 	foreach (QObject* object, children())
 	{
 		HttpHandler* handler = qobject_cast<HttpHandler*>(object);
 		
-		if (handler && handler->handleRequest(request))
+		if (handler && handler->handleRequest(connection))
 			return true;
 	}
 	
@@ -63,10 +63,9 @@ HttpHandlerFixed::HttpHandlerFixed(int statusCode, const QByteArray& content, QO
 {
 }
 
-bool HttpHandlerFixed::handleRequest(Pillow::HttpConnection *request)
+bool HttpHandlerFixed::handleRequest(Pillow::HttpConnection *connection)
 {
-	request->requestParams();
-	request->writeResponse(_statusCode, HttpHeaderCollection(), _content);
+	connection->writeResponse(_statusCode, HttpHeaderCollection(), _content);
 	return true;
 }
 
@@ -79,9 +78,9 @@ HttpHandler404::HttpHandler404(QObject *parent)
 {
 }
 
-bool HttpHandler404::handleRequest(Pillow::HttpConnection *request)
+bool HttpHandler404::handleRequest(Pillow::HttpConnection *connection)
 {
-	request->writeResponseString(404, HttpHeaderCollection(), QString("The requested resource '%1' does not exist on this server").arg(QString(request->requestPath())));
+	connection->writeResponseString(404, HttpHeaderCollection(), QString("The requested resource '%1' does not exist on this server").arg(QString(connection->requestPath())));
 	return true;
 }
 
@@ -105,39 +104,39 @@ HttpHandlerLog::~HttpHandlerLog()
 		delete timer;
 }
 
-bool HttpHandlerLog::handleRequest(Pillow::HttpConnection *request)
+bool HttpHandlerLog::handleRequest(Pillow::HttpConnection *connection)
 {
-	QElapsedTimer* timer = requestTimerMap.value(request, NULL);
+	QElapsedTimer* timer = requestTimerMap.value(connection, NULL);
 	if (timer == NULL)
 	{
-		timer = requestTimerMap[request] = new QElapsedTimer();
-		connect(request, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
-		connect(request, SIGNAL(destroyed(QObject*)), this, SLOT(requestDestroyed(QObject*)));
+		timer = requestTimerMap[connection] = new QElapsedTimer();
+		connect(connection, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
+		connect(connection, SIGNAL(destroyed(QObject*)), this, SLOT(requestDestroyed(QObject*)));
 	}
 	timer->start();
 
 	return false;
 }
 
-void HttpHandlerLog::requestCompleted(Pillow::HttpConnection *request)
+void HttpHandlerLog::requestCompleted(Pillow::HttpConnection *connection)
 {
-	QElapsedTimer* timer = requestTimerMap.value(request, NULL);
+	QElapsedTimer* timer = requestTimerMap.value(connection, NULL);
 	if (timer)
 	{
 		qint64 elapsed = timer->elapsed();
 		QString logEntry = QString("%1 - - [%2] \"%3 %4 %5\" %6 %7 %8")
-		        .arg(request->remoteAddress().toString())
+		        .arg(connection->remoteAddress().toString())
 		        .arg(QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss"))
-		        .arg(QString(request->requestMethod())).arg(QString(request->requestUri())).arg(QString(request->requestHttpVersion()))
-		        .arg(request->responseStatusCode()).arg(request->responseContentLength())
+		        .arg(QString(connection->requestMethod())).arg(QString(connection->requestUri())).arg(QString(connection->requestHttpVersion()))
+		        .arg(connection->responseStatusCode()).arg(connection->responseContentLength())
 		        .arg(elapsed / 1000.0, 3, 'f', 3);
 
 //		QString logEntry = QString()
-//				% request->remoteAddress().toString()
+//				% connection->remoteAddress().toString()
 //				% " - - [" % QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss") % "] \""
-//				% request->requestMethod() % ' ' % request->requestUri() % ' ' % request->requestHttpVersion() % "\" "
-//				% QString::number(request->responseStatusCode()) % ' ' 
-//				% QString::number(request->responseContentLength()) % ' '
+//				% connection->requestMethod() % ' ' % connection->requestUri() % ' ' % connection->requestHttpVersion() % "\" "
+//				% QString::number(connection->responseStatusCode()) % ' ' 
+//				% QString::number(connection->responseContentLength()) % ' '
 //				% QString::number(elapsed / 1000.0, 'f', 3);
 
 		if (_device == NULL)
@@ -152,9 +151,9 @@ void HttpHandlerLog::requestCompleted(Pillow::HttpConnection *request)
 
 void HttpHandlerLog::requestDestroyed(QObject *r)
 {
-	HttpConnection* request = static_cast<HttpConnection*>(r);
-	delete requestTimerMap.value(request, NULL);
-	requestTimerMap.remove(request);
+	HttpConnection* connection = static_cast<HttpConnection*>(r);
+	delete requestTimerMap.value(connection, NULL);
+	requestTimerMap.remove(connection);
 }
 
 QIODevice * HttpHandlerLog::device() const
@@ -200,11 +199,11 @@ void HttpHandlerFile::setBufferSize(int bytes)
 	_bufferSize = bytes;
 }
 
-bool HttpHandlerFile::handleRequest(Pillow::HttpConnection *request)
+bool HttpHandlerFile::handleRequest(Pillow::HttpConnection *connection)
 {	
 	if (_publicPath.isEmpty()) { return false; } // Just don't allow access to the root filesystem unless really configured for it.
 
-	QString requestPath = QByteArray::fromPercentEncoding(request->requestPath());
+	QString requestPath = QByteArray::fromPercentEncoding(connection->requestPath());
 	QString resultPath = _publicPath + requestPath;
 	QFileInfo resultPathInfo(resultPath);
 
@@ -226,7 +225,7 @@ bool HttpHandlerFile::handleRequest(Pillow::HttpConnection *request)
 	if (!file->open(QIODevice::ReadOnly))
 	{
 		// Could not read the file?
-		request->writeResponse(403, HttpHeaderCollection(), QString("The requested resource '%1' is not accessible").arg(requestPath).toUtf8());
+		connection->writeResponse(403, HttpHeaderCollection(), QString("The requested resource '%1' is not accessible").arg(requestPath).toUtf8());
 		delete file;
 	}
 	else
@@ -242,10 +241,10 @@ bool HttpHandlerFile::handleRequest(Pillow::HttpConnection *request)
 			QByteArray etag = md5sum.result().toHex();
 			headers << HttpHeader("ETag", etag);
 
-			if (request->getRequestHeaderValue("If-None-Match") == etag)
-				request->writeResponse(304); // The client's cached file was not modified.
+			if (connection->getRequestHeaderValue("If-None-Match") == etag)
+				connection->writeResponse(304); // The client's cached file was not modified.
 			else
-				request->writeResponse(200, headers, content);
+				connection->writeResponse(200, headers, content);
 
 			delete file;
 		}
@@ -253,9 +252,9 @@ bool HttpHandlerFile::handleRequest(Pillow::HttpConnection *request)
 		{
 			// The file exceeds the buffer size and must be sent incrementally. Do send the headers right away.
 			headers << HttpHeader("Content-Length", QByteArray::number(file->size()));
-			request->writeHeaders(200, headers);
+			connection->writeHeaders(200, headers);
 
-			HttpHandlerFileTransfer* transfer = new HttpHandlerFileTransfer(file, request, bufferSize());
+			HttpHandlerFileTransfer* transfer = new HttpHandlerFileTransfer(file, connection, bufferSize());
 			file->setParent(transfer);
 			//transfer->setParent(this);
 			connect(transfer, SIGNAL(finished()), transfer, SLOT(deleteLater()));
@@ -270,8 +269,8 @@ bool HttpHandlerFile::handleRequest(Pillow::HttpConnection *request)
 // HttpHandlerFile
 //
 
-HttpHandlerFileTransfer::HttpHandlerFileTransfer(QIODevice *sourceDevice, HttpConnection *targetRequest, int bufferSize)
-    : _sourceDevice(sourceDevice), _targetRequest(targetRequest), _bufferSize(bufferSize)
+HttpHandlerFileTransfer::HttpHandlerFileTransfer(QIODevice *sourceDevice, HttpConnection *connection, int bufferSize)
+    : _sourceDevice(sourceDevice), _connection(connection), _bufferSize(bufferSize)
 {
 	if (bufferSize < 512)
 	{
@@ -280,24 +279,24 @@ HttpHandlerFileTransfer::HttpHandlerFileTransfer(QIODevice *sourceDevice, HttpCo
 	}
 
 	connect(sourceDevice, SIGNAL(destroyed()), this, SLOT(deleteLater()));
-	connect(targetRequest, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(deleteLater()));
-	connect(targetRequest, SIGNAL(closed(Pillow::HttpConnection*)), this, SLOT(deleteLater()));
-	connect(targetRequest, SIGNAL(destroyed()), this, SLOT(deleteLater()));
-	connect(targetRequest->outputDevice(), SIGNAL(bytesWritten(qint64)), this, SLOT(writeNextPayload()), Qt::QueuedConnection);
+	connect(_connection, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(deleteLater()));
+	connect(_connection, SIGNAL(closed(Pillow::HttpConnection*)), this, SLOT(deleteLater()));
+	connect(_connection, SIGNAL(destroyed()), this, SLOT(deleteLater()));
+	connect(_connection->outputDevice(), SIGNAL(bytesWritten(qint64)), this, SLOT(writeNextPayload()), Qt::QueuedConnection);
 }
 
 void HttpHandlerFileTransfer::writeNextPayload()
 {
-	if (_sourceDevice == NULL || _targetRequest == NULL || _targetRequest->outputDevice() == NULL) return;
+	if (_sourceDevice == NULL || _connection == NULL || _connection->outputDevice() == NULL) return;
 
-	qint64 bytesToRead = _bufferSize - _targetRequest->outputDevice()->bytesToWrite();
+	qint64 bytesToRead = _bufferSize - _connection->outputDevice()->bytesToWrite();
 	if (bytesToRead <= 0) return;
 	qint64 bytesAvailable = _sourceDevice->size() - _sourceDevice->pos();
 	if (bytesToRead > bytesAvailable) bytesToRead = bytesAvailable;
 
 	if (bytesToRead > 0)
 	{
-		_targetRequest->writeContent(_sourceDevice->read(bytesToRead));
+		_connection->writeContent(_sourceDevice->read(bytesToRead));
 
 		if (_sourceDevice->atEnd()) 
 			emit finished();

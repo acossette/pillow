@@ -77,21 +77,21 @@ void HttpHandlerQtScript::setScriptFunction(const QScriptValue &scriptFunction)
 		registerMarshallers(scriptFunction.engine());
 }
 
-bool HttpHandlerQtScript::handleRequest(Pillow::HttpConnection *request)
+bool HttpHandlerQtScript::handleRequest(Pillow::HttpConnection *connection)
 {
 	if (!_scriptFunction.isFunction()) return false;
 
 	QScriptEngine* engine = _scriptFunction.engine();
 	QScriptValue requestObject = engine->newObject();
-	requestObject.setProperty("nativeRequest", _scriptFunction.engine()->newQObject(request));
-	requestObject.setProperty("requestMethod", QUrl::fromPercentEncoding(request->requestMethod()));
-	requestObject.setProperty("requestUri", QUrl::fromPercentEncoding(request->requestUri()));
-	requestObject.setProperty("requestFragment", QUrl::fromPercentEncoding(request->requestFragment()));
-	requestObject.setProperty("requestPath", QUrl::fromPercentEncoding(request->requestPath()));
-	requestObject.setProperty("requestQueryString", QUrl::fromPercentEncoding(request->requestQueryString()));
-	requestObject.setProperty("requestHeaders", qScriptValueFromValue(engine, request->requestHeaders()));
+	requestObject.setProperty("nativeRequest", _scriptFunction.engine()->newQObject(connection));
+	requestObject.setProperty("requestMethod", QUrl::fromPercentEncoding(connection->requestMethod()));
+	requestObject.setProperty("requestUri", QUrl::fromPercentEncoding(connection->requestUri()));
+	requestObject.setProperty("requestFragment", QUrl::fromPercentEncoding(connection->requestFragment()));
+	requestObject.setProperty("requestPath", QUrl::fromPercentEncoding(connection->requestPath()));
+	requestObject.setProperty("requestQueryString", QUrl::fromPercentEncoding(connection->requestQueryString()));
+	requestObject.setProperty("requestHeaders", qScriptValueFromValue(engine, connection->requestHeaders()));
 	
-	QList<QPair<QString, QString> > queryParams = QUrl(request->requestUri()).queryItems();
+	QList<QPair<QString, QString> > queryParams = QUrl(connection->requestUri()).queryItems();
 	QScriptValue queryParamsObject = engine->newObject();
 	for (int i = 0, iE = queryParams.size(); i < iE; ++i)
 		queryParamsObject.setProperty(queryParams.at(i).first, queryParams.at(i).second);
@@ -101,10 +101,10 @@ bool HttpHandlerQtScript::handleRequest(Pillow::HttpConnection *request)
 
 	if (result.isError())
 	{
-		if (request->state() == HttpConnection::SendingHeaders)
+		if (connection->state() == HttpConnection::SendingHeaders)
 		{
 			// Nothing was sent yet... We have a chance to let the client know we had an error.
-			request->writeResponseString(500, HttpHeaderCollection(), objectToString(result));
+			connection->writeResponseString(500, HttpHeaderCollection(), objectToString(result));
 		}
 		engine->clearExceptions();
 		return true;

@@ -14,18 +14,18 @@ Pillow::HttpConnection * HttpHandlerTestBase::createGetRequest(const QByteArray 
 	QBuffer* outputBuffer = new QBuffer(); outputBuffer->open(QIODevice::ReadWrite);
 	connect(outputBuffer, SIGNAL(bytesWritten(qint64)), this, SLOT(outputBuffer_bytesWritten()));
 	
-	Pillow::HttpConnection* request = new Pillow::HttpConnection(inputBuffer, outputBuffer, this);
-	connect(request, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
-	inputBuffer->setParent(request);
-	outputBuffer->setParent(request);
+	Pillow::HttpConnection* connection = new Pillow::HttpConnection(inputBuffer, outputBuffer, this);
+	connect(connection, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
+	inputBuffer->setParent(connection);
+	outputBuffer->setParent(connection);
 	
 	inputBuffer->write(data);
 	inputBuffer->seek(0);
 	
-	while (request->state() != Pillow::HttpConnection::SendingHeaders)
+	while (connection->state() != Pillow::HttpConnection::SendingHeaders)
 		QCoreApplication::processEvents();
 	
-	return request;
+	return connection;
 }
 
 Pillow::HttpConnection * HttpHandlerTestBase::createPostRequest(const QByteArray &path, const QByteArray &content)
@@ -37,26 +37,26 @@ Pillow::HttpConnection * HttpHandlerTestBase::createPostRequest(const QByteArray
 	QBuffer* outputBuffer = new QBuffer(); outputBuffer->open(QIODevice::ReadWrite);
 	connect(outputBuffer, SIGNAL(bytesWritten(qint64)), this, SLOT(outputBuffer_bytesWritten()));
 	
-	Pillow::HttpConnection* request = new Pillow::HttpConnection(inputBuffer, outputBuffer, this);
-	connect(request, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
-	inputBuffer->setParent(request);
-	outputBuffer->setParent(request);
+	Pillow::HttpConnection* connection = new Pillow::HttpConnection(inputBuffer, outputBuffer, this);
+	connect(connection, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
+	inputBuffer->setParent(connection);
+	outputBuffer->setParent(connection);
 	
 	inputBuffer->write(data);
 	inputBuffer->seek(0);
 	
-	while (request->state() != Pillow::HttpConnection::SendingHeaders)
+	while (connection->state() != Pillow::HttpConnection::SendingHeaders)
 		QCoreApplication::processEvents();
 	
-	return request;
+	return connection;
 }
 
-void HttpHandlerTestBase::requestCompleted(Pillow::HttpConnection* request)
+void HttpHandlerTestBase::requestCompleted(Pillow::HttpConnection* connection)
 {
 	QCoreApplication::processEvents();
 	response = responseBuffer;
 	responseBuffer = QByteArray();
-	requestParams = request->requestParams();
+	requestParams = connection->requestParams();
 }
 
 void HttpHandlerTestBase::outputBuffer_bytesWritten()
@@ -77,13 +77,13 @@ public:
 	int statusCode;
 	int handleRequestCount;	
 	
-	bool handleRequest(Pillow::HttpConnection *request)
+	bool handleRequest(Pillow::HttpConnection *connection)
 	{
 		++handleRequestCount;
 		
-		if (acceptPath == request->requestPath())
+		if (acceptPath == connection->requestPath())
 		{
-			request->writeResponse(statusCode);
+			connection->writeResponse(statusCode);
 			return true;
 		}
 		return false;
