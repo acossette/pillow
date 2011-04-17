@@ -26,6 +26,12 @@ inline void setFromRawDataAndNullterm(QByteArray& target, char* data, int start,
 	}
 }
 
+inline void setFromRawData(QByteArray& target, const char* data, int start, int length)
+{
+	if (target.data_ptr()) target.data_ptr()->alloc = 0;
+	target.setRawData(data + start, length);	
+}
+
 template <typename Integer>
 inline void appendNumber(QByteArray& target, const Integer number)
 {
@@ -182,7 +188,7 @@ void HttpConnection::transitionToReceivingContent()
 	setFromRawDataAndNullterm(_requestPath, data, _parser.request_path_start, _parser.request_path_len);
 	setFromRawDataAndNullterm(_requestQueryString, data, _parser.query_string_start, _parser.query_string_len);
 	setFromRawDataAndNullterm(_requestHttpVersion, data, _parser.http_version_start, _parser.http_version_len);
-	
+		
 	while (_requestHeaders.size() > _requestHeadersRef.size()) _requestHeaders.pop_back();
 	if (_requestHeaders.size() != _requestHeadersRef.size()) _requestHeaders.resize(_requestHeadersRef.size());
 	
@@ -213,6 +219,8 @@ void HttpConnection::transitionToSendingHeaders()
 {
 	if (_state == SendingHeaders) return;
 	_state = SendingHeaders;
+	
+	setFromRawData(_requestContent, _requestBuffer.constData(), _parser.body_start, _requestContentLength);
 
 	// Reset our known information about the response.
 	_responseContentLength = -1;   // The response content-length is initially unknown.
@@ -263,6 +271,8 @@ void HttpConnection::transitionToCompleted()
 	
 	if (_requestParams.capacity() > 16) _requestParams.clear();
 	else while(!_requestParams.isEmpty()) _requestParams.pop_back();
+	
+	_requestContent.data_ptr()->size = 0;
 
 	if (_responseConnectionKeepAlive)
 	{
@@ -464,17 +474,6 @@ QByteArray HttpConnection::getRequestHeaderValue(const QByteArray &field)
 	}
 	return QByteArray();
 }
-
-QByteArray HttpConnection::requestContent() const
-{
-	if (_requestContentLength == 0)
-		return QByteArray();
-	else if (int(_parser.body_start) < _requestBuffer.size())
-		return _requestBuffer.mid(_parser.body_start, _requestContentLength);
-
-	return QByteArray();
-}
-
 const Pillow::HttpParamCollection& Pillow::HttpConnection::requestParams()
 {
 	if (_requestParams.isEmpty() && !_requestQueryString.isEmpty())

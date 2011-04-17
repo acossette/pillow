@@ -19,7 +19,8 @@ SOURCES += \
     HttpHelpers.cpp \
     HttpsServer.cpp \
     HttpHandlerSimpleRouter.cpp \
-    HttpConnection.cpp
+    HttpConnection.cpp \
+    HttpHandlerProxy.cpp
 
 HEADERS += \
 	parser/parser.h \
@@ -29,4 +30,5 @@ HEADERS += \
     HttpHelpers.h \
     HttpsServer.h \
     HttpHandlerSimpleRouter.h \
-    HttpConnection.h
+    HttpConnection.h \
+    HttpHandlerProxy.h

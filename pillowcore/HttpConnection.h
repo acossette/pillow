@@ -42,7 +42,7 @@ namespace Pillow
 
 		// Request fields.
 		QByteArray _requestBuffer;
-		QByteArray _requestMethod, _requestUri, _requestFragment, _requestPath, _requestQueryString, _requestHttpVersion;
+		QByteArray _requestMethod, _requestUri, _requestFragment, _requestPath, _requestQueryString, _requestHttpVersion, _requestContent;
 		QVector<HttpHeaderRef> _requestHeadersRef;
 		HttpHeaderCollection _requestHeaders;
 		int _requestContentLength;
@@ -94,7 +94,7 @@ namespace Pillow
 		inline const QByteArray& requestHttpVersion() const { return _requestHttpVersion; }
 		inline const HttpHeaderCollection& requestHeaders() const { return _requestHeaders; }
 		QByteArray getRequestHeaderValue(const QByteArray& field);
-		QByteArray requestContent() const;
+		inline const QByteArray& requestContent() const { return _requestContent; }
 		
 		const HttpParamCollection& requestParams();
 		QString getRequestParam(const QString& name);

@@ -154,7 +154,7 @@ void HttpConnectionTest::testIncrementalPost()
 	QCOMPARE(connection->requestHeaders().size(), 1);
 	QCOMPARE(connection->requestHeaders().at(0).first, QByteArray("Content-Length"));
 	QCOMPARE(connection->requestHeaders().at(0).second, QByteArray("8"));
-	QCOMPARE(connection->requestContent(), QByteArray("some"));
+	QCOMPARE(connection->requestContent(), QByteArray()); // The request content should not be available until it is all received.
 	QCOMPARE(readySpy->size(), 0);
 	QCOMPARE(completedSpy->size(), 0);
 	QCOMPARE(closedSpy->size(), 0);
