@@ -212,10 +212,11 @@ bool HttpHandlerSimpleRouter::handleRequest(Pillow::HttpConnection *request)
 		if (!methodParam.isEmpty())
 			requestMethod = methodParam.toAscii();
 	}
+	
+	QString requestPath = QUrl::fromPercentEncoding(request->requestPath());	
 			
 	foreach (Route* route, d_ptr->routes) 
 	{
-		QString requestPath = QUrl::fromPercentEncoding(request->requestPath());
 		if (route->regExp.indexIn(requestPath) != -1)
 		{
 			matchedRoutes.append(route);

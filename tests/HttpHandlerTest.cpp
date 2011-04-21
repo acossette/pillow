@@ -7,9 +7,9 @@
 #include <QtTest/QtTest>
 using namespace Pillow;
 
-Pillow::HttpConnection * HttpHandlerTestBase::createGetRequest(const QByteArray &path)
+Pillow::HttpConnection * HttpHandlerTestBase::createGetRequest(const QByteArray &path, const QByteArray& httpVersion)
 {
-	QByteArray data = QByteArray().append("GET ").append(path).append(" HTTP/1.0\r\n\r\n");
+	QByteArray data = QByteArray().append("GET ").append(path).append(" HTTP/").append(httpVersion).append("\r\n\r\n");
 	QBuffer* inputBuffer = new QBuffer(); inputBuffer->open(QIODevice::ReadWrite);
 	QBuffer* outputBuffer = new QBuffer(); outputBuffer->open(QIODevice::ReadWrite);
 	connect(outputBuffer, SIGNAL(bytesWritten(qint64)), this, SLOT(outputBuffer_bytesWritten()));
@@ -31,7 +31,11 @@ Pillow::HttpConnection * HttpHandlerTestBase::createGetRequest(const QByteArray 
 Pillow::HttpConnection * HttpHandlerTestBase::createPostRequest(const QByteArray &path, const QByteArray &content)
 {
 	QByteArray data = QByteArray().append("POST ").append(path).append(" HTTP/1.0\r\n");
-	if (content.size() > 0) data.append("Content-Length: ").append(QByteArray::number(content.size())).append("\r\n");
+	if (content.size() > 0) 
+	{
+		data.append("Content-Length: ").append(QByteArray::number(content.size())).append("\r\n");
+		data.append("Content-Type: text/plain\r\n");
+	}
 	data.append("\r\n").append(content);
 	QBuffer* inputBuffer = new QBuffer(); inputBuffer->open(QIODevice::ReadWrite);
 	QBuffer* outputBuffer = new QBuffer(); outputBuffer->open(QIODevice::ReadWrite);

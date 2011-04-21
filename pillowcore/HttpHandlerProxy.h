@@ -21,7 +21,7 @@ namespace Pillow
 		
 		const QUrl& proxiedUrl() const { return _proxiedUrl; }
 		void setProxiedUrl(const QUrl& proxiedUrl);
-		
+			
 	public:
 		virtual bool handleRequest(Pillow::HttpConnection *request);	
 	};
@@ -31,6 +31,8 @@ namespace Pillow
 		Q_OBJECT
 		Pillow::HttpConnection* _request;
 		QNetworkReply* _proxiedRequest;
+		bool _headersSent;
+		bool _broken;
 		
 	public:
 		HttpHandlerProxyPipe(Pillow::HttpConnection* request, QNetworkReply* proxiedRequest);
@@ -40,6 +42,7 @@ namespace Pillow
 		QNetworkReply* proxiedRequest() const { return _proxiedRequest; }
 	
 	private slots:
+		void sendHeaders();
 		void teardown();
 		void proxiedRequest_readyRead();
 		void proxiedRequest_finished();

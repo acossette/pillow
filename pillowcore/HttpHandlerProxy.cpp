@@ -33,7 +33,7 @@ bool Pillow::HttpHandlerProxy::handleRequest(Pillow::HttpConnection *request)
 	targetUrl.setEncodedPath(request->requestPath());
 	targetUrl.setEncodedQuery(request->requestQueryString());
 	targetUrl.setEncodedFragment(request->requestFragment());
-	
+		
 	QNetworkRequest proxiedRequest(targetUrl);
 	foreach (const Pillow::HttpHeader& header, request->requestHeaders())
 		proxiedRequest.setRawHeader(header.first, header.second);
@@ -46,6 +46,7 @@ bool Pillow::HttpHandlerProxy::handleRequest(Pillow::HttpConnection *request)
 	}
 	
 	QNetworkReply* proxiedReply = networkAccessManager->sendCustomRequest(proxiedRequest, request->requestMethod(), requestContentBuffer);
+	
 	if (requestContentBuffer) requestContentBuffer->setParent(proxiedReply);	
 	
 	new Pillow::HttpHandlerProxyPipe(request, proxiedReply);
@@ -58,7 +59,7 @@ bool Pillow::HttpHandlerProxy::handleRequest(Pillow::HttpConnection *request)
 //
 
 Pillow::HttpHandlerProxyPipe::HttpHandlerProxyPipe(Pillow::HttpConnection *request, QNetworkReply *proxiedRequest)
-	: _request(request), _proxiedRequest(proxiedRequest)
+	: _request(request), _proxiedRequest(proxiedRequest), _headersSent(false), _broken(false)
 {
 	// Make sure we stop piping data if the client request finishes early or the proxied request sends too much.
 	connect(request, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(teardown()));
@@ -73,52 +74,10 @@ Pillow::HttpHandlerProxyPipe::~HttpHandlerProxyPipe()
 {
 }
 
-void Pillow::HttpHandlerProxyPipe::proxiedRequest_readyRead()
-{
-	if (_request->state() == Pillow::HttpConnection::SendingHeaders)
-	{
-		// Headers have not been sent yet. Do so now.
-		int statusCode = proxiedRequest()->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-		QList<Pillow::HttpHeader> headerList = proxiedRequest()->rawHeaderPairs();
-		Pillow::HttpHeaderCollection headers; headers.reserve(headerList.size());
-		foreach (const Pillow::HttpHeader& header, headerList)
-			headers << header;
-		_request->writeHeaders(statusCode, headers);
-	}
-	
-	_request->writeContent(_proxiedRequest->readAll());
-}
-
-void Pillow::HttpHandlerProxyPipe::proxiedRequest_finished()
-{	
-	if (_proxiedRequest->error() == QNetworkReply::NoError)
-	{
-		if (_request->state() == Pillow::HttpConnection::SendingContent)
-		{
-			// The client request will still be in this state if the content-length was not specified. We must
-			// close the connection to indicate the end of the content stream.
-			_request->close();
-		}
-		else if (_request->state() == Pillow::HttpConnection::SendingHeaders)
-		{
-			// The client should not be in this state; if the proxied request succeeded, then headers should have been sent.
-			qWarning() << "Pillow::HttpHandlerProxyPipe::proxiedRequest_finished(): proxied request finished successfully but client request is still waiting to send headers";
-		}
-	}
-	else
-	{
-		if (_request->state() == Pillow::HttpConnection::SendingHeaders)
-		{
-			// Finishing before sending headers mean that we have a network or transport error. Let the client know about this.
-			qWarning() << _proxiedRequest->errorString();
-			_request->writeResponse(503);
-		}
-		_request->close();;
-	}
-}
-
 void Pillow::HttpHandlerProxyPipe::teardown()
 {
+	_broken = true;
+	
 	if (_request)
 	{
 		disconnect(_request, NULL, this, NULL);
@@ -128,12 +87,58 @@ void Pillow::HttpHandlerProxyPipe::teardown()
 	if (_proxiedRequest)
 	{
 		disconnect(_proxiedRequest, NULL, this, NULL);
-		_proxiedRequest->abort();
-		_proxiedRequest->deleteLater();
+		if (qobject_cast<QNetworkReply*>(_proxiedRequest))
+		{
+			_proxiedRequest->abort();
+			_proxiedRequest->deleteLater();
+		}
 		_proxiedRequest = NULL;
 	}
 	
 	deleteLater();
+}
+
+void Pillow::HttpHandlerProxyPipe::sendHeaders()
+{
+	if (_headersSent || _broken) return;
+	_headersSent = true;	
+
+	// Headers have not been sent yet. Do so now.
+	int statusCode = _proxiedRequest->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+	QList<Pillow::HttpHeader> headerList = _proxiedRequest->rawHeaderPairs();
+	Pillow::HttpHeaderCollection headers; headers.reserve(headerList.size());
+	foreach (const Pillow::HttpHeader& header, headerList)
+		headers << header;
+	_request->writeHeaders(statusCode, headers);
+}
+
+void Pillow::HttpHandlerProxyPipe::proxiedRequest_readyRead()
+{	
+	sendHeaders();
+	if (!_broken) _request->writeContent(_proxiedRequest->readAll());
+}
+
+void Pillow::HttpHandlerProxyPipe::proxiedRequest_finished()
+{	
+	if (_proxiedRequest->error() == QNetworkReply::NoError)
+	{
+		sendHeaders(); // Make sure headers have been sent; can cause the pipe to tear down.
+		
+		if (!_broken && _request->state() == Pillow::HttpConnection::SendingContent)
+		{
+			// The client request will still be in this state if the content-length was not specified. We must
+			// close the connection to indicate the end of the content stream.
+			_request->close();
+		}
+	}
+	else
+	{
+		if (!_broken && _request->state() == Pillow::HttpConnection::SendingHeaders)
+		{
+			// Finishing before sending headers means that we have a network or transport error. Let the client know about this.
+			_request->writeResponse(503);
+		}
+	}
 }
 
 //
@@ -144,4 +149,3 @@ Pillow::ElasticNetworkAccessManager::ElasticNetworkAccessManager(QObject *parent
 	: QNetworkAccessManager(parent)
 {
 }
-

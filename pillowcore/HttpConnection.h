@@ -84,8 +84,8 @@ namespace Pillow
 
 		QHostAddress remoteAddress() const;
 
-		// Request members. Note: the underlying shared QByteArray data remains valid until the completed() signal
-		// is emitted. Call detach() on the QByteArrays if you wish to create a deep copy of the data and keep it longer.
+		// Request members. Note: the underlying shared QByteArray data remains valid until either the completed() 
+		// or closed()  signals is emitted. Call detach() on your copy of the QByteArrays if you wish to keep it longer.
 		inline const QByteArray& requestMethod() const { return _requestMethod; }
 		inline const QByteArray& requestUri() const { return _requestUri; }
 		inline const QByteArray& requestFragment() const { return _requestFragment; }
@@ -96,6 +96,7 @@ namespace Pillow
 		QByteArray getRequestHeaderValue(const QByteArray& field);
 		inline const QByteArray& requestContent() const { return _requestContent; }
 		
+		// Request params.
 		const HttpParamCollection& requestParams();
 		QString getRequestParam(const QString& name);
 		void setRequestParam(const QString& name, const QString& value);
