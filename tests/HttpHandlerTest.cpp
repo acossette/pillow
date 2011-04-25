@@ -37,6 +37,7 @@ Pillow::HttpConnection * HttpHandlerTestBase::createPostRequest(const QByteArray
 		data.append("Content-Type: text/plain\r\n");
 	}
 	data.append("\r\n").append(content);
+
 	QBuffer* inputBuffer = new QBuffer(); inputBuffer->open(QIODevice::ReadWrite);
 	QBuffer* outputBuffer = new QBuffer(); outputBuffer->open(QIODevice::ReadWrite);
 	connect(outputBuffer, SIGNAL(bytesWritten(qint64)), this, SLOT(outputBuffer_bytesWritten()));

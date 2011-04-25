@@ -31,8 +31,8 @@ bool Pillow::HttpHandlerProxy::handleRequest(Pillow::HttpConnection *request)
 	
 	QUrl targetUrl = _proxiedUrl;
 	targetUrl.setEncodedPath(request->requestPath());
-	targetUrl.setEncodedQuery(request->requestQueryString());
-	targetUrl.setEncodedFragment(request->requestFragment());
+	if (!request->requestQueryString().isEmpty()) targetUrl.setEncodedQuery(request->requestQueryString());
+	if (!request->requestFragment().isEmpty()) targetUrl.setEncodedFragment(request->requestFragment());
 		
 	QNetworkRequest proxiedRequest(targetUrl);
 	foreach (const Pillow::HttpHeader& header, request->requestHeaders())

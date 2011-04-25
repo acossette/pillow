@@ -31,9 +31,7 @@ private slots:
 	void testPrematureClosingResponse();
 	void testInvalidResponse();
 	void testContentLengthMismatchedResponse();
-	void testProxyChain();
-	
-private slots: 
+	void testProxyChain();	
 	void testPostRequest();
 };
 

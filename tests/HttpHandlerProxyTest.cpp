@@ -65,7 +65,7 @@ public:
 			requestHeaders[i].first.detach();
 			requestHeaders[i].second.detach();
 		}
-		connection->writeResponse(200, Pillow::HttpHeaderCollection(), "captured!");
+		connection->writeResponse(200, Pillow::HttpHeaderCollection(), requestMethod + " captured!");
 		return true;
 	}	
 };
@@ -80,7 +80,7 @@ void HttpHandlerProxyTest::init()
 {
 	server = new Pillow::HttpServer(this);
 	server->listen();
-	
+
 	router = new Pillow::HttpHandlerSimpleRouter();
 	router->addRoute("GET", "/first", 200, Pillow::HttpHeaderCollection(), "first content");
 	router->addRoute("GET", "/second", 200, Pillow::HttpHeaderCollection(), "second content");
@@ -90,7 +90,7 @@ void HttpHandlerProxyTest::init()
 	router->addRoute("GET", "/explosive", 500, Pillow::HttpHeaderCollection(), "explosive content");
 	router->addRoute("GET", "/third", 200, Pillow::HttpHeaderCollection(), "second content");
 	router->addRoute("GET", "/bad_length", new ContentLengthMismatchedHandler());
-	router->addRoute("GET", "/capturing", capturingHandler = new CapturingHandler());
+	router->addRoute("", "/capturing", capturingHandler = new CapturingHandler());
 	
 	connect(server, SIGNAL(requestReady(Pillow::HttpConnection*)), router, SLOT(handleRequest(Pillow::HttpConnection*)));
 }
@@ -125,7 +125,7 @@ void HttpHandlerProxyTest::testSuccessfulResponse()
 	QVERIFY(handler.handleRequest(request));
 	QVERIFY(waitForResponse(request)); // The response should complete successfully.
 	QVERIFY(response.startsWith("HTTP/1.1 200"));
-	QVERIFY(response.endsWith("\r\n\r\ncaptured!"));
+	QVERIFY(response.endsWith("\r\n\r\nGET captured!"));
 	QVERIFY(capturingHandler->requestMethod == "GET");
 	QVERIFY(capturingHandler->requestUri == "/capturing?key1=value1&key2=value2%20with%20escaped");
 	//QVERIFY(capturingHandler->requestFragment == "and_fragment"); // QNetworkAccessManager seems not to pass fragments in the requests it sends.
@@ -262,25 +262,12 @@ void HttpHandlerProxyTest::testProxyChain()
 void HttpHandlerProxyTest::testPostRequest()
 {
 	Pillow::HttpHandlerProxy handler(serverUrl());
-//	Pillow::HttpConnection* request = createGetRequest("/capturing?key1=value1&key2=value2%20with%20escaped#and_fragment", "1.1");
-
-//	QVERIFY(handler.handleRequest(request));
-//	QVERIFY(waitForResponse(request)); // The response should complete successfully.
-//	QVERIFY(response.startsWith("HTTP/1.1 200"));
-//	QVERIFY(response.endsWith("\r\n\r\ncaptured!"));
-//	QVERIFY(capturingHandler->requestMethod == "GET");
-//	QVERIFY(capturingHandler->requestUri == "/capturing?key1=value1&key2=value2%20with%20escaped");
-//	//QVERIFY(capturingHandler->requestFragment == "and_fragment"); // QNetworkAccessManager seems not to pass fragments in the requests it sends.
-//	QVERIFY(capturingHandler->requestContent.isEmpty());
-
-
-	Pillow::HttpConnection* request = createPostRequest("/capturing", "some data");
+	Pillow::HttpConnection* request = createPostRequest("/capturing?key1=value1", "some data");
 	QVERIFY(handler.handleRequest(request));
 	QVERIFY(waitForResponse(request)); // The response should complete successfully.
-	QVERIFY(response.startsWith("HTTP/1.1 200"));
-	QVERIFY(response.endsWith("\r\n\r\ncaptured!"));
+	QVERIFY(response.startsWith("HTTP/1.0 200"));
+	QVERIFY(response.endsWith("\r\n\r\nPOST captured!"));
 	QVERIFY(capturingHandler->requestMethod == "POST");
 	QVERIFY(capturingHandler->requestUri == "/capturing?key1=value1");
-	//QVERIFY(capturingHandler->requestFragment == "and_fragment"); // QNetworkAccessManager seems not to pass fragments in the requests it sends.
 	QVERIFY(capturingHandler->requestContent == "some data");	
 }
