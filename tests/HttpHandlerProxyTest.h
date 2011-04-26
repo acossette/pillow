@@ -7,6 +7,7 @@
 
 namespace Pillow { class HttpServer; class HttpHandlerSimpleRouter; }
 class CapturingHandler;
+class HoldingHandler;
 
 class HttpHandlerProxyTest : public HttpHandlerTestBase
 {
@@ -14,6 +15,7 @@ class HttpHandlerProxyTest : public HttpHandlerTestBase
 	Pillow::HttpServer* server;
 	Pillow::HttpHandlerSimpleRouter* router;
 	CapturingHandler* capturingHandler;
+	HoldingHandler* holdingHandler;
 	
 public:
 	HttpHandlerProxyTest();
@@ -31,8 +33,9 @@ private slots:
 	void testPrematureClosingResponse();
 	void testInvalidResponse();
 	void testContentLengthMismatchedResponse();
-	void testProxyChain();	
+	void testProxyChain();
 	void testNonGetRequest();
+	void testHandlesMultipleConcurrentRequests();
 	void testCustomProxyPipe();
 };
 

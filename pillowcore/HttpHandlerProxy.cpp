@@ -10,13 +10,13 @@
 Pillow::HttpHandlerProxy::HttpHandlerProxy(QObject *parent) 
 	: Pillow::HttpHandler(parent)
 {
-	networkAccessManager = new ElasticNetworkAccessManager(this);
+	_networkAccessManager = new ElasticNetworkAccessManager(this);
 }
 
 Pillow::HttpHandlerProxy::HttpHandlerProxy(const QUrl& proxiedUrl, QObject *parent) 
 	: Pillow::HttpHandler(parent), _proxiedUrl(proxiedUrl)
 {
-	networkAccessManager = new ElasticNetworkAccessManager(this);
+	_networkAccessManager = new ElasticNetworkAccessManager(this);
 }
 
 void Pillow::HttpHandlerProxy::setProxiedUrl(const QUrl &proxiedUrl)
@@ -52,7 +52,7 @@ QNetworkReply * Pillow::HttpHandlerProxy::createProxiedReply(Pillow::HttpConnect
 		requestContentBuffer->open(QIODevice::ReadOnly);
 	}
 
-	QNetworkReply* proxiedReply = networkAccessManager->sendCustomRequest(proxiedRequest, request->requestMethod(), requestContentBuffer);
+	QNetworkReply* proxiedReply = _networkAccessManager->sendCustomRequest(proxiedRequest, request->requestMethod(), requestContentBuffer);
 	
 	if (requestContentBuffer) requestContentBuffer->setParent(proxiedReply);
 	
@@ -160,9 +160,42 @@ void Pillow::HttpHandlerProxyPipe::proxiedReply_finished()
 // Pillow::ElasticNetworkAccessManager
 //
 
+class NamOpener : public QNetworkAccessManager
+{
+public:	
+	inline QNetworkReply* doCreateRequest(Operation op, const QNetworkRequest &request, QIODevice *outgoingData)
+	{
+		return QNetworkAccessManager::createRequest(op, request, outgoingData);
+	}
+};
+
 Pillow::ElasticNetworkAccessManager::ElasticNetworkAccessManager(QObject *parent)
 	: QNetworkAccessManager(parent)
 {
+}
+
+QNetworkReply * Pillow::ElasticNetworkAccessManager::createRequest(QNetworkAccessManager::Operation op, const QNetworkRequest &request, QIODevice *outgoingData)
+{
+	// Find the first available child QNetworkAccessManager.
+	QNetworkAccessManager* nam = NULL;
+	foreach (QObject* child, children())
+	{
+		if ((nam = qobject_cast<QNetworkAccessManager*>(child)))
+		{
+			if (nam->children().size() < 6)
+				break; // Found an available one.
+			else
+				nam = NULL; // This one is not available.
+		}
+	}
+	
+	if (nam == NULL)
+	{
+		// Did not find an available manager. Spawn a new one.
+		nam = new QNetworkAccessManager(this);
+	}
+	
+	return static_cast<NamOpener*>(nam)->doCreateRequest(op, request, outgoingData);
 }
 
 

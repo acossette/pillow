@@ -70,6 +70,18 @@ public:
 	}	
 };
 
+class HoldingHandler : public Pillow::HttpHandler
+{
+public:
+	QList<Pillow::HttpConnection*> connections;
+	
+	virtual bool handleRequest(Pillow::HttpConnection *connection)
+	{
+		connections.append(connection);
+		return true;
+	}
+};
+
 HttpHandlerProxyTest::HttpHandlerProxyTest() :
     HttpHandlerTestBase(), router(NULL)
 {
@@ -91,6 +103,7 @@ void HttpHandlerProxyTest::init()
 	router->addRoute("GET", "/third", 200, Pillow::HttpHeaderCollection(), "second content");
 	router->addRoute("GET", "/bad_length", new ContentLengthMismatchedHandler());
 	router->addRoute("", "/capturing", capturingHandler = new CapturingHandler());
+	router->addRoute("GET", "/holding", holdingHandler = new HoldingHandler());
 	
 	connect(server, SIGNAL(requestReady(Pillow::HttpConnection*)), router, SLOT(handleRequest(Pillow::HttpConnection*)));
 }
@@ -290,6 +303,20 @@ void HttpHandlerProxyTest::testNonGetRequest()
 	QVERIFY(capturingHandler->requestMethod == "TEAPOT");
 	QVERIFY(capturingHandler->requestUri == "/capturing?key1=value1");
 	QVERIFY(capturingHandler->requestContent.isEmpty());		
+}
+
+void HttpHandlerProxyTest::testHandlesMultipleConcurrentRequests()
+{
+	Pillow::HttpHandlerProxy handler(serverUrl());
+
+	for (int i = 0; i < 50; ++i)
+		handler.handleRequest(createGetRequest("/holding"));
+	
+	QElapsedTimer t; t.start();
+	while (t.elapsed() < 200) // Fragile, I know...
+		QCoreApplication::processEvents();
+	
+	QCOMPARE(holdingHandler->connections.size(), 50);
 }
 
 class CustomProxyPipe: public Pillow::HttpHandlerProxyPipe
