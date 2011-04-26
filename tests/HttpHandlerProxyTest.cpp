@@ -259,10 +259,12 @@ void HttpHandlerProxyTest::testProxyChain()
 	QVERIFY(capturingHandler->requestContent.isEmpty());	
 }
 
-void HttpHandlerProxyTest::testPostRequest()
+void HttpHandlerProxyTest::testNonGetRequest()
 {
 	Pillow::HttpHandlerProxy handler(serverUrl());
-	Pillow::HttpConnection* request = createPostRequest("/capturing?key1=value1", "some data");
+	Pillow::HttpConnection* request; 
+	
+	request = createPostRequest("/capturing?key1=value1", "some data");
 	QVERIFY(handler.handleRequest(request));
 	QVERIFY(waitForResponse(request)); // The response should complete successfully.
 	QVERIFY(response.startsWith("HTTP/1.0 200"));
@@ -270,4 +272,23 @@ void HttpHandlerProxyTest::testPostRequest()
 	QVERIFY(capturingHandler->requestMethod == "POST");
 	QVERIFY(capturingHandler->requestUri == "/capturing?key1=value1");
 	QVERIFY(capturingHandler->requestContent == "some data");	
+
+	request = createRequest("OPTIONS", "/capturing?key1=value1", QByteArray(), "1.1");
+	QVERIFY(handler.handleRequest(request));
+	QVERIFY(waitForResponse(request)); // The response should complete successfully.
+	QVERIFY(response.startsWith("HTTP/1.1 200"));
+	QVERIFY(response.endsWith("\r\n\r\nOPTIONS captured!"));
+	QVERIFY(capturingHandler->requestMethod == "OPTIONS");
+	QVERIFY(capturingHandler->requestUri == "/capturing?key1=value1");
+	QVERIFY(capturingHandler->requestContent.isEmpty());	
+
+	request = createRequest("TEAPOT", "/capturing?key1=value1", QByteArray(), "1.1");
+	QVERIFY(handler.handleRequest(request));
+	QVERIFY(waitForResponse(request)); // The response should complete successfully.
+	QVERIFY(response.startsWith("HTTP/1.1 200"));
+	QVERIFY(response.endsWith("\r\n\r\nTEAPOT captured!"));
+	QVERIFY(capturingHandler->requestMethod == "TEAPOT");
+	QVERIFY(capturingHandler->requestUri == "/capturing?key1=value1");
+	QVERIFY(capturingHandler->requestContent.isEmpty());		
+	
 }

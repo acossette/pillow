@@ -9,28 +9,17 @@ using namespace Pillow;
 
 Pillow::HttpConnection * HttpHandlerTestBase::createGetRequest(const QByteArray &path, const QByteArray& httpVersion)
 {
-	QByteArray data = QByteArray().append("GET ").append(path).append(" HTTP/").append(httpVersion).append("\r\n\r\n");
-	QBuffer* inputBuffer = new QBuffer(); inputBuffer->open(QIODevice::ReadWrite);
-	QBuffer* outputBuffer = new QBuffer(); outputBuffer->open(QIODevice::ReadWrite);
-	connect(outputBuffer, SIGNAL(bytesWritten(qint64)), this, SLOT(outputBuffer_bytesWritten()));
-	
-	Pillow::HttpConnection* connection = new Pillow::HttpConnection(inputBuffer, outputBuffer, this);
-	connect(connection, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
-	inputBuffer->setParent(connection);
-	outputBuffer->setParent(connection);
-	
-	inputBuffer->write(data);
-	inputBuffer->seek(0);
-	
-	while (connection->state() != Pillow::HttpConnection::SendingHeaders)
-		QCoreApplication::processEvents();
-	
-	return connection;
+	return createRequest("GET", path, QByteArray(), httpVersion);
 }
 
-Pillow::HttpConnection * HttpHandlerTestBase::createPostRequest(const QByteArray &path, const QByteArray &content)
+Pillow::HttpConnection * HttpHandlerTestBase::createPostRequest(const QByteArray &path, const QByteArray &content, const QByteArray &httpVersion)
 {
-	QByteArray data = QByteArray().append("POST ").append(path).append(" HTTP/1.0\r\n");
+	return createRequest("POST", path, content, httpVersion);
+}
+
+Pillow::HttpConnection * HttpHandlerTestBase::createRequest(const QByteArray &method, const QByteArray &path, const QByteArray &content, const QByteArray &httpVersion)
+{
+	QByteArray data = QByteArray().append(method).append(" ").append(path).append(" HTTP/").append(httpVersion).append("\r\n");
 	if (content.size() > 0) 
 	{
 		data.append("Content-Length: ").append(QByteArray::number(content.size())).append("\r\n");

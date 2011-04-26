@@ -21,7 +21,9 @@ protected:
 	
 protected:
 	Pillow::HttpConnection* createGetRequest(const QByteArray& path = "/", const QByteArray& httpVersion = "1.0");
-	Pillow::HttpConnection* createPostRequest(const QByteArray& path = "/", const QByteArray& content = QByteArray());
+	Pillow::HttpConnection* createPostRequest(const QByteArray& path = "/", const QByteArray& content = QByteArray(), const QByteArray& httpVersion = "1.0");
+	Pillow::HttpConnection* createRequest(const QByteArray& method, const QByteArray& path = "/", const QByteArray& content = QByteArray(), const QByteArray& httpVersion = "1.0");
+	
 };
 
 class HttpHandlerTest : public HttpHandlerTestBase

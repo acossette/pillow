@@ -32,7 +32,7 @@ private slots:
 	void testInvalidResponse();
 	void testContentLengthMismatchedResponse();
 	void testProxyChain();	
-	void testPostRequest();
+	void testNonGetRequest();
 };
 
 #endif // HTTPHANDLERPROXYTEST_H
