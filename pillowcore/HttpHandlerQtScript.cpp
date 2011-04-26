@@ -90,6 +90,7 @@ bool HttpHandlerQtScript::handleRequest(Pillow::HttpConnection *connection)
 	requestObject.setProperty("requestPath", QUrl::fromPercentEncoding(connection->requestPath()));
 	requestObject.setProperty("requestQueryString", QUrl::fromPercentEncoding(connection->requestQueryString()));
 	requestObject.setProperty("requestHeaders", qScriptValueFromValue(engine, connection->requestHeaders()));
+	requestObject.setProperty("requestContent", QUrl::fromPercentEncoding(connection->requestContent()));
 	
 	QList<QPair<QString, QString> > queryParams = QUrl(connection->requestUri()).queryItems();
 	QScriptValue queryParamsObject = engine->newObject();
