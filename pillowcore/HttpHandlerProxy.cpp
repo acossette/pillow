@@ -37,37 +37,47 @@ bool Pillow::HttpHandlerProxy::handleRequest(Pillow::HttpConnection *request)
 	QNetworkRequest proxiedRequest(targetUrl);
 	foreach (const Pillow::HttpHeader& header, request->requestHeaders())
 		proxiedRequest.setRawHeader(header.first, header.second);
-	
+		
+	createPipe(request, createProxiedReply(request, proxiedRequest));
+			
+	return true;
+}
+
+QNetworkReply * Pillow::HttpHandlerProxy::createProxiedReply(Pillow::HttpConnection *request, QNetworkRequest proxiedRequest)
+{
 	QBuffer* requestContentBuffer = NULL;
 	if (request->requestContent().size() > 0)
 	{
 		requestContentBuffer = new QBuffer(&(const_cast<QByteArray&>(request->requestContent())));
 		requestContentBuffer->open(QIODevice::ReadOnly);
 	}
-	
+
 	QNetworkReply* proxiedReply = networkAccessManager->sendCustomRequest(proxiedRequest, request->requestMethod(), requestContentBuffer);
 	
-	if (requestContentBuffer) requestContentBuffer->setParent(proxiedReply);	
+	if (requestContentBuffer) requestContentBuffer->setParent(proxiedReply);
 	
-	new Pillow::HttpHandlerProxyPipe(request, proxiedReply);
-	
-	return true;
+	return proxiedReply;
+}
+
+Pillow::HttpHandlerProxyPipe * Pillow::HttpHandlerProxy::createPipe(Pillow::HttpConnection *request, QNetworkReply* proxiedReply)
+{	
+	return new Pillow::HttpHandlerProxyPipe(request, proxiedReply);
 }
 
 //
 // Pillow::HttpHandlerProxyPipe
 //
 
-Pillow::HttpHandlerProxyPipe::HttpHandlerProxyPipe(Pillow::HttpConnection *request, QNetworkReply *proxiedRequest)
-	: _request(request), _proxiedRequest(proxiedRequest), _headersSent(false), _broken(false)
+Pillow::HttpHandlerProxyPipe::HttpHandlerProxyPipe(Pillow::HttpConnection *request, QNetworkReply *proxiedReply)
+	: _request(request), _proxiedReply(proxiedReply), _headersSent(false), _broken(false)
 {
 	// Make sure we stop piping data if the client request finishes early or the proxied request sends too much.
 	connect(request, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(teardown()));
 	connect(request, SIGNAL(closed(Pillow::HttpConnection*)), this, SLOT(teardown()));
 	connect(request, SIGNAL(destroyed()), this, SLOT(teardown()));
-	connect(proxiedRequest, SIGNAL(readyRead()), this, SLOT(proxiedRequest_readyRead()));
-	connect(proxiedRequest, SIGNAL(finished()), this, SLOT(proxiedRequest_finished()));
-	connect(proxiedRequest, SIGNAL(destroyed()), this, SLOT(teardown()));
+	connect(proxiedReply, SIGNAL(readyRead()), this, SLOT(proxiedReply_readyRead()));
+	connect(proxiedReply, SIGNAL(finished()), this, SLOT(proxiedReply_finished()));
+	connect(proxiedReply, SIGNAL(destroyed()), this, SLOT(teardown()));
 }
 
 Pillow::HttpHandlerProxyPipe::~HttpHandlerProxyPipe()
@@ -84,15 +94,15 @@ void Pillow::HttpHandlerProxyPipe::teardown()
 		_request = NULL;
 	}
 	
-	if (_proxiedRequest)
+	if (_proxiedReply)
 	{
-		disconnect(_proxiedRequest, NULL, this, NULL);
-		if (qobject_cast<QNetworkReply*>(_proxiedRequest))
+		disconnect(_proxiedReply, NULL, this, NULL);
+		if (qobject_cast<QNetworkReply*>(_proxiedReply))
 		{
-			_proxiedRequest->abort();
-			_proxiedRequest->deleteLater();
+			_proxiedReply->abort();
+			_proxiedReply->deleteLater();
 		}
-		_proxiedRequest = NULL;
+		_proxiedReply = NULL;
 	}
 	
 	deleteLater();
@@ -104,23 +114,28 @@ void Pillow::HttpHandlerProxyPipe::sendHeaders()
 	_headersSent = true;	
 
 	// Headers have not been sent yet. Do so now.
-	int statusCode = _proxiedRequest->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-	QList<Pillow::HttpHeader> headerList = _proxiedRequest->rawHeaderPairs();
+	int statusCode = _proxiedReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+	QList<Pillow::HttpHeader> headerList = _proxiedReply->rawHeaderPairs();
 	Pillow::HttpHeaderCollection headers; headers.reserve(headerList.size());
 	foreach (const Pillow::HttpHeader& header, headerList)
 		headers << header;
 	_request->writeHeaders(statusCode, headers);
 }
 
-void Pillow::HttpHandlerProxyPipe::proxiedRequest_readyRead()
-{	
-	sendHeaders();
-	if (!_broken) _request->writeContent(_proxiedRequest->readAll());
+void Pillow::HttpHandlerProxyPipe::pump(const QByteArray &data)
+{
+	if (_request) _request->writeContent(data);
 }
 
-void Pillow::HttpHandlerProxyPipe::proxiedRequest_finished()
+void Pillow::HttpHandlerProxyPipe::proxiedReply_readyRead()
 {	
-	if (_proxiedRequest->error() == QNetworkReply::NoError)
+	sendHeaders();
+	if (!_broken) pump(_proxiedReply->readAll());
+}
+
+void Pillow::HttpHandlerProxyPipe::proxiedReply_finished()
+{	
+	if (_proxiedReply->error() == QNetworkReply::NoError)
 	{
 		sendHeaders(); // Make sure headers have been sent; can cause the pipe to tear down.
 		
@@ -149,3 +164,5 @@ Pillow::ElasticNetworkAccessManager::ElasticNetworkAccessManager(QObject *parent
 	: QNetworkAccessManager(parent)
 {
 }
+
+

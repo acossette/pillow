@@ -4,10 +4,12 @@
 #include "HttpHandler.h"
 #include <QtCore/QUrl>
 #include <QtNetwork/QNetworkAccessManager>
+#include <QtNetwork/QNetworkRequest>
 
 namespace Pillow 
 {
 	class ElasticNetworkAccessManager;
+	class HttpHandlerProxyPipe;
 	
 	class HttpHandlerProxy : public Pillow::HttpHandler
 	{
@@ -21,6 +23,10 @@ namespace Pillow
 		
 		const QUrl& proxiedUrl() const { return _proxiedUrl; }
 		void setProxiedUrl(const QUrl& proxiedUrl);
+		
+	protected:
+		virtual QNetworkReply* createProxiedReply(Pillow::HttpConnection* request, QNetworkRequest proxiedRequest);
+		virtual Pillow::HttpHandlerProxyPipe* createPipe(Pillow::HttpConnection* request, QNetworkReply* proxiedReply);
 			
 	public:
 		virtual bool handleRequest(Pillow::HttpConnection *request);	
@@ -29,23 +35,28 @@ namespace Pillow
 	class HttpHandlerProxyPipe : public QObject
 	{
 		Q_OBJECT
+		
+	protected:
 		Pillow::HttpConnection* _request;
-		QNetworkReply* _proxiedRequest;
+		QNetworkReply* _proxiedReply;
 		bool _headersSent;
 		bool _broken;
 		
 	public:
-		HttpHandlerProxyPipe(Pillow::HttpConnection* request, QNetworkReply* proxiedRequest);
+		HttpHandlerProxyPipe(Pillow::HttpConnection* request, QNetworkReply* proxiedReply);
 		~HttpHandlerProxyPipe();
 		
 		Pillow::HttpConnection* request() const { return _request; }
-		QNetworkReply* proxiedRequest() const { return _proxiedRequest; }
+		QNetworkReply* proxiedReply() const { return _proxiedReply; }
 	
+	protected slots:
+		virtual void teardown();
+		virtual void sendHeaders();
+		virtual void pump(const QByteArray& data);
+		
 	private slots:
-		void sendHeaders();
-		void teardown();
-		void proxiedRequest_readyRead();
-		void proxiedRequest_finished();
+		void proxiedReply_readyRead();
+		void proxiedReply_finished();
 	};
 	
 	class ElasticNetworkAccessManager : public QNetworkAccessManager

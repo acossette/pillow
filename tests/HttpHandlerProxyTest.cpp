@@ -290,5 +290,48 @@ void HttpHandlerProxyTest::testNonGetRequest()
 	QVERIFY(capturingHandler->requestMethod == "TEAPOT");
 	QVERIFY(capturingHandler->requestUri == "/capturing?key1=value1");
 	QVERIFY(capturingHandler->requestContent.isEmpty());		
+}
+
+class CustomProxyPipe: public Pillow::HttpHandlerProxyPipe
+{
+public:
+	CustomProxyPipe(Pillow::HttpConnection* request, QNetworkReply* proxiedReply)
+		: Pillow::HttpHandlerProxyPipe(request, proxiedReply)
+	{}
 	
+	virtual void pump(const QByteArray &data)
+	{
+		_request->writeContent(QByteArray(data.size(), '*'));
+	}
+};
+
+class CustomProxy: public Pillow::HttpHandlerProxy
+{
+public:
+	CustomProxy(const QUrl& url) : Pillow::HttpHandlerProxy(url)
+	{}
+	
+	virtual QNetworkReply* createProxiedReply(Pillow::HttpConnection *request, QNetworkRequest proxiedRequest)
+	{
+		return Pillow::HttpHandlerProxy::createProxiedReply(request, proxiedRequest);
+	}
+	
+	virtual Pillow::HttpHandlerProxyPipe* createPipe(Pillow::HttpConnection *request, QNetworkReply *proxiedReply)
+	{
+		return new CustomProxyPipe(request, proxiedReply);
+	}
+};
+
+void HttpHandlerProxyTest::testCustomProxyPipe()
+{
+	CustomProxy handler(serverUrl());
+	Pillow::HttpConnection* request = createGetRequest("/capturing", "1.1");
+
+	QVERIFY(handler.handleRequest(request));
+	QVERIFY(waitForResponse(request)); // The response should complete successfully.
+	QVERIFY(response.startsWith("HTTP/1.1 200"));
+	QVERIFY(response.endsWith("\r\n\r\n*************"));
+	QVERIFY(capturingHandler->requestMethod == "GET");
+	QVERIFY(capturingHandler->requestUri == "/capturing");
+	QVERIFY(capturingHandler->requestContent.isEmpty());
 }
