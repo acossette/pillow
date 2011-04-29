@@ -15,6 +15,8 @@ namespace Pillow
 	{
 		Q_OBJECT
 		QUrl _proxiedUrl;
+		
+	protected:
 		ElasticNetworkAccessManager* _networkAccessManager;
 		
 	public:
