@@ -422,7 +422,7 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 	_responseConnectionKeepAlive = connectionKeepAlive;
 
 	// Automatically add essential headers.
-	if (!contentLengthFound) { _responseHeadersBuffer.append("Content-Length: "); appendNumber(_responseHeadersBuffer, _responseContentLength); _responseHeadersBuffer.append(crLfToken); }
+	if (!contentLengthFound && _responseContentLength != -1) { _responseHeadersBuffer.append("Content-Length: "); appendNumber(_responseHeadersBuffer, _responseContentLength); _responseHeadersBuffer.append(crLfToken); }
 	if (!contentTypeFound && (contentLengthFound || _responseContentLength > 0)) _responseHeadersBuffer.append("Content-Type: text/plain").append(crLfToken);
 	if (!connectionFound) _responseHeadersBuffer.append(connectionKeepAlive ? "Connection: keep-alive": "Connection: close").append(crLfToken);
 	_responseHeadersBuffer.append(crLfToken); // End of headers.

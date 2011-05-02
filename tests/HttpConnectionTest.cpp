@@ -532,6 +532,43 @@ void HttpConnectionTest::testWriteIncrementalResponseContent()
 	QCOMPARE(readySpy->size(), 1);
 	QCOMPARE(completedSpy->size(), 1);
 	QCOMPARE(closedSpy->size(), 1);
+	
+	// Next, try sending an incremental response without specifying the content-length.
+	cleanup(); init();
+
+	clientWrite("GET / HTTP/1.0\r\n");
+	clientWrite("\r\n"); clientFlush();
+
+	connection->writeHeaders(200);
+	
+	QByteArray sentHeaders = clientReadAll();
+	QVERIFY(!sentHeaders.toLower().contains("content-length"));
+	
+	QCOMPARE(connection->state(), HttpConnection::SendingContent);
+	QVERIFY(isClientConnected());
+	QCOMPARE(readySpy->size(), 1);
+	QCOMPARE(completedSpy->size(), 0);
+
+	connection->writeContent("1234");	
+	QCOMPARE(clientReadAll(), QByteArray("1234"));
+	QCOMPARE(connection->state(), HttpConnection::SendingContent);
+	QVERIFY(isClientConnected());
+	QCOMPARE(readySpy->size(), 1);
+	QCOMPARE(completedSpy->size(), 0);
+
+	connection->writeContent("567890");	
+	QCOMPARE(clientReadAll(), QByteArray("567890"));
+	QCOMPARE(connection->state(), HttpConnection::SendingContent);
+	QVERIFY(isClientConnected());
+	QCOMPARE(readySpy->size(), 1);
+	QCOMPARE(completedSpy->size(), 0);
+
+	connection->writeContent(QByteArray(32 * 1024, '*'));	
+	QCOMPARE(clientReadAll(), QByteArray(32 * 1024, '*'));
+	QCOMPARE(connection->state(), HttpConnection::SendingContent);
+	QVERIFY(isClientConnected());
+	QCOMPARE(readySpy->size(), 1);
+	QCOMPARE(completedSpy->size(), 0);
 }
 
 void HttpConnectionTest::testWriteResponseWithoutRequest()
