@@ -7,7 +7,8 @@
 
 uint qHash(const QPointer<Pillow::HttpConnection>& ptr)
 {
-	return qHash(uint(static_cast<Pillow::HttpConnection*>(ptr)));
+	Pillow::HttpConnection* c = static_cast<Pillow::HttpConnection*>(ptr);
+	return qHash(c);
 }
 
 void HttpServerTestBase::init()
