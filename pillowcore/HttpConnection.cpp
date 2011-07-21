@@ -60,10 +60,15 @@ static const int responseHeadersBufferRecyclingCapacity = 4096; // The capacity 
 static const QByteArray crLfToken("\r\n");
 static const QByteArray connectionToken("connection");
 static const QByteArray contentLengthToken("content-length");
+static const QByteArray contentLengthOutToken("Content-Length");
 static const QByteArray contentTypeToken("content-type");
 static const QByteArray expectToken("expect");
 static const QByteArray hundredDashContinueToken("100-continue");
 static const QByteArray keepAliveToken("keep-alive");
+static const QByteArray colonSpaceToken(": ");
+static const QByteArray contentTypeTextPlainTokenHeaderToken("Content-Type: text/plain\r\n");
+static const QByteArray connectionKeepAliveHeaderToken("Connection: keep-alive\r\n");
+static const QByteArray connectionCloseHeaderToken("Connection: close\r\n");
 
 HttpConnection::HttpConnection(QObject* parent /*= 0*/)
 	: QObject(parent), _inputDevice(NULL), _outputDevice(NULL), _state(Uninitialized)
@@ -397,7 +402,7 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 		else if (!contentTypeFound && field == contentTypeToken) contentTypeFound = true;
 		else if (!connectionFound && field == connectionToken) { connectionFound = true; connectionKeepAlive = header.second.toLower() == keepAliveToken; }
 
-		_responseHeadersBuffer.append(header.first).append(": ").append(header.second).append(crLfToken);
+		_responseHeadersBuffer.append(header.first).append(colonSpaceToken).append(header.second).append(crLfToken);
 	}
 
 	if (connectionKeepAlive)
@@ -422,9 +427,9 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 	_responseConnectionKeepAlive = connectionKeepAlive;
 
 	// Automatically add essential headers.
-	if (!contentLengthFound && _responseContentLength != -1) { _responseHeadersBuffer.append("Content-Length: "); appendNumber(_responseHeadersBuffer, _responseContentLength); _responseHeadersBuffer.append(crLfToken); }
-	if (!contentTypeFound && (contentLengthFound || _responseContentLength > 0)) _responseHeadersBuffer.append("Content-Type: text/plain").append(crLfToken);
-	if (!connectionFound) _responseHeadersBuffer.append(connectionKeepAlive ? "Connection: keep-alive": "Connection: close").append(crLfToken);
+	if (!contentLengthFound && _responseContentLength != -1) { _responseHeadersBuffer.append(contentLengthOutToken).append(colonSpaceToken); appendNumber(_responseHeadersBuffer, _responseContentLength); _responseHeadersBuffer.append(crLfToken); }
+	if (!contentTypeFound && (contentLengthFound || _responseContentLength > 0)) _responseHeadersBuffer.append(contentTypeTextPlainTokenHeaderToken);
+	if (!connectionFound) _responseHeadersBuffer.append(connectionKeepAlive ? connectionKeepAliveHeaderToken : connectionCloseHeaderToken);
 	_responseHeadersBuffer.append(crLfToken); // End of headers.
 	_outputDevice->write(_responseHeadersBuffer);
 	transitionToSendingContent();
