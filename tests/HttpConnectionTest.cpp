@@ -44,11 +44,16 @@ void HttpConnectionTest::testInitialState()
 	QCOMPARE(connection->requestQueryString(), QByteArray());
 	QVERIFY(connection->requestHeaders().isEmpty());
 	QCOMPARE(connection->requestContent(), QByteArray());
+
+	QCOMPARE(connection->requestUriDecoded(), QString());
+	QCOMPARE(connection->requestFragmentDecoded(), QString());
+	QCOMPARE(connection->requestPathDecoded(), QString());
+	QCOMPARE(connection->requestQueryStringDecoded(), QString());
 }
 
 void HttpConnectionTest::testSimpleGet()
 {
-	clientWrite("GET /test/index.html?key=value#fragment HTTP/1.0\r\n");
+	clientWrite("GET /first%20test/some%20index.html?key=one%20value#and%20fragment HTTP/1.0\r\n");
 	clientWrite("Host: example.org\r\n");
 	clientWrite("Weird: \r\n");
 	clientWrite("X-Dummy: DummyValue\r\n");
@@ -56,10 +61,14 @@ void HttpConnectionTest::testSimpleGet()
 
 	QCOMPARE(connection->state(), HttpConnection::SendingHeaders);
 	QCOMPARE(connection->requestMethod(), QByteArray("GET"));
-	QCOMPARE(connection->requestUri(), QByteArray("/test/index.html?key=value"));
-	QCOMPARE(connection->requestFragment(), QByteArray("fragment"));
-	QCOMPARE(connection->requestPath(), QByteArray("/test/index.html"));
-	QCOMPARE(connection->requestQueryString(), QByteArray("key=value"));
+	QCOMPARE(connection->requestUri(), QByteArray("/first%20test/some%20index.html?key=one%20value"));
+	QCOMPARE(connection->requestUriDecoded(), QString("/first test/some index.html?key=one value"));
+	QCOMPARE(connection->requestFragment(), QByteArray("and%20fragment"));
+	QCOMPARE(connection->requestFragmentDecoded(), QString("and fragment"));
+	QCOMPARE(connection->requestPath(), QByteArray("/first%20test/some%20index.html"));
+	QCOMPARE(connection->requestPathDecoded(), QString("/first test/some index.html"));
+	QCOMPARE(connection->requestQueryString(), QByteArray("key=one%20value"));
+	QCOMPARE(connection->requestQueryStringDecoded(), QString("key=one value"));
 	QCOMPARE(connection->requestHttpVersion(), QByteArray("HTTP/1.0"));
 	QCOMPARE(connection->requestHeaders().size(), 3);
 	QCOMPARE(connection->requestHeaders().at(0).first, QByteArray("Host"));
@@ -68,8 +77,8 @@ void HttpConnectionTest::testSimpleGet()
 	QCOMPARE(connection->requestHeaders().at(1).second, QByteArray(""));
 	QCOMPARE(connection->requestHeaders().at(2).first, QByteArray("X-Dummy"));
 	QCOMPARE(connection->requestHeaders().at(2).second, QByteArray("DummyValue"));
-	QCOMPARE(connection->getRequestHeaderValue("x-DUmmY"), QByteArray("DummyValue"));
-	QCOMPARE(connection->getRequestHeaderValue("missing"), QByteArray());
+	QCOMPARE(connection->requestHeaderValue("x-DUmmY"), QByteArray("DummyValue"));
+	QCOMPARE(connection->requestHeaderValue("missing"), QByteArray());
 	QCOMPARE(connection->requestContent(), QByteArray());
 	QCOMPARE(readySpy->size(), 1);
 	QCOMPARE(completedSpy->size(), 0);
@@ -79,10 +88,10 @@ void HttpConnectionTest::testSimpleGet()
 	// Safety test: check that all returned QByteArrays are null-terminated. Even if some internally come
 	// from QByteArray::fromRawData, we still want to provide null-terminated QByteArrays.
 	QVERIFY(qstrcmp(connection->requestMethod().constData(), "GET") == 0);
-	QVERIFY(qstrcmp(connection->requestUri().constData(), "/test/index.html?key=value") == 0);
-	QVERIFY(qstrcmp(connection->requestFragment().constData(), "fragment") == 0);
-	QVERIFY(qstrcmp(connection->requestPath().constData(), "/test/index.html") == 0);
-	QVERIFY(qstrcmp(connection->requestQueryString().constData(), "key=value") == 0);
+	QVERIFY(qstrcmp(connection->requestUri().constData(), "/first%20test/some%20index.html?key=one%20value") == 0);
+	QVERIFY(qstrcmp(connection->requestFragment().constData(), "and%20fragment") == 0);
+	QVERIFY(qstrcmp(connection->requestPath().constData(), "/first%20test/some%20index.html") == 0);
+	QVERIFY(qstrcmp(connection->requestQueryString().constData(), "key=one%20value") == 0);
 	QVERIFY(qstrcmp(connection->requestHttpVersion().constData(), "HTTP/1.0") == 0);
 	QVERIFY(qstrcmp(connection->requestHeaders().at(0).first.constData(), "Host") == 0);
 	QVERIFY(qstrcmp(connection->requestHeaders().at(0).second.constData(), "example.org") == 0);
@@ -327,7 +336,7 @@ void HttpConnectionTest::testConnectionKeepAlive()
 
 	// For HTTP/1.0, keep-alive is done only if requested by the client.
 	clientWrite("GET /another/but?http=1.0 HTTP/1.0\r\n");
-	clientWrite("Connection: keep-alive\r\n");
+	clientWrite("cOnnEcTion: keep-alive\r\n");
 	clientWrite("\r\n"); clientFlush(); 
 
 	connection->writeResponse(200); 
@@ -358,7 +367,7 @@ void HttpConnectionTest::testConnectionClose()
 {
 	// The server should close the connection if the client specifies Connection: close for any protocol version.
 	clientWrite("GET / HTTP/1.1\r\n");
-	clientWrite("Connection: close\r\n");
+	clientWrite("coNNEction: close\r\n");
 	clientWrite("\r\n"); clientFlush(); 
 
 	connection->writeResponse(200); 
@@ -628,12 +637,12 @@ void HttpConnectionTest::testReadsRequestParams()
 	clientWrite("GET /path?first=value&second=other_value&composite[property]=another+value&without_value&=without_name&final=true#fragment HTTP/1.1\r\n");
 	clientWrite("\r\n"); clientFlush();
 	
-	QCOMPARE(connection->getRequestParam("first"), QString("value"));
-	QCOMPARE(connection->getRequestParam("fIRsT"), QString("value"));
-	QCOMPARE(connection->getRequestParam("second"), QString("other_value"));
-	QCOMPARE(connection->getRequestParam("composite[property]"), QString("another+value"));
-	QCOMPARE(connection->getRequestParam("composITe[propERtY]"), QString("another+value"));
-	QCOMPARE(connection->getRequestParam("final"), QString("true"));
+	QCOMPARE(connection->requestParamValue("first"), QString("value"));
+	QCOMPARE(connection->requestParamValue("fIRsT"), QString("value"));
+	QCOMPARE(connection->requestParamValue("second"), QString("other_value"));
+	QCOMPARE(connection->requestParamValue("composite[property]"), QString("another+value"));
+	QCOMPARE(connection->requestParamValue("composITe[propERtY]"), QString("another+value"));
+	QCOMPARE(connection->requestParamValue("final"), QString("true"));
 
 	Pillow::HttpParamCollection params = connection->requestParams();
 	QCOMPARE(params.size(),  6);
@@ -652,10 +661,10 @@ void HttpConnectionTest::testReadsRequestParams()
 	
 	connection->setRequestParam("hello", "world");
 	QCOMPARE(connection->requestParams().size(), 7);
-	QCOMPARE(connection->getRequestParam("heLLo"), QString("world"));
+	QCOMPARE(connection->requestParamValue("heLLo"), QString("world"));
 	connection->setRequestParam("hello", "there");
 	QCOMPARE(connection->requestParams().size(), 7);
-	QCOMPARE(connection->getRequestParam("hEllo"), QString("there"));
+	QCOMPARE(connection->requestParamValue("hEllo"), QString("there"));
 	
 	// They should be cleared between requests.
 	connection->writeResponse(200); 
@@ -671,7 +680,7 @@ void HttpConnectionTest::testReadsRequestParams()
 	clientWrite("GET /final?a=b HTTP/1.1\r\n");
 	clientWrite("\r\n"); clientFlush();
 	QCOMPARE(connection->requestParams().size(), 1);
-	QCOMPARE(connection->getRequestParam("a"), QString("b"));
+	QCOMPARE(connection->requestParamValue("a"), QString("b"));
 	
 	// Some edge cases
 	connection->writeResponse(200); 
@@ -680,7 +689,7 @@ void HttpConnectionTest::testReadsRequestParams()
 	clientWrite("GET /final?nameonly HTTP/1.1\r\n");
 	clientWrite("\r\n"); clientFlush();
 	QCOMPARE(connection->requestParams().size(), 1);
-	QCOMPARE(connection->getRequestParam("nameonly"), QString(""));
+	QCOMPARE(connection->requestParamValue("nameonly"), QString(""));
 
 	connection->writeResponse(200); 
 	QVERIFY(clientReadAll().startsWith("HTTP/1.1 200"));
@@ -688,7 +697,7 @@ void HttpConnectionTest::testReadsRequestParams()
 	clientWrite("GET /final?=valueonly HTTP/1.1\r\n");
 	clientWrite("\r\n"); clientFlush();
 	QCOMPARE(connection->requestParams().size(), 1);
-	QCOMPARE(connection->getRequestParam(""), QString("valueonly"));
+	QCOMPARE(connection->requestParamValue(""), QString("valueonly"));
 
 }
 

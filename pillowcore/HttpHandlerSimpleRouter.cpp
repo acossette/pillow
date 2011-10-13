@@ -208,7 +208,7 @@ bool HttpHandlerSimpleRouter::handleRequest(Pillow::HttpConnection *request)
 	QByteArray requestMethod = request->requestMethod();
 	if (d_ptr->acceptMethodParam)
 	{
-		QString methodParam = request->getRequestParam(methodToken);
+		QString methodParam = request->requestParamValue(methodToken);
 		if (!methodParam.isEmpty())
 			requestMethod = methodParam.toAscii();
 	}

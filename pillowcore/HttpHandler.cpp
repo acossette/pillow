@@ -41,19 +41,6 @@ bool HttpHandlerStack::handleRequest(Pillow::HttpConnection *connection)
 	return false;
 }
 
-QList<HttpHandler *> HttpHandlerStack::GetHandlers() const
-{
-	QList<HttpHandler*> handlers;
-
-	foreach (QObject* object, children())
-	{
-		HttpHandler* handler = qobject_cast<HttpHandler*>(object);
-		if (handler) handlers.append(handler);
-	}
-	
-	return handlers;
-}
-
 //
 // HttpHandlerFixed
 //
@@ -61,6 +48,20 @@ QList<HttpHandler *> HttpHandlerStack::GetHandlers() const
 HttpHandlerFixed::HttpHandlerFixed(int statusCode, const QByteArray& content, QObject *parent)
     :HttpHandler(parent), _statusCode(statusCode), _content(content)
 {
+}
+
+void Pillow::HttpHandlerFixed::setStatusCode(int statusCode)
+{
+	if (_statusCode == statusCode) return;
+	_statusCode = statusCode;
+	emit changed();
+}
+
+void Pillow::HttpHandlerFixed::setContent(const QByteArray &content)
+{
+	if (_content == content) return;
+	_content = content;
+	emit changed();
 }
 
 bool HttpHandlerFixed::handleRequest(Pillow::HttpConnection *connection)
@@ -100,16 +101,16 @@ HttpHandlerLog::HttpHandlerLog(QIODevice *device, QObject *parent)
 
 HttpHandlerLog::~HttpHandlerLog()
 {
-	foreach (QElapsedTimer* timer, requestTimerMap)
+	foreach (QElapsedTimer* timer, _requestTimerMap)
 		delete timer;
 }
 
 bool HttpHandlerLog::handleRequest(Pillow::HttpConnection *connection)
 {
-	QElapsedTimer* timer = requestTimerMap.value(connection, NULL);
+	QElapsedTimer* timer = _requestTimerMap.value(connection, NULL);
 	if (timer == NULL)
 	{
-		timer = requestTimerMap[connection] = new QElapsedTimer();
+		timer = _requestTimerMap[connection] = new QElapsedTimer();
 		connect(connection, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
 		connect(connection, SIGNAL(destroyed(QObject*)), this, SLOT(requestDestroyed(QObject*)));
 	}
@@ -120,7 +121,7 @@ bool HttpHandlerLog::handleRequest(Pillow::HttpConnection *connection)
 
 void HttpHandlerLog::requestCompleted(Pillow::HttpConnection *connection)
 {
-	QElapsedTimer* timer = requestTimerMap.value(connection, NULL);
+	QElapsedTimer* timer = _requestTimerMap.value(connection, NULL);
 	if (timer)
 	{
 		qint64 elapsed = timer->elapsed();
@@ -152,8 +153,8 @@ void HttpHandlerLog::requestCompleted(Pillow::HttpConnection *connection)
 void HttpHandlerLog::requestDestroyed(QObject *r)
 {
 	HttpConnection* connection = static_cast<HttpConnection*>(r);
-	delete requestTimerMap.value(connection, NULL);
-	requestTimerMap.remove(connection);
+	delete _requestTimerMap.value(connection, NULL);
+	_requestTimerMap.remove(connection);
 }
 
 QIODevice * HttpHandlerLog::device() const
@@ -191,6 +192,7 @@ void HttpHandlerFile::setPublicPath(const QString &publicPath)
 			qWarning() << "HttpHandlerStaticFile::SetPublicPath:" << publicPath << "does not exist or is not a readable directory.";
 		}
 	}
+	emit changed();
 }
 
 void HttpHandlerFile::setBufferSize(int bytes)
@@ -241,7 +243,7 @@ bool HttpHandlerFile::handleRequest(Pillow::HttpConnection *connection)
 			QByteArray etag = md5sum.result().toHex();
 			headers << HttpHeader("ETag", etag);
 
-			if (connection->getRequestHeaderValue("If-None-Match") == etag)
+			if (connection->requestHeaderValue("If-None-Match") == etag)
 				connection->writeResponse(304); // The client's cached file was not modified.
 			else
 				connection->writeResponse(200, headers, content);

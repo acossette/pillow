@@ -37,9 +37,7 @@ namespace Pillow
 		
 	public:
 		HttpHandlerStack(QObject* parent = 0);
-		
-		QList<HttpHandler*> GetHandlers() const;
-		
+				
 	public:
 		virtual bool handleRequest(Pillow::HttpConnection *connection);
 	};
@@ -51,14 +49,28 @@ namespace Pillow
 	class HttpHandlerFixed : public HttpHandler
 	{
 		Q_OBJECT
+		Q_PROPERTY(int statusCode READ statusCode WRITE setStatusCode NOTIFY changed)
+		Q_PROPERTY(QByteArray content READ content WRITE setContent NOTIFY changed)
+	
+	private:
 		int _statusCode;
 		QByteArray _content;
 
 	public:
 		HttpHandlerFixed(int statusCode = 200, const QByteArray& content = QByteArray(), QObject* parent = 0);
 
+		inline int statusCode() const { return _statusCode; }
+		inline const QByteArray& content() const { return _content; }
+		
 	public:
 		virtual bool handleRequest(Pillow::HttpConnection* connection);
+		
+	public slots:
+		void setStatusCode(int statusCode);
+		void setContent(const QByteArray& content);
+
+	signals:
+		void changed();
 	};
 
 	
@@ -84,7 +96,7 @@ namespace Pillow
 	class HttpHandlerLog : public HttpHandler
 	{
 		Q_OBJECT
-		QHash<Pillow::HttpConnection*, QElapsedTimer*> requestTimerMap;
+		QHash<Pillow::HttpConnection*, QElapsedTimer*> _requestTimerMap;
 		QPointer<QIODevice> _device;
 		
 	private slots:
@@ -110,6 +122,8 @@ namespace Pillow
 	class HttpHandlerFile : public HttpHandler
 	{
 		Q_OBJECT
+		Q_PROPERTY(QString publicPath READ publicPath WRITE setPublicPath NOTIFY changed)
+		
 		QString _publicPath;
 		int _bufferSize;
 	
@@ -126,11 +140,14 @@ namespace Pillow
 		void setBufferSize(int bytes);
 		
 		virtual bool handleRequest(Pillow::HttpConnection* connection);
+		
+	signals:
+		void changed();
 	};
 	
 	class HttpHandlerFileTransfer : public QObject
 	{
-		Q_OBJECT;
+		Q_OBJECT
 		QPointer<QIODevice> _sourceDevice;
 		QPointer<HttpConnection> _connection;
 		int _bufferSize;

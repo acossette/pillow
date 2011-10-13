@@ -9,6 +9,10 @@
 #include <QtNetwork/QLocalSocket>
 using namespace Pillow;
 
+//
+// Helpers
+//
+
 inline void setFromRawDataAndNullterm(QByteArray& target, char* data, int start, int length)
 {
 	// Reminder: switching between a deep copy/unshared target QByteArray and a shared data QByteArray
@@ -52,6 +56,19 @@ inline void appendNumber(QByteArray& target, const Integer number)
 	}
 }
 
+inline bool asciiEqualsCaseInsensitive(const QByteArray& first, const QByteArray& second)
+{
+    if (first.size() != second.size()) return false;
+    
+    for (register int i = 0; i < first.size(); ++i)
+    {
+        register char f = first.at(i), s = second.at(i);
+        bool good = (f == s) || ((f - s) == 32 && f >= 'a' && f <= 'z') || ((f - s) == -32 && f >= 'A' && f <= 'Z');
+        if (!good) return false;
+    }
+    return true;
+}
+
 //
 // HttpConnection
 //
@@ -66,23 +83,24 @@ static const QByteArray expectToken("expect");
 static const QByteArray hundredDashContinueToken("100-continue");
 static const QByteArray keepAliveToken("keep-alive");
 static const QByteArray colonSpaceToken(": ");
+static const QByteArray closeToken("close");
 static const QByteArray contentTypeTextPlainTokenHeaderToken("Content-Type: text/plain\r\n");
 static const QByteArray connectionKeepAliveHeaderToken("Connection: keep-alive\r\n");
 static const QByteArray connectionCloseHeaderToken("Connection: close\r\n");
 
 HttpConnection::HttpConnection(QObject* parent /*= 0*/)
-	: QObject(parent), _inputDevice(NULL), _outputDevice(NULL), _state(Uninitialized)
+	: QObject(parent), _state(Uninitialized), _inputDevice(NULL), _outputDevice(NULL)
 {
 }
 
 HttpConnection::HttpConnection(QIODevice* inputOutputDevice, QObject* parent /* = 0 */)
-	: QObject(parent), _inputDevice(NULL), _outputDevice(NULL), _state(Uninitialized)
+	: QObject(parent), _state(Uninitialized), _inputDevice(NULL), _outputDevice(NULL)
 {
 	initialize(inputOutputDevice, inputOutputDevice);
 }
 
 HttpConnection::HttpConnection(QIODevice* inputDevice, QIODevice* outputDevice, QObject* parent /*= 0*/)
-	: QObject(parent), _inputDevice(NULL), _outputDevice(NULL), _state(Uninitialized)
+	: QObject(parent), _state(Uninitialized), _inputDevice(NULL), _outputDevice(NULL)
 {
 	initialize(inputDevice, outputDevice);
 }
@@ -193,7 +211,12 @@ void HttpConnection::transitionToReceivingContent()
 	setFromRawDataAndNullterm(_requestPath, data, _parser.request_path_start, _parser.request_path_len);
 	setFromRawDataAndNullterm(_requestQueryString, data, _parser.query_string_start, _parser.query_string_len);
 	setFromRawDataAndNullterm(_requestHttpVersion, data, _parser.http_version_start, _parser.http_version_len);
-		
+	
+	_requestUriDecoded = QString();
+	_requestFragmentDecoded = QString();
+	_requestPathDecoded = QString();
+	_requestQueryStringDecoded = QString();
+	
 	while (_requestHeaders.size() > _requestHeadersRef.size()) _requestHeaders.pop_back();
 	if (_requestHeaders.size() != _requestHeadersRef.size()) _requestHeaders.resize(_requestHeadersRef.size());
 	
@@ -205,7 +228,7 @@ void HttpConnection::transitionToReceivingContent()
 		setFromRawDataAndNullterm(header.second, data, ref.valuePos, ref.valueLength);
 	}
 	
-	QByteArray requestContentLengthValue = getRequestHeaderValue(contentLengthToken); bool parseOk = true;
+    QByteArray requestContentLengthValue = requestHeaderValue(contentLengthToken); bool parseOk = true;
 	_requestContentLength = requestContentLengthValue.isEmpty() ? 0 : requestContentLengthValue.toInt(&parseOk);
 
 	if (_requestContentLength < 0)
@@ -214,7 +237,7 @@ void HttpConnection::transitionToReceivingContent()
 		return writeRequestErrorResponse(413); // Request entity too large.
 	else if (_requestContentLength == 0)
 		transitionToSendingHeaders(); // No content to receive. Go straight to sending headers.
-	else if (getRequestHeaderValue(expectToken) == hundredDashContinueToken)
+    else if (requestHeaderValue(expectToken) == hundredDashContinueToken)
 		_outputDevice->write("HTTP/1.1 100 Continue\r\n\r\n");// The client politely wanted to know if it could proceed with his payload. All clear!
 	
 	processInput();
@@ -237,7 +260,7 @@ void HttpConnection::transitionToSendingHeaders()
 void HttpConnection::transitionToSendingContent()
 {
 	if (_state == SendingContent) return;
-	_state= SendingContent;
+	_state = SendingContent;
 
 	if (_responseHeadersBuffer.capacity() > responseHeadersBufferRecyclingCapacity)
 		_responseHeadersBuffer.clear();
@@ -256,7 +279,7 @@ void HttpConnection::transitionToSendingContent()
 
 void HttpConnection::transitionToCompleted()
 {
-	if (_state == Completed)  return;
+	if (_state == Completed) return;
 	if (_state == Closed)
 	{
 		qWarning() << "HttpConnection::transitionToCompleted called while the request is in the closed state.";
@@ -408,17 +431,17 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 	if (connectionKeepAlive)
 	{
 		// We'd like to keep the connection alive... Check if the client would rather have the connection closed.
-		QByteArray requestConnectionValue = getRequestHeaderValue(connectionToken);
-
+		QByteArray requestConnectionValue = requestHeaderValue(connectionToken);
+ 
 		if (_requestHttpVersion == "HTTP/1.0")
 		{
 			// HTTP/1.0 defaults to "close" unless it is "keep-alive".
-			connectionKeepAlive = qstrnicmp(requestConnectionValue.constData(), keepAliveToken.constData(), keepAliveToken.size()) == 0;
+			connectionKeepAlive = asciiEqualsCaseInsensitive(requestConnectionValue, keepAliveToken);
 		}
 		else
 		{
 			// HTTP/1.1 defaults to "keep-alive" unless it is "close".
-			connectionKeepAlive = !(qstrnicmp(requestConnectionValue.constData(), "close", 5) == 0);
+			connectionKeepAlive = !asciiEqualsCaseInsensitive(requestConnectionValue, closeToken);
 		}
 
 		if (!connectionKeepAlive) connectionFound = false; // The client wants the connection closed. Make sure we output the connection header.
@@ -469,12 +492,12 @@ void Pillow::HttpConnection::close()
 		transitionToClosed();
 }
 
-QByteArray HttpConnection::getRequestHeaderValue(const QByteArray &field)
+QByteArray HttpConnection::requestHeaderValue(const QByteArray &field)
 {
 	for (int i = 0, iE = _requestHeaders.size(); i < iE; ++i)
 	{
 		const HttpHeader& header = _requestHeaders.at(i);
-		if (field.size() == header.first.size() && qstrnicmp(field.constData(), header.first.constData(), field.size()) == 0)
+        if (asciiEqualsCaseInsensitive(field, header.first))
 			return header.second;
 	}
 	return QByteArray();
@@ -493,7 +516,7 @@ const Pillow::HttpParamCollection& Pillow::HttpConnection::requestParams()
 	return _requestParams;
 }
 
-QString Pillow::HttpConnection::getRequestParam(const QString &name)
+QString Pillow::HttpConnection::requestParamValue(const QString &name)
 {
 	requestParams();
 	for (int i = 0, iE = _requestParams.size(); i < iE; ++i)
@@ -527,7 +550,35 @@ QHostAddress HttpConnection::remoteAddress() const
 
 void HttpConnection::parser_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {	
-	HttpConnection* request = reinterpret_cast<HttpConnection*>(data);
-	const char* begin = request->_requestBuffer.constData();
-	request->_requestHeadersRef.append(HttpHeaderRef(field - begin, flen, value - begin, vlen));
+	HttpConnection* request = reinterpret_cast<HttpConnection*>(data);    
+    const char* begin = request->_requestBuffer.constData();
+	request->_requestHeadersRef.append(HttpHeaderRef(field - begin, flen, value - begin, vlen));    
+}
+
+const QString & Pillow::HttpConnection::requestUriDecoded() const
+{
+	if (_requestUriDecoded.isEmpty() && !_requestUri.isEmpty())
+		_requestUriDecoded = QUrl::fromPercentEncoding(_requestUri);
+	return _requestUriDecoded;
+}
+
+const QString & Pillow::HttpConnection::requestFragmentDecoded() const
+{
+	if (_requestFragmentDecoded.isEmpty() && !_requestFragment.isEmpty())
+		_requestFragmentDecoded = QUrl::fromPercentEncoding(_requestFragment);
+	return _requestFragmentDecoded;
+}
+
+const QString & Pillow::HttpConnection::requestPathDecoded() const
+{
+	if (_requestPathDecoded.isEmpty() && !_requestPath.isEmpty())
+		_requestPathDecoded = QUrl::fromPercentEncoding(_requestPath);
+	return _requestPathDecoded;
+}
+
+const QString & Pillow::HttpConnection::requestQueryStringDecoded() const
+{
+	if (_requestQueryStringDecoded.isEmpty() && !_requestQueryString.isEmpty())
+		_requestQueryStringDecoded = QUrl::fromPercentEncoding(_requestQueryString);
+	return _requestQueryStringDecoded;
 }

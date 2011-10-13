@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	qDebug() << "Ready";
 
-	Pillow::HttpHandler* handler = new Pillow::HttpHandlerFixed(200, "Hello from pillow!", &server);
+	Pillow::HttpHandler* handler = new Pillow::HttpHandlerFixed(200, "", &server);
 	
 //	Pillow::HttpHandler* handler = new Pillow::HttpHandlerStack(&server);
 //		new Pillow::HttpHandlerLog(handler);

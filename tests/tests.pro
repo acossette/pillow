@@ -1,8 +1,7 @@
 include(../config.pri)
 TEMPLATE = app
 
-QT       += core network testlib script
-QT       -= gui
+QT       += core network testlib script gui
 
 CONFIG   += console
 CONFIG   -= app_bundle
