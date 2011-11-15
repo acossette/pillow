@@ -7,6 +7,11 @@ CONFIG(debug, debug|release) {
 	PILLOWCORE_LIB_NAME = $${PILLOWCORE_LIB_NAME}d
 }
 
+contains(QMAKE_CC, cl) {
+        PILLOWCORE_LIB_FILE = $${PILLOWCORE_LIB_NAME}.lib
+} else {
+        PILLOWCORE_LIB_FILE = lib$${PILLOWCORE_LIB_NAME}.a
+}
 
 # Uncomment the following to disable SSL support in Pillow.
 #CONFIG += pillow_no_ssl
