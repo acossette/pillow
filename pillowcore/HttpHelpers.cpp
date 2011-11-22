@@ -54,8 +54,8 @@ namespace Pillow
 					case 408: return "408 Request Timeout";
 					case 409: return "409 Conflict";
 					case 410: return "410 Gone";
-					case 411: return "411 Conflict";
-					case 412: return "412 Length Required";
+					case 411: return "411 Length Required";
+					case 412: return "412 Precondition Failed";
 					case 413: return "413 Request Entity Too Large";
 					case 414: return "414 Request-URI Too Long";
 					case 415: return "415 Unsupported Media Type";
