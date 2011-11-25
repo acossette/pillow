@@ -577,7 +577,55 @@ void HttpConnectionTest::testWriteIncrementalResponseContent()
 	QCOMPARE(connection->state(), HttpConnection::SendingContent);
 	QVERIFY(isClientConnected());
 	QCOMPARE(readySpy->size(), 1);
+    QCOMPARE(completedSpy->size(), 0);
+    QCOMPARE(closedSpy->size(), 0); 
+    
+    connection->endContent();
+	QCOMPARE(clientReadAll(), QByteArray());
+	QCOMPARE(connection->state(), HttpConnection::Closed);
+	QVERIFY(!isClientConnected());
+	QCOMPARE(readySpy->size(), 1);
+    QCOMPARE(completedSpy->size(), 1);
+    QCOMPARE(closedSpy->size(), 1); 
+}
+
+void HttpConnectionTest::testWriteChunkedResponseContent()
+{
+    clientWrite("GET / HTTP/1.1\r\n");
+	clientWrite("\r\n"); clientFlush();
+
+	connection->writeHeaders(200, HttpHeaderCollection() << HttpHeader("Transfer-Encoding", "Chunked"));
+	
+	QVERIFY(clientReadAll().startsWith("HTTP/1.1 200"));
+	QCOMPARE(connection->state(), HttpConnection::SendingContent);
+	QVERIFY(isClientConnected());
+	QCOMPARE(readySpy->size(), 1);
 	QCOMPARE(completedSpy->size(), 0);
+
+	connection->writeContent("hello");	
+	QCOMPARE(clientReadAll(), QByteArray("5\r\nhello"));
+	QCOMPARE(connection->state(), HttpConnection::SendingContent);
+    
+	connection->writeContent("there! How are you?");
+	QCOMPARE(clientReadAll(), QByteArray("13\r\nthere! How are you?"));
+	QCOMPARE(connection->state(), HttpConnection::SendingContent);
+
+    connection->writeContent(QByteArray());
+	QCOMPARE(clientReadAll(), QByteArray());
+	QCOMPARE(connection->state(), HttpConnection::SendingContent);
+    
+    connection->writeContent("1234567890");
+	QCOMPARE(clientReadAll(), QByteArray("a\r\n1234567890"));
+	QCOMPARE(connection->state(), HttpConnection::SendingContent);
+    
+    connection->endContent();
+    QCOMPARE(clientReadAll(), QByteArray("0\r\n\r\n"));
+    qDebug() << connection->state();
+	QCOMPARE(connection->state(), HttpConnection::ReceivingHeaders);    
+	QVERIFY(isClientConnected());
+	QCOMPARE(readySpy->size(), 1);
+	QCOMPARE(completedSpy->size(), 1);
+	QCOMPARE(closedSpy->size(), 0);	
 }
 
 void HttpConnectionTest::testWriteResponseWithoutRequest()

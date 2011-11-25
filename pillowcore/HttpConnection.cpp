@@ -36,12 +36,13 @@ inline void setFromRawData(QByteArray& target, const char* data, int start, int 
 	target.setRawData(data + start, length);	
 }
 
-template <typename Integer>
+template <typename Integer, int Base>
 inline void appendNumber(QByteArray& target, const Integer number)
 {
+    static const char intToChar[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
 	int start = target.size();
 	Integer n = number; if (n < 0) n = -n;
-	do { target.append(char(n % 10) + '0');	} while ((n /= 10) > 0);
+    do { if (Base <= 10) target.append(char(n % Base) + '0'); else target.append(intToChar[n % Base]); } while ((n /= Base) > 0);
 	if (number < 0) target.append('-');
 
 	// Reverse the string we've just output
@@ -87,6 +88,10 @@ static const QByteArray closeToken("close");
 static const QByteArray contentTypeTextPlainTokenHeaderToken("Content-Type: text/plain\r\n");
 static const QByteArray connectionKeepAliveHeaderToken("Connection: keep-alive\r\n");
 static const QByteArray connectionCloseHeaderToken("Connection: close\r\n");
+static const QByteArray transferEncodingToken("transfer-encoding");
+static const QByteArray chunkedToken("chunked");
+static const QByteArray httpSlash11Token("HTTP/1.1");
+static const QByteArray headToken("HEAD");
 
 HttpConnection::HttpConnection(QObject* parent /*= 0*/)
 	: QObject(parent), _state(Uninitialized), _inputDevice(NULL), _outputDevice(NULL)
@@ -185,6 +190,7 @@ void HttpConnection::transitionToReceivingHeaders()
 	
 	thin_http_parser_init(&_parser);
 	_requestContentLength = 0;
+    _requestHttp11 = false;
 }
 
 void HttpConnection::transitionToReceivingContent()
@@ -212,25 +218,35 @@ void HttpConnection::transitionToReceivingContent()
 	setFromRawDataAndNullterm(_requestQueryString, data, _parser.query_string_start, _parser.query_string_len);
 	setFromRawDataAndNullterm(_requestHttpVersion, data, _parser.http_version_start, _parser.http_version_len);
 	
-	_requestUriDecoded = QString();
-	_requestFragmentDecoded = QString();
-	_requestPathDecoded = QString();
-	_requestQueryStringDecoded = QString();
+	if (!_requestUriDecoded.isEmpty()) _requestUriDecoded = QString();
+	if (!_requestFragmentDecoded.isEmpty())_requestFragmentDecoded = QString();
+	if (!_requestPathDecoded.isEmpty())_requestPathDecoded = QString();
+	if (!_requestQueryStringDecoded.isEmpty())_requestQueryStringDecoded = QString();
 	
 	while (_requestHeaders.size() > _requestHeadersRef.size()) _requestHeaders.pop_back();
-	if (_requestHeaders.size() != _requestHeadersRef.size()) _requestHeaders.resize(_requestHeadersRef.size());
+    if (_requestHeaders.capacity() == 0 && _requestHeadersRef.size() > 0) _requestHeaders.resize(_requestHeadersRef.size());
+    else while (_requestHeaders.size() < _requestHeadersRef.size()) _requestHeaders.push_back(HttpHeader());
 	
-	for (int i = 0, iE = _requestHeadersRef.size(); i < iE; ++i)
-	{
-		const HttpHeaderRef& ref = _requestHeadersRef.at(i);
-		HttpHeader& header = _requestHeaders[i];
-		setFromRawDataAndNullterm(header.first, data, ref.fieldPos, ref.fieldLength);
-		setFromRawDataAndNullterm(header.second, data, ref.valuePos, ref.valueLength);
-	}
+    HttpHeader* header = _requestHeaders.begin();
+    for (const HttpHeaderRef* ref = _requestHeadersRef.constBegin(), *refE = _requestHeadersRef.constEnd(); ref < refE; ++ref, ++header)
+    {
+        setFromRawDataAndNullterm(header->first, data, ref->fieldPos, ref->fieldLength);
+		setFromRawDataAndNullterm(header->second, data, ref->valuePos, ref->valueLength);        
+    }
+    
+//	for (int i = 0, iE = _requestHeadersRef.size(); i < iE; ++i)
+//	{
+//		const HttpHeaderRef& ref = _requestHeadersRef.at(i);
+//		HttpHeader& header = _requestHeaders[i];
+//		setFromRawDataAndNullterm(header.first, data, ref.fieldPos, ref.fieldLength);
+//		setFromRawDataAndNullterm(header.second, data, ref.valuePos, ref.valueLength);
+//	}
 	
-    QByteArray requestContentLengthValue = requestHeaderValue(contentLengthToken); bool parseOk = true;
+    const QByteArray& requestContentLengthValue = requestHeaderValue(contentLengthToken); bool parseOk = true;
 	_requestContentLength = requestContentLengthValue.isEmpty() ? 0 : requestContentLengthValue.toInt(&parseOk);
 
+    _requestHttp11 = _requestHttpVersion == httpSlash11Token;
+    
 	if (_requestContentLength < 0)
 		return writeRequestErrorResponse(400); // Invalid request: negative content length does not make sense.
 	else if (_requestContentLength > MaximumRequestContentLength || !parseOk)
@@ -254,6 +270,7 @@ void HttpConnection::transitionToSendingHeaders()
 	_responseContentLength = -1;   // The response content-length is initially unknown.
 	_responseContentBytesSent = 0; // No content bytes transfered yet.
 	_responseConnectionKeepAlive = true;
+    _responseChunkedTransferEncoding = false;
 	emit requestReady(this);
 }
 
@@ -267,12 +284,12 @@ void HttpConnection::transitionToSendingContent()
 	else
 		_responseHeadersBuffer.data_ptr()->size = 0;
 
-	if (_responseContentLength == 0 || _requestMethod == "HEAD")
+	if (_responseContentLength == 0 || _requestMethod == headToken)
 		transitionToCompleted();
 
-	if (_responseContentLength < 0)
+	if (_responseContentLength < 0 && !_responseChunkedTransferEncoding)
 	{
-		// The response content length needs to be known to support keep-alive. Forcefully disable it.
+		// The response content length needs to be specified or chunked transfer encoding used to support keep-alive. Forcefully disable it.
 		_responseConnectionKeepAlive = false;
 	}
 }
@@ -416,15 +433,15 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 	bool contentLengthFound = false;
 	bool contentTypeFound = false;
 	bool connectionFound = false, connectionKeepAlive = true; // Http 1.1 defaults to keep-alive.
-
+    bool transferEncodingFound = false;
+    
 	for (int i = 0, iE = headers.size(); i < iE; ++i)
 	{
 		const HttpHeader& header = headers.at(i);
-		QByteArray field = header.first.toLower();
-		if (!contentLengthFound && field == contentLengthToken) { contentLengthFound = true; _responseContentLength = header.second.toLongLong(); }
-		else if (!contentTypeFound && field == contentTypeToken) contentTypeFound = true;
-		else if (!connectionFound && field == connectionToken) { connectionFound = true; connectionKeepAlive = header.second.toLower() == keepAliveToken; }
-
+		if (asciiEqualsCaseInsensitive(header.first, contentLengthToken)) { contentLengthFound = true; _responseContentLength = header.second.toLongLong(); }
+		else if (asciiEqualsCaseInsensitive(header.first, contentTypeToken)) contentTypeFound = true;
+		else if (asciiEqualsCaseInsensitive(header.first, connectionToken)) { connectionFound = true; connectionKeepAlive = asciiEqualsCaseInsensitive(header.second, keepAliveToken); }
+        else if (asciiEqualsCaseInsensitive(header.first, transferEncodingToken)) { _responseChunkedTransferEncoding = asciiEqualsCaseInsensitive(header.second, chunkedToken); }
 		_responseHeadersBuffer.append(header.first).append(colonSpaceToken).append(header.second).append(crLfToken);
 	}
 
@@ -433,7 +450,7 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 		// We'd like to keep the connection alive... Check if the client would rather have the connection closed.
 		QByteArray requestConnectionValue = requestHeaderValue(connectionToken);
  
-		if (_requestHttpVersion == "HTTP/1.0")
+		if (!_requestHttp11)
 		{
 			// HTTP/1.0 defaults to "close" unless it is "keep-alive".
 			connectionKeepAlive = asciiEqualsCaseInsensitive(requestConnectionValue, keepAliveToken);
@@ -450,9 +467,9 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 	_responseConnectionKeepAlive = connectionKeepAlive;
 
 	// Automatically add essential headers.
-	if (!contentLengthFound && _responseContentLength != -1) { _responseHeadersBuffer.append(contentLengthOutToken).append(colonSpaceToken); appendNumber(_responseHeadersBuffer, _responseContentLength); _responseHeadersBuffer.append(crLfToken); }
+	if (!contentLengthFound && _responseContentLength != -1) { _responseHeadersBuffer.append(contentLengthOutToken).append(colonSpaceToken); appendNumber<int, 10>(_responseHeadersBuffer, _responseContentLength); _responseHeadersBuffer.append(crLfToken); }
 	if (!contentTypeFound && (contentLengthFound || _responseContentLength > 0)) _responseHeadersBuffer.append(contentTypeTextPlainTokenHeaderToken);
-	if (!connectionFound) _responseHeadersBuffer.append(connectionKeepAlive ? connectionKeepAliveHeaderToken : connectionCloseHeaderToken);
+    if (!connectionFound && !(_requestHttp11 && connectionKeepAlive)) _responseHeadersBuffer.append(connectionKeepAlive ? connectionKeepAliveHeaderToken : connectionCloseHeaderToken);
 	_responseHeadersBuffer.append(crLfToken); // End of headers.
 	_outputDevice->write(_responseHeadersBuffer);
 	transitionToSendingContent();
@@ -479,11 +496,38 @@ void HttpConnection::writeContent(const QByteArray& content)
 	if (content.size() > 0 && _requestMethod != "HEAD")
 	{
 		_responseContentBytesSent += content.size();
+        if (_responseChunkedTransferEncoding)
+        {
+            QByteArray buffer; appendNumber<int, 16>(buffer, content.size()); buffer.append("\r\n");
+            _outputDevice->write(buffer);
+        }
 		_outputDevice->write(content);
 
 		if (_responseContentBytesSent == _responseContentLength)
 			transitionToCompleted();
-	}
+    }
+}
+
+void HttpConnection::endContent()
+{
+    if (_state != SendingContent)
+    {
+        qWarning() << "HttpConnection::endContent called while state is not 'SendingContent'. Not proceeding.";
+        return;
+    }
+    
+    if (_responseContentLength >= 0)
+    {
+        qWarning() << "HttpConnection::endContent called while the response content-length is specified. Call the close() method to forcibly end the connection without sending enough data.";
+        return;        
+    }
+    
+    if (_responseChunkedTransferEncoding)
+        _outputDevice->write("0\r\n\r\n", 5);
+    else
+        _responseConnectionKeepAlive = false;
+    
+    transitionToCompleted();
 }
 
 void Pillow::HttpConnection::close()

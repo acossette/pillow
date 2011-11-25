@@ -4,6 +4,7 @@
 #include <QObject>
 #include "parser/parser.h"
 #include <QtNetwork/QHostAddress>
+#include <QtCore/QVector>
 class QIODevice;
 
 namespace Pillow
@@ -55,6 +56,7 @@ namespace Pillow
 		QVector<Pillow::HttpHeaderRef> _requestHeadersRef;
 		Pillow::HttpHeaderCollection _requestHeaders;
 		int _requestContentLength;
+        bool _requestHttp11;
 		Pillow::HttpParamCollection _requestParams;
 
 		// Response fields.
@@ -62,6 +64,7 @@ namespace Pillow
 		int _responseStatusCode;
 		qint64 _responseContentLength, _responseContentBytesSent;
 		bool _responseConnectionKeepAlive;
+        bool _responseChunkedTransferEncoding;
 
 	private:
 		void transitionToReceivingHeaders();
@@ -125,6 +128,7 @@ namespace Pillow
 		void writeResponseString(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QString& content = QString());
 		void writeHeaders(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection());
 		void writeContent(const QByteArray& content);
+        void endContent();
 
 		int responseStatusCode() const { return _responseStatusCode; }
 		qint64 responseContentLength() const { return _responseContentLength; }

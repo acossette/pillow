@@ -51,6 +51,7 @@ protected slots: // Test methods.
 	void testClientExpects100Continue();
 	void testHeadShouldNotSendResponseContent();
 	void testWriteIncrementalResponseContent();
+    void testWriteChunkedResponseContent();
 	void testWriteResponseWithoutRequest();
 	void testMultipacketResponse();
 	void testReadsRequestParams();
@@ -102,6 +103,7 @@ private slots: // Test methods.
 	void testClientExpects100Continue() { HttpConnectionTest::testClientExpects100Continue(); }
 	void testHeadShouldNotSendResponseContent() { HttpConnectionTest::testHeadShouldNotSendResponseContent(); }
 	void testWriteIncrementalResponseContent() { HttpConnectionTest::testWriteIncrementalResponseContent(); }
+    void testWriteChunkedResponseContent() { HttpConnectionTest::testWriteChunkedResponseContent(); }
 	void testWriteResponseWithoutRequest() { HttpConnectionTest::testWriteResponseWithoutRequest(); }
 	void testMultipacketResponse() { HttpConnectionTest::testMultipacketResponse(); }
 	void testReadsRequestParams() { HttpConnectionTest::testReadsRequestParams(); }
