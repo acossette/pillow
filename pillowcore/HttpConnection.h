@@ -5,22 +5,23 @@
 #include "parser/parser.h"
 #include <QtNetwork/QHostAddress>
 #include <QtCore/QVector>
+#include <QtCore/QVarLengthArray>
 class QIODevice;
 
 namespace Pillow
 {
-    typedef QPair<QByteArray, QByteArray> HttpHeader;
-    typedef QVector<HttpHeader> HttpHeaderCollection;
-    typedef QPair<QString, QString> HttpParam;
-    typedef QVector<HttpParam> HttpParamCollection;
-    
-    struct HttpHeaderRef 
-    { 
-        int fieldPos, fieldLength, valuePos, valueLength; 
-        inline HttpHeaderRef(int fieldPos, int fieldLength, int valuePos, int valueLength) 
-            : fieldPos(fieldPos), fieldLength(fieldLength), valuePos(valuePos), valueLength(valueLength) {}
-        inline HttpHeaderRef() {}
-    };
+	typedef QPair<QByteArray, QByteArray> HttpHeader;
+	typedef QVector<HttpHeader> HttpHeaderCollection;
+	typedef QPair<QString, QString> HttpParam;
+	typedef QVector<HttpParam> HttpParamCollection;
+
+	struct HttpHeaderRef
+	{
+		int fieldPos, fieldLength, valuePos, valueLength;
+		inline HttpHeaderRef(int fieldPos, int fieldLength, int valuePos, int valueLength)
+			: fieldPos(fieldPos), fieldLength(fieldLength), valuePos(valuePos), valueLength(valueLength) {}
+		inline HttpHeaderRef() {}
+	};
 }
 Q_DECLARE_TYPEINFO(Pillow::HttpHeaderRef, Q_PRIMITIVE_TYPE);
 
@@ -34,7 +35,7 @@ namespace Pillow
 	class HttpConnection : public QObject
 	{
 		Q_OBJECT
-		Q_PROPERTY(State state READ state)		
+		Q_PROPERTY(State state READ state)
 		Q_PROPERTY(QByteArray requestMethod READ requestMethod)
 		Q_PROPERTY(QByteArray requestUri READ requestUri)
 		Q_PROPERTY(QByteArray requestPath READ requestPath)
@@ -42,7 +43,7 @@ namespace Pillow
 		Q_PROPERTY(QByteArray requestFragment READ requestFragment)
 		Q_PROPERTY(QByteArray requestHttpVersion READ requestHttpVersion)
 		Q_PROPERTY(QByteArray requestContent READ requestContent)
-				
+
 	public:
 		enum State { Uninitialized, ReceivingHeaders, ReceivingContent, SendingHeaders, SendingContent, Completed, Flushing, Closed };
 		enum { MaximumRequestHeaderLength = 32 * 1024 };
@@ -53,15 +54,15 @@ namespace Pillow
 		State _state;
 		QIODevice* _inputDevice,* _outputDevice;
 		http_parser _parser;
-	
+
 		// Request fields.
 		QByteArray _requestBuffer;
 		QByteArray _requestMethod, _requestUri, _requestFragment, _requestPath, _requestQueryString, _requestHttpVersion, _requestContent;
 		mutable QString _requestUriDecoded, _requestFragmentDecoded, _requestPathDecoded, _requestQueryStringDecoded;
-		QVector<Pillow::HttpHeaderRef> _requestHeadersRef;
+		QVarLengthArray<Pillow::HttpHeaderRef, 32> _requestHeadersRef;
 		Pillow::HttpHeaderCollection _requestHeaders;
 		int _requestContentLength;
-        bool _requestHttp11;
+		bool _requestHttp11;
 		Pillow::HttpParamCollection _requestParams;
 
 		// Response fields.
@@ -69,7 +70,7 @@ namespace Pillow
 		int _responseStatusCode;
 		qint64 _responseContentLength, _responseContentBytesSent;
 		bool _responseConnectionKeepAlive;
-        bool _responseChunkedTransferEncoding;
+		bool _responseChunkedTransferEncoding;
 
 	private:
 		void transitionToReceivingHeaders();
@@ -94,14 +95,14 @@ namespace Pillow
 		~HttpConnection();
 
 		void initialize(QIODevice* inputDevice, QIODevice* outputDevice);
-		
+
 		inline QIODevice* inputDevice() const { return _inputDevice; }
 		inline QIODevice* outputDevice() const { return _outputDevice; }
 		inline State state() const { return _state; }
 
 		QHostAddress remoteAddress() const;
 
-		// Request members. Note: the underlying shared QByteArray data remains valid until either the completed() 
+		// Request members. Note: the underlying shared QByteArray data remains valid until either the completed()
 		// or closed()  signals is emitted. Call detach() on your copy of the QByteArrays if you wish to keep it longer.
 		inline const QByteArray& requestMethod() const { return _requestMethod; }
 		inline const QByteArray& requestUri() const { return _requestUri; }
@@ -111,18 +112,18 @@ namespace Pillow
 		inline const QByteArray& requestHttpVersion() const { return _requestHttpVersion; }
 		inline const QByteArray& requestContent() const { return _requestContent; }
 
-		// Request members, decoded version. Use those rather than manually decoding the raw data returned by the methods 
+		// Request members, decoded version. Use those rather than manually decoding the raw data returned by the methods
 		// above when decoded values are desired (they are cached).
 		const QString& requestUriDecoded() const;
 		const QString& requestFragmentDecoded() const;
 		const QString& requestPathDecoded() const;
 		const QString& requestQueryStringDecoded() const;
-		
+
 	public slots:
 		// Request headers.
 		inline const Pillow::HttpHeaderCollection& requestHeaders() const { return _requestHeaders; }
 		QByteArray requestHeaderValue(const QByteArray& field);
-		
+
 		// Request params.
 		const Pillow::HttpParamCollection& requestParams();
 		QString requestParamValue(const QString& name);
@@ -133,7 +134,7 @@ namespace Pillow
 		void writeResponseString(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QString& content = QString());
 		void writeHeaders(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection());
 		void writeContent(const QByteArray& content);
-        void endContent();
+		void endContent();
 
 		int responseStatusCode() const { return _responseStatusCode; }
 		qint64 responseContentLength() const { return _responseContentLength; }
