@@ -9,22 +9,27 @@ class QIODevice;
 
 namespace Pillow
 {
+    typedef QPair<QByteArray, QByteArray> HttpHeader;
+    typedef QVector<HttpHeader> HttpHeaderCollection;
+    typedef QPair<QString, QString> HttpParam;
+    typedef QVector<HttpParam> HttpParamCollection;
+    
+    struct HttpHeaderRef 
+    { 
+        int fieldPos, fieldLength, valuePos, valueLength; 
+        inline HttpHeaderRef(int fieldPos, int fieldLength, int valuePos, int valueLength) 
+            : fieldPos(fieldPos), fieldLength(fieldLength), valuePos(valuePos), valueLength(valueLength) {}
+        inline HttpHeaderRef() {}
+    };
+}
+Q_DECLARE_TYPEINFO(Pillow::HttpHeaderRef, Q_PRIMITIVE_TYPE);
+
+
+namespace Pillow
+{
 	//
 	// HttpConnection
 	//
-
-	typedef QPair<QByteArray, QByteArray> HttpHeader;
-	typedef QVector<HttpHeader> HttpHeaderCollection;
-	typedef QPair<QString, QString> HttpParam;
-	typedef QVector<HttpParam> HttpParamCollection;
-
-	struct HttpHeaderRef 
-	{ 
-		int fieldPos, fieldLength, valuePos, valueLength; 
-		HttpHeaderRef(int fieldPos, int fieldLength, int valuePos, int valueLength) 
-			: fieldPos(fieldPos), fieldLength(fieldLength), valuePos(valuePos), valueLength(valueLength) {}
-		HttpHeaderRef() {}
-	};
 
 	class HttpConnection : public QObject
 	{

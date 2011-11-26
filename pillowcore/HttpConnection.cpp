@@ -20,20 +20,36 @@ inline void setFromRawDataAndNullterm(QByteArray& target, char* data, int start,
 	// So the only downside that will happen if an unshared QByteArray is altered to share data is a few bytes wasted
 	// until the QByteArray control block releases the control data + the unshared buffer at some point in the future.
 
-	if (target.data_ptr()) target.data_ptr()->alloc = 0;
+	target.data_ptr()->alloc = 0;
 	if (length == 0)
 		target.setRawData("", 0);
 	else
 	{
-		target.setRawData(data + start, length);
+        if (target.data_ptr()->ref == 1)
+        {
+            target.data_ptr()->data = data + start;
+            target.data_ptr()->alloc = target.data_ptr()->size = length;
+            target.data_ptr()->array[0] = 0;
+        }
+        else
+    		target.setRawData(data + start, length);
 		*(data + start + length) = 0; // Null terminate the string.
 	}
 }
 
 inline void setFromRawData(QByteArray& target, const char* data, int start, int length)
 {
-	if (target.data_ptr()) target.data_ptr()->alloc = 0;
-	target.setRawData(data + start, length);	
+    if (target.data_ptr()->ref == 1)
+    {
+        target.data_ptr()->data = const_cast<char*>(data) + start;
+        target.data_ptr()->alloc = target.data_ptr()->size = length;
+        target.data_ptr()->array[0] = 0;
+    }
+    else
+    {
+        target.data_ptr()->alloc = 0;
+        target.setRawData(data + start, length);
+    }
 }
 
 template <typename Integer, int Base>
@@ -538,11 +554,10 @@ void Pillow::HttpConnection::close()
 
 QByteArray HttpConnection::requestHeaderValue(const QByteArray &field)
 {
-	for (int i = 0, iE = _requestHeaders.size(); i < iE; ++i)
+    for (const HttpHeader* header = _requestHeaders.constBegin(), *headerE = _requestHeaders.constEnd(); header != headerE; ++header)
 	{
-		const HttpHeader& header = _requestHeaders.at(i);
-        if (asciiEqualsCaseInsensitive(field, header.first))
-			return header.second;
+        if (asciiEqualsCaseInsensitive(field, header->first))
+			return header->second;
 	}
 	return QByteArray();
 }
