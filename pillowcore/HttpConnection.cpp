@@ -248,14 +248,6 @@ void HttpConnection::transitionToReceivingContent()
 		setFromRawDataAndNullterm(header->second, data, ref->valuePos, ref->valueLength);
 	}
 
-//	for (int i = 0, iE = _requestHeadersRef.size(); i < iE; ++i)
-//	{
-//		const HttpHeaderRef& ref = _requestHeadersRef.at(i);
-//		HttpHeader& header = _requestHeaders[i];
-//		setFromRawDataAndNullterm(header.first, data, ref.fieldPos, ref.fieldLength);
-//		setFromRawDataAndNullterm(header.second, data, ref.valuePos, ref.valueLength);
-//	}
-
 	const QByteArray& requestContentLengthValue = requestHeaderValue(contentLengthToken); bool parseOk = true;
 	_requestContentLength = requestContentLengthValue.isEmpty() ? 0 : requestContentLengthValue.toInt(&parseOk);
 
@@ -446,7 +438,6 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 	bool contentLengthFound = false;
 	bool contentTypeFound = false;
 	bool connectionFound = false, connectionKeepAlive = true; // Http 1.1 defaults to keep-alive.
-	bool transferEncodingFound = false;
 
 	for (int i = 0, iE = headers.size(); i < iE; ++i)
 	{
@@ -563,11 +554,28 @@ const Pillow::HttpParamCollection& Pillow::HttpConnection::requestParams()
 	if (_requestParams.isEmpty() && !_requestQueryString.isEmpty())
 	{
 		// The params have not yet been initialized. Parse them.
-		QUrl url; url.setEncodedQuery(_requestQueryString);
-		QList<HttpParam> params = url.queryItems();
-		if (_requestParams.capacity() < params.size()) _requestParams.reserve(params.size());
-		for (int i = 0, iE = params.size(); i < iE; ++i)
-			_requestParams << params.at(i);
+		const char paramDelimiter = '&', keyValueDelimiter = '=';
+		for (const char* c = _requestQueryString.constBegin(), *cE = _requestQueryString.constEnd(); c < cE;)
+		{
+			const char *paramEnd, *keyEnd;
+			for (paramEnd = c; paramEnd < cE; ++paramEnd) if (*paramEnd == paramDelimiter) break; // Find the param delimiter, or the end of string.
+			for (keyEnd = c; keyEnd < paramEnd; ++keyEnd) if (*keyEnd == keyValueDelimiter) break; // Find the key value delimiter, or the end of the param.
+
+			if (keyEnd < paramEnd)
+			{
+				// Key-value pair.
+				QByteArray key(c, keyEnd - c);
+				QByteArray value(keyEnd + 1, paramEnd - (keyEnd + 1));
+				_requestParams << HttpParam(QUrl::fromPercentEncoding(key), QUrl::fromPercentEncoding(value));
+			}
+			else
+			{
+				// Key without value.
+				QByteArray key(c, paramEnd - c);
+				_requestParams << HttpParam(QUrl::fromPercentEncoding(key), QString());
+			}
+			c = paramEnd + 1;
+		}
 	}
 	return _requestParams;
 }
