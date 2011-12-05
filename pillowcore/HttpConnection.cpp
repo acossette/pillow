@@ -94,7 +94,7 @@ static const int responseHeadersBufferRecyclingCapacity = 4096; // The capacity 
 static const QByteArray crLfToken("\r\n");
 static const QByteArray connectionToken("connection");
 static const QByteArray contentLengthToken("content-length");
-static const QByteArray contentLengthOutToken("Content-Length");
+static const QByteArray contentLengthOutToken("Content-Length: ");
 static const QByteArray contentTypeToken("content-type");
 static const QByteArray expectToken("expect");
 static const QByteArray hundredDashContinueToken("100-continue");
@@ -108,6 +108,11 @@ static const QByteArray transferEncodingToken("transfer-encoding");
 static const QByteArray chunkedToken("chunked");
 static const QByteArray httpSlash11Token("HTTP/1.1");
 static const QByteArray headToken("HEAD");
+
+inline void appendHeader(QByteArray& byteArray, const HttpHeader& header)
+{
+	byteArray.append(header.first).append(colonSpaceToken).append(header.second).append(crLfToken);
+}
 
 HttpConnection::HttpConnection(QObject* parent /*= 0*/)
 	: QObject(parent), _state(Uninitialized), _inputDevice(NULL), _outputDevice(NULL)
@@ -384,7 +389,7 @@ void HttpConnection::writeRequestErrorResponse(int statusCode)
 		return;
 	}
 
-	qDebug() << "HttpConnection: request error! (sending http status" << statusCode << "and closing connection.)";
+	qDebug() << "HttpConnection: request error. Sending http status" << statusCode << "and closing connection.";
 
 	QByteArray _responseHeadersBuffer; _responseHeadersBuffer.reserve(1024);
 	_responseHeadersBuffer.append("HTTP/1.0 ").append(HttpProtocol::StatusCodes::getStatusCodeAndMessage(statusCode)).append(crLfToken);
@@ -405,7 +410,7 @@ void HttpConnection::writeResponse(int statusCode, const HttpHeaderCollection& h
 	// Calculate the Content-Length header so it can be set in WriteHeaders, unless it is already present.
 	_responseContentLength = content.size();
 	writeHeaders(statusCode, headers);
-	if (!content.isEmpty() && _requestMethod != "HEAD") writeContent(content);
+	if (!content.isEmpty() && _requestMethod != headToken) writeContent(content);
 }
 
 void HttpConnection::writeResponseString(int statusCode, const HttpHeaderCollection& headers, const QString& content)
@@ -431,49 +436,92 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 	_responseStatusCode = statusCode;
 
 	if (_responseHeadersBuffer.capacity() == 0)
-		_responseHeadersBuffer.reserve(2048);
+		_responseHeadersBuffer.reserve(1024);
 
 	_responseHeadersBuffer.append(_requestHttpVersion).append(' ').append(statusCodeAndMessage).append(crLfToken);
 
-	bool contentLengthFound = false;
-	bool contentTypeFound = false;
-	bool connectionFound = false, connectionKeepAlive = true; // Http 1.1 defaults to keep-alive.
+	const HttpHeader* contentTypeHeader = 0;
+	const HttpHeader* connectionHeader = 0;
+	const HttpHeader* transferEncodingHeader = 0;
 
-	for (int i = 0, iE = headers.size(); i < iE; ++i)
+	// Grab headers that are important to us so we can check their values and consistency.
+	for (const HttpHeader* header = headers.constBegin(), *headerE = headers.constEnd(); header != headerE; ++header)
 	{
-		const HttpHeader& header = headers.at(i);
-		if (asciiEqualsCaseInsensitive(header.first, contentLengthToken)) { contentLengthFound = true; _responseContentLength = header.second.toLongLong(); }
-		else if (asciiEqualsCaseInsensitive(header.first, contentTypeToken)) contentTypeFound = true;
-		else if (asciiEqualsCaseInsensitive(header.first, connectionToken)) { connectionFound = true; connectionKeepAlive = asciiEqualsCaseInsensitive(header.second, keepAliveToken); }
-		else if (asciiEqualsCaseInsensitive(header.first, transferEncodingToken)) { _responseChunkedTransferEncoding = asciiEqualsCaseInsensitive(header.second, chunkedToken); }
-		_responseHeadersBuffer.append(header.first).append(colonSpaceToken).append(header.second).append(crLfToken);
+		if (asciiEqualsCaseInsensitive(header->first, contentLengthToken))
+		{
+			bool ok = false;
+			_responseContentLength = header->second.toLongLong(&ok);
+			if (!ok)
+			{
+				// Somebody trying to be a bad server? Pretend we don't know the length.
+				qWarning() << "HttpConnection::writeHeaders: Invalid content-length header specified. Sending response as if content-length was unknown.";
+				_responseContentLength = -1;
+			}
+		}
+		else if (asciiEqualsCaseInsensitive(header->first, contentTypeToken)) contentTypeHeader = header;
+		else if (asciiEqualsCaseInsensitive(header->first, connectionToken)) connectionHeader = header;
+		else if (asciiEqualsCaseInsensitive(header->first, transferEncodingToken)) transferEncodingHeader = header;
+		else
+		{
+			// Not a special header for us. Write it out to the buffer.
+			appendHeader(_responseHeadersBuffer, *header);
+		}
 	}
 
-	if (connectionKeepAlive)
+	if (transferEncodingHeader && asciiEqualsCaseInsensitive(transferEncodingHeader->second, chunkedToken))
 	{
-		// We'd like to keep the connection alive... Check if the client would rather have the connection closed.
-		QByteArray requestConnectionValue = requestHeaderValue(connectionToken);
-
-		if (!_requestHttp11)
+		if (_requestHttp11)
 		{
-			// HTTP/1.0 defaults to "close" unless it is "keep-alive".
-			connectionKeepAlive = asciiEqualsCaseInsensitive(requestConnectionValue, keepAliveToken);
+			if (_responseContentLength == -1)
+				_responseChunkedTransferEncoding = true;
+			else
+			{
+				qWarning() << "HttpConnection::writeHeaders: Using chunked transfer encoding with a known content-lenght does not make sense. Not using chunked transfer encoding.";
+				transferEncodingHeader = 0; // Suppress header
+			}
 		}
 		else
 		{
-			// HTTP/1.1 defaults to "keep-alive" unless it is "close".
-			connectionKeepAlive = !asciiEqualsCaseInsensitive(requestConnectionValue, closeToken);
+			// Chunked transfer encoding is not supported on Http below 1.1.
+			transferEncodingHeader = 0;
 		}
-
-		if (!connectionKeepAlive) connectionFound = false; // The client wants the connection closed. Make sure we output the connection header.
 	}
 
-	_responseConnectionKeepAlive = connectionKeepAlive;
+	// Negotiate keep-alive between client and server.
+	bool clientWantsKeepAlive;
+
+	if (_requestHttp11)
+	{
+		// Keep-Alive by default, unless "close" is specified.
+		clientWantsKeepAlive = !asciiEqualsCaseInsensitive(requestHeaderValue(connectionToken), closeToken);
+	}
+	else
+	{
+		// Close by default, unless "keep-alive" is specified.
+		clientWantsKeepAlive = asciiEqualsCaseInsensitive(requestHeaderValue(connectionToken), keepAliveToken);
+	}
+
+	if (clientWantsKeepAlive)
+	{
+		// To be able to keep the connection alive, the response length needs to be known, or chunked encoding be used.
+		bool serverWantsKeepAlive = _responseContentLength >= 0 || _responseChunkedTransferEncoding;
+
+		if (serverWantsKeepAlive && connectionHeader)
+		{
+			// Server is Keep-Alive by default, unless "close" is specified.
+			serverWantsKeepAlive = !asciiEqualsCaseInsensitive(connectionHeader->second, closeToken);
+		}
+
+		_responseConnectionKeepAlive = serverWantsKeepAlive;
+	}
+	else
+		_responseConnectionKeepAlive = false;
 
 	// Automatically add essential headers.
-	if (!contentLengthFound && _responseContentLength != -1) { _responseHeadersBuffer.append(contentLengthOutToken).append(colonSpaceToken); appendNumber<int, 10>(_responseHeadersBuffer, _responseContentLength); _responseHeadersBuffer.append(crLfToken); }
-	if (!contentTypeFound && (contentLengthFound || _responseContentLength > 0)) _responseHeadersBuffer.append(contentTypeTextPlainTokenHeaderToken);
-	if (!connectionFound && !(_requestHttp11 && connectionKeepAlive)) _responseHeadersBuffer.append(connectionKeepAlive ? connectionKeepAliveHeaderToken : connectionCloseHeaderToken);
+	if (_responseContentLength != -1) { _responseHeadersBuffer.append(contentLengthOutToken); appendNumber<int, 10>(_responseHeadersBuffer, _responseContentLength); _responseHeadersBuffer.append(crLfToken); }
+	if (contentTypeHeader) { appendHeader(_responseHeadersBuffer, *contentTypeHeader); } else if (_responseContentLength > 0) { _responseHeadersBuffer.append(contentTypeTextPlainTokenHeaderToken); }
+	if (!_requestHttp11 || !_responseConnectionKeepAlive) _responseHeadersBuffer.append(_responseConnectionKeepAlive ? connectionKeepAliveHeaderToken : connectionCloseHeaderToken);
+	if (transferEncodingHeader) { appendHeader(_responseHeadersBuffer, *transferEncodingHeader); }
 	_responseHeadersBuffer.append(crLfToken); // End of headers.
 	_outputDevice->write(_responseHeadersBuffer);
 	transitionToSendingContent();

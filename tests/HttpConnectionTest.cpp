@@ -270,7 +270,8 @@ void HttpConnectionTest::testWriteSimpleResponse()
 
 	connection->writeResponse(200, HttpHeaderCollection() << HttpHeader("Some-Header", "Some Value") << HttpHeader("Other-Header", "OtherValue"), "response content");
 
-	QCOMPARE(clientReadAll(), QByteArray("HTTP/1.0 200 OK\r\nSome-Header: Some Value\r\nOther-Header: OtherValue\r\nContent-Length: 16\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nresponse content"));
+	QByteArray data = clientReadAll();
+	QCOMPARE(data, QByteArray("HTTP/1.0 200 OK\r\nSome-Header: Some Value\r\nOther-Header: OtherValue\r\nContent-Length: 16\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nresponse content"));
 	QCOMPARE(readySpy->size(), 1);
 	QCOMPARE(completedSpy->size(), 1);
 }
@@ -398,6 +399,30 @@ void HttpConnectionTest::testConnectionClose()
 
 	connection->writeResponse(304, HttpHeaderCollection() << HttpHeader("Connection", "close"));
 	QVERIFY(clientReadAll().startsWith("HTTP/1.1 304"));
+	QVERIFY(!isClientConnected());
+	QCOMPARE(connection->state(), HttpConnection::Closed);
+	QCOMPARE(readySpy->size(), 1);
+	QCOMPARE(completedSpy->size(), 1);
+	QCOMPARE(closedSpy->size(), 1);
+
+	// The server should also close the response content-length is not known and chunked transfer encoding is not used.
+	cleanup(); init();
+	clientWrite("GET /and_more HTTP/1.1\r\n");
+	clientWrite("\r\n"); clientFlush();
+
+	connection->writeHeaders(200, HttpHeaderCollection());
+	QByteArray data = clientReadAll();
+	QVERIFY(data.startsWith("HTTP/1.1 200"));
+	QVERIFY(data.toLower().contains("connection: close"));
+	QVERIFY(isClientConnected());
+	QCOMPARE(connection->state(), HttpConnection::SendingContent);
+	QCOMPARE(readySpy->size(), 1);
+	QCOMPARE(completedSpy->size(), 0);
+	QCOMPARE(closedSpy->size(), 0);
+	connection->writeContent("hello");
+	connection->endContent();
+	data = clientReadAll();
+	QCOMPARE(data, QByteArray("hello"));
 	QVERIFY(!isClientConnected());
 	QCOMPARE(connection->state(), HttpConnection::Closed);
 	QCOMPARE(readySpy->size(), 1);
@@ -595,8 +620,10 @@ void HttpConnectionTest::testWriteChunkedResponseContent()
 	clientWrite("\r\n"); clientFlush();
 
 	connection->writeHeaders(200, HttpHeaderCollection() << HttpHeader("Transfer-Encoding", "Chunked"));
+	QByteArray clientReceived = clientReadAll();
 
-	QVERIFY(clientReadAll().startsWith("HTTP/1.1 200"));
+	QVERIFY(clientReceived.startsWith("HTTP/1.1 200"));
+	QVERIFY(clientReceived.toLower().contains("transfer-encoding: chunked\r\n"));
 	QCOMPARE(connection->state(), HttpConnection::SendingContent);
 	QVERIFY(isClientConnected());
 	QCOMPARE(readySpy->size(), 1);
@@ -620,12 +647,38 @@ void HttpConnectionTest::testWriteChunkedResponseContent()
 
 	connection->endContent();
 	QCOMPARE(clientReadAll(), QByteArray("0\r\n\r\n"));
-	qDebug() << connection->state();
 	QCOMPARE(connection->state(), HttpConnection::ReceivingHeaders);
 	QVERIFY(isClientConnected());
 	QCOMPARE(readySpy->size(), 1);
 	QCOMPARE(completedSpy->size(), 1);
 	QCOMPARE(closedSpy->size(), 0);
+
+	// Trying to specify chunked encoding when there is no data to send does not make sense.
+	clientWrite("GET / HTTP/1.1\r\n");
+	clientWrite("\r\n"); clientFlush();
+	QCOMPARE(readySpy->size(), 2);
+	QCOMPARE(completedSpy->size(), 1);
+	QCOMPARE(closedSpy->size(), 0);
+	connection->writeResponse(200, HttpHeaderCollection() << HttpHeader("Transfer-Encoding", "Chunked"), QByteArray());
+	clientReceived = clientReadAll().toLower();
+	QVERIFY(clientReceived.contains("content-length: 0"));
+	QVERIFY(!clientReceived.contains("chunked"));
+	QCOMPARE(readySpy->size(), 2);
+	QCOMPARE(completedSpy->size(), 2);
+	QCOMPARE(closedSpy->size(), 0);
+
+	// Using chunked encoding does nothing on HTTP/1.0.
+	clientWrite("GET / HTTP/1.0\r\n");
+	clientWrite("\r\n"); clientFlush();
+	QCOMPARE(readySpy->size(), 3);
+	QCOMPARE(completedSpy->size(), 2);
+	QCOMPARE(closedSpy->size(), 0);
+	connection->writeResponse(200, HttpHeaderCollection() << HttpHeader("Transfer-Encoding", "Chunked"), QByteArray("Hello"));
+	clientReceived = clientReadAll().toLower();
+	QVERIFY(!clientReceived.contains("chunked"));
+	QCOMPARE(readySpy->size(), 3);
+	QCOMPARE(completedSpy->size(), 3);
+	QCOMPARE(closedSpy->size(), 1);
 }
 
 void HttpConnectionTest::testWriteResponseWithoutRequest()
