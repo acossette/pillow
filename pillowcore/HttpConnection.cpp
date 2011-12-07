@@ -86,6 +86,70 @@ inline bool asciiEqualsCaseInsensitive(const QByteArray& first, const QByteArray
 	return true;
 }
 
+inline char unhex(const char c)
+{
+	if (c >= '0' && c <= '9') return c - '0';
+	if (c >= 'a' && c <= 'f') return (c - 'a') + 10;
+	if (c >= 'A' && c <= 'F') return (c - 'A') + 10;
+	return 0;
+}
+
+inline int percentDecode(char* data, int size)
+{
+	const char* inData = data;
+	const char* inDataE = data + size;
+	while (inData < inDataE)
+	{
+		if (inData[0] == '%' && inData + 2 < inDataE)
+		{
+			// Percent-encoded sequence.
+			*data = static_cast<char>(unhex(inData[1]) << 4 | unhex(inData[2]));
+			++data; inData += 3;
+			size -= 2;
+		}
+		else
+		{
+			*data = *inData;
+			++data; ++inData;
+		}
+	}
+	return size;
+}
+
+inline QString percentDecode(const QByteArray& byteArray)
+{
+	if (byteArray.isEmpty()) return QString();
+
+	if (byteArray.size() < 1024)
+	{
+		char buffer[1024];
+		memcpy(buffer, byteArray.constData(), byteArray.size());
+		return QString::fromUtf8(buffer, percentDecode(buffer, byteArray.size()));
+	}
+	else
+	{
+		QByteArray temp = byteArray; temp.detach();
+		return QString::fromUtf8(temp.constData(), percentDecode(temp.data(), byteArray.size()));
+	}
+}
+
+inline QString percentDecode(const char* data, int size)
+{
+	if (size == 0 || data == 0) return QString();
+	if (size < 1024)
+	{
+		char buffer[1024];
+		memcpy(buffer, data, size);
+		return QString::fromUtf8(buffer, percentDecode(buffer, size));
+	}
+	else
+	{
+		QByteArray temp(data, size);
+		return QString::fromUtf8(temp.constData(), percentDecode(temp.data(), size));
+	}
+}
+
+
 //
 // HttpConnection
 //
@@ -223,7 +287,7 @@ void HttpConnection::transitionToReceivingContent()
 	if (_parser.query_string_len == 0)
 	{
 		// The request uri has no query string, we can use the data straight because it means that inserting null after the path
-		// will not destroy the uri.
+		// will not destroy the uri (which does not include the fragment).
 		setFromRawDataAndNullterm(_requestUri, data, _parser.request_uri_start, _parser.request_uri_len);
 	}
 	else
@@ -430,7 +494,7 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 	if (statusCodeAndMessage == NULL)
 	{
 		// Huh? Trying to send a bad status code...
-		qWarning() << "HttpConnection::writeHeaders:" << statusCode << "is not a valid Http status code.";
+		qWarning() << "HttpConnection::writeHeaders:" << statusCode << "is not a valid Http status code. Using 500 Internal Server Error instead.";
 		statusCodeAndMessage = HttpProtocol::StatusCodes::getStatusMessage(500); // Internal server error.
 	}
 	_responseStatusCode = statusCode;
@@ -612,15 +676,12 @@ const Pillow::HttpParamCollection& Pillow::HttpConnection::requestParams()
 			if (keyEnd < paramEnd)
 			{
 				// Key-value pair.
-				QByteArray key(c, keyEnd - c);
-				QByteArray value(keyEnd + 1, paramEnd - (keyEnd + 1));
-				_requestParams << HttpParam(QUrl::fromPercentEncoding(key), QUrl::fromPercentEncoding(value));
+				_requestParams << HttpParam(percentDecode(c, keyEnd - c), percentDecode(keyEnd + 1, paramEnd - (keyEnd + 1)));
 			}
 			else
 			{
 				// Key without value.
-				QByteArray key(c, paramEnd - c);
-				_requestParams << HttpParam(QUrl::fromPercentEncoding(key), QString());
+				_requestParams << HttpParam(percentDecode(c, paramEnd - c), QString());
 			}
 			c = paramEnd + 1;
 		}
@@ -670,27 +731,27 @@ void HttpConnection::parser_http_field(void *data, const char *field, size_t fle
 const QString & Pillow::HttpConnection::requestUriDecoded() const
 {
 	if (_requestUriDecoded.isEmpty() && !_requestUri.isEmpty())
-		_requestUriDecoded = QUrl::fromPercentEncoding(_requestUri);
+		_requestUriDecoded = percentDecode(_requestUri);
 	return _requestUriDecoded;
 }
 
 const QString & Pillow::HttpConnection::requestFragmentDecoded() const
 {
 	if (_requestFragmentDecoded.isEmpty() && !_requestFragment.isEmpty())
-		_requestFragmentDecoded = QUrl::fromPercentEncoding(_requestFragment);
+		_requestFragmentDecoded = percentDecode(_requestFragment);
 	return _requestFragmentDecoded;
 }
 
 const QString & Pillow::HttpConnection::requestPathDecoded() const
 {
 	if (_requestPathDecoded.isEmpty() && !_requestPath.isEmpty())
-		_requestPathDecoded = QUrl::fromPercentEncoding(_requestPath);
+		_requestPathDecoded = percentDecode(_requestPath);
 	return _requestPathDecoded;
 }
 
 const QString & Pillow::HttpConnection::requestQueryStringDecoded() const
 {
 	if (_requestQueryStringDecoded.isEmpty() && !_requestQueryString.isEmpty())
-		_requestQueryStringDecoded = QUrl::fromPercentEncoding(_requestQueryString);
+		_requestQueryStringDecoded = percentDecode(_requestQueryString);
 	return _requestQueryStringDecoded;
 }
