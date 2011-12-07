@@ -1,177 +1,40 @@
 #include "HttpConnection.h"
 #include "HttpHelpers.h"
-#include <QtCore/QByteArray>
-#include <QtCore/QDateTime>
+#include "ByteArrayHelpers.h"
 #include <QtCore/QIODevice>
 #include <QtCore/QTimer>
 #include <QtCore/QUrl>
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QLocalSocket>
-using namespace Pillow;
-
-//
-// Helpers
-//
-
-inline void setFromRawDataAndNullterm(QByteArray& target, char* data, int start, int length)
-{
-	// Reminder: switching between a deep copy/unshared target QByteArray and a shared data QByteArray
-	// will *not* cause memory leaks as Qt allocates and frees the QByteArray control data+buffer in one block.
-	// So the only downside that will happen if an unshared QByteArray is altered to share data is a few bytes wasted
-	// until the QByteArray control block releases the control data + the unshared buffer at some point in the future.
-
-	target.data_ptr()->alloc = 0;
-	if (length == 0)
-		target.setRawData("", 0);
-	else
-	{
-		if (target.data_ptr()->ref == 1)
-		{
-			target.data_ptr()->data = data + start;
-			target.data_ptr()->alloc = target.data_ptr()->size = length;
-			target.data_ptr()->array[0] = 0;
-		}
-		else
-			target.setRawData(data + start, length);
-		*(data + start + length) = 0; // Null terminate the string.
-	}
-}
-
-inline void setFromRawData(QByteArray& target, const char* data, int start, int length)
-{
-	if (target.data_ptr()->ref == 1)
-	{
-		target.data_ptr()->data = const_cast<char*>(data) + start;
-		target.data_ptr()->alloc = target.data_ptr()->size = length;
-		target.data_ptr()->array[0] = 0;
-	}
-	else
-	{
-		target.data_ptr()->alloc = 0;
-		target.setRawData(data + start, length);
-	}
-}
-
-template <typename Integer, int Base>
-inline void appendNumber(QByteArray& target, const Integer number)
-{
-	static const char intToChar[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
-	int start = target.size();
-	Integer n = number; if (n < 0) n = -n;
-	do { if (Base <= 10) target.append(char(n % Base) + '0'); else target.append(intToChar[n % Base]); } while ((n /= Base) > 0);
-	if (number < 0) target.append('-');
-
-	// Reverse the string we've just output
-	int end = target.size() - 1;
-	char* data = target.data();
-	while (start < end)
-	{
-		char c = data[start];
-		data[start] = data[end];
-		data[end] = c;
-		++start; --end;
-	}
-}
-
-inline bool asciiEqualsCaseInsensitive(const QByteArray& first, const QByteArray& second)
-{
-	if (first.size() != second.size()) return false;
-
-	for (register int i = 0; i < first.size(); ++i)
-	{
-		register char f = first.at(i), s = second.at(i);
-		bool good = (f == s) || ((f - s) == 32 && f >= 'a' && f <= 'z') || ((f - s) == -32 && f >= 'A' && f <= 'Z');
-		if (!good) return false;
-	}
-	return true;
-}
-
-inline char unhex(const char c)
-{
-	if (c >= '0' && c <= '9') return c - '0';
-	if (c >= 'a' && c <= 'f') return (c - 'a') + 10;
-	if (c >= 'A' && c <= 'F') return (c - 'A') + 10;
-	return 0;
-}
-
-inline int percentDecode(char* data, int size)
-{
-	const char* inData = data;
-	const char* inDataE = data + size;
-	while (inData < inDataE)
-	{
-		if (inData[0] == '%' && inData + 2 < inDataE)
-		{
-			// Percent-encoded sequence.
-			*data = static_cast<char>(unhex(inData[1]) << 4 | unhex(inData[2]));
-			++data; inData += 3;
-			size -= 2;
-		}
-		else
-		{
-			*data = *inData;
-			++data; ++inData;
-		}
-	}
-	return size;
-}
-
-inline QString percentDecode(const QByteArray& byteArray)
-{
-	if (byteArray.isEmpty()) return QString();
-
-	if (byteArray.size() < 1024)
-	{
-		char buffer[1024];
-		memcpy(buffer, byteArray.constData(), byteArray.size());
-		return QString::fromUtf8(buffer, percentDecode(buffer, byteArray.size()));
-	}
-	else
-	{
-		QByteArray temp = byteArray; temp.detach();
-		return QString::fromUtf8(temp.constData(), percentDecode(temp.data(), byteArray.size()));
-	}
-}
-
-inline QString percentDecode(const char* data, int size)
-{
-	if (size == 0 || data == 0) return QString();
-	if (size < 1024)
-	{
-		char buffer[1024];
-		memcpy(buffer, data, size);
-		return QString::fromUtf8(buffer, percentDecode(buffer, size));
-	}
-	else
-	{
-		QByteArray temp(data, size);
-		return QString::fromUtf8(temp.constData(), percentDecode(temp.data(), size));
-	}
-}
-
 
 //
 // HttpConnection
 //
 
-static const int responseHeadersBufferRecyclingCapacity = 4096; // The capacity above which the response buffer will not be preserved between requests.
-static const QByteArray crLfToken("\r\n");
-static const QByteArray connectionToken("connection");
-static const QByteArray contentLengthToken("content-length");
-static const QByteArray contentLengthOutToken("Content-Length: ");
-static const QByteArray contentTypeToken("content-type");
-static const QByteArray expectToken("expect");
-static const QByteArray hundredDashContinueToken("100-continue");
-static const QByteArray keepAliveToken("keep-alive");
-static const QByteArray colonSpaceToken(": ");
-static const QByteArray closeToken("close");
-static const QByteArray contentTypeTextPlainTokenHeaderToken("Content-Type: text/plain\r\n");
-static const QByteArray connectionKeepAliveHeaderToken("Connection: keep-alive\r\n");
-static const QByteArray connectionCloseHeaderToken("Connection: close\r\n");
-static const QByteArray transferEncodingToken("transfer-encoding");
-static const QByteArray chunkedToken("chunked");
-static const QByteArray httpSlash11Token("HTTP/1.1");
-static const QByteArray headToken("HEAD");
+namespace Tokens
+{
+	static const QByteArray crLfToken("\r\n");
+	static const QByteArray connectionToken("connection");
+	static const QByteArray contentLengthToken("content-length");
+	static const QByteArray contentLengthOutToken("Content-Length: ");
+	static const QByteArray contentTypeToken("content-type");
+	static const QByteArray expectToken("expect");
+	static const QByteArray hundredDashContinueToken("100-continue");
+	static const QByteArray keepAliveToken("keep-alive");
+	static const QByteArray colonSpaceToken(": ");
+	static const QByteArray closeToken("close");
+	static const QByteArray contentTypeTextPlainTokenHeaderToken("Content-Type: text/plain\r\n");
+	static const QByteArray connectionKeepAliveHeaderToken("Connection: keep-alive\r\n");
+	static const QByteArray connectionCloseHeaderToken("Connection: close\r\n");
+	static const QByteArray transferEncodingToken("transfer-encoding");
+	static const QByteArray chunkedToken("chunked");
+	static const QByteArray httpSlash11Token("HTTP/1.1");
+	static const QByteArray headToken("HEAD");
+}
+
+using namespace Pillow;
+using namespace Pillow::ByteArrayHelpers;
+using namespace Tokens;
 
 inline void appendHeader(QByteArray& byteArray, const HttpHeader& header)
 {
@@ -354,7 +217,7 @@ void HttpConnection::transitionToSendingContent()
 	if (_state == SendingContent) return;
 	_state = SendingContent;
 
-	if (_responseHeadersBuffer.capacity() > responseHeadersBufferRecyclingCapacity)
+	if (_responseHeadersBuffer.capacity() > 4096)
 		_responseHeadersBuffer.clear();
 	else
 		_responseHeadersBuffer.data_ptr()->size = 0;
