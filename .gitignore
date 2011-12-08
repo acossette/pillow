@@ -12,3 +12,15 @@ lib
 *.pdb
 *.obj
 callgrind.*
+examples/declarative/declarative
+examples/declarative/declaratived
+examples/fileserver/fileserver
+examples/fileserver/fileserverd
+examples/qtscript/qtscript
+examples/qtscript/qtscriptd
+examples/simple/simple
+examples/simple/simpled
+examples/simplessl/simplessl
+examples/simplessl/simplessld
+tests/tests
+tests/testsd
