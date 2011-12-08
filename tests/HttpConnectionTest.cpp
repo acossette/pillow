@@ -630,11 +630,11 @@ void HttpConnectionTest::testWriteChunkedResponseContent()
 	QCOMPARE(completedSpy->size(), 0);
 
 	connection->writeContent("hello");
-	QCOMPARE(clientReadAll(), QByteArray("5\r\nhello"));
+	QCOMPARE(clientReadAll(), QByteArray("5\r\nhello\r\n"));
 	QCOMPARE(connection->state(), HttpConnection::SendingContent);
 
 	connection->writeContent("there! How are you?");
-	QCOMPARE(clientReadAll(), QByteArray("13\r\nthere! How are you?"));
+	QCOMPARE(clientReadAll(), QByteArray("13\r\nthere! How are you?\r\n"));
 	QCOMPARE(connection->state(), HttpConnection::SendingContent);
 
 	connection->writeContent(QByteArray());
@@ -642,7 +642,7 @@ void HttpConnectionTest::testWriteChunkedResponseContent()
 	QCOMPARE(connection->state(), HttpConnection::SendingContent);
 
 	connection->writeContent("1234567890");
-	QCOMPARE(clientReadAll(), QByteArray("a\r\n1234567890"));
+	QCOMPARE(clientReadAll(), QByteArray("a\r\n1234567890\r\n"));
 	QCOMPARE(connection->state(), HttpConnection::SendingContent);
 
 	connection->endContent();

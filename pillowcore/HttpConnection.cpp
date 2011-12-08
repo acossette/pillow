@@ -263,7 +263,9 @@ void HttpConnection::transitionToCompleted()
 		processInput();
 	}
 	else
+	{
 		transitionToFlushing();
+	}
 }
 
 void HttpConnection::transitionToFlushing()
@@ -477,10 +479,13 @@ void HttpConnection::writeContent(const QByteArray& content)
 		_responseContentBytesSent += content.size();
 		if (_responseChunkedTransferEncoding)
 		{
-			QByteArray buffer; appendNumber<int, 16>(buffer, content.size()); buffer.append("\r\n");
+			QByteArray buffer; appendNumber<int, 16>(buffer, content.size()); buffer.append(crLfToken);
 			_outputDevice->write(buffer);
 		}
 		_outputDevice->write(content);
+
+		if (_responseChunkedTransferEncoding)
+			_outputDevice->write(crLfToken);
 
 		if (_responseContentBytesSent == _responseContentLength)
 			transitionToCompleted();
