@@ -174,7 +174,7 @@ void HttpConnection::transitionToReceivingContent()
 	else while (_requestHeaders.size() < _requestHeadersRef.size()) _requestHeaders.push_back(HttpHeader());
 
 	HttpHeader* header = _requestHeaders.begin();
-	for (const HttpHeaderRef* ref = _requestHeadersRef.constBegin(), *refE = _requestHeadersRef.constEnd(); ref < refE; ++ref, ++header)
+	for (const HttpHeaderRef* ref = _requestHeadersRef.data(), *refE = _requestHeadersRef.data() + _requestHeadersRef.size(); ref < refE; ++ref, ++header)
 	{
 		setFromRawDataAndNullterm(header->first, data, ref->fieldPos, ref->fieldLength);
 		setFromRawDataAndNullterm(header->second, data, ref->valuePos, ref->valueLength);
