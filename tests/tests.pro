@@ -16,7 +16,8 @@ SOURCES += main.cpp \
     HttpConnectionTest.cpp \
     HttpHandlerTest.cpp \
     HttpsServerTest.cpp \
-    HttpHandlerProxyTest.cpp
+    HttpHandlerProxyTest.cpp \
+    ByteArrayHelpersTest.cpp
 
 HEADERS += \
     HttpServerTest.h \

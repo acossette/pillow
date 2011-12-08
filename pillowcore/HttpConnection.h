@@ -1,11 +1,21 @@
 #ifndef _PILLOW_HTTPCONNECTION_H_
 #define _PILLOW_HTTPCONNECTION_H_
 
+#ifndef QOBJECT_H
 #include <QObject>
+#endif // QOBJECT_H
+#ifndef http11_parser_h
 #include "parser/parser.h"
+#endif // http11_parser_h
+#ifndef QHOSTADDRESS_H
 #include <QtNetwork/QHostAddress>
+#endif // QHOSTADDRESS_H
+#ifndef QVECTOR_H
 #include <QtCore/QVector>
+#endif // QVECTOR_H
+#ifndef QVARLENGTHARRAY_H
 #include <QtCore/QVarLengthArray>
+#endif // QVARLENGTHARRAY_H
 class QIODevice;
 
 namespace Pillow
@@ -24,7 +34,6 @@ namespace Pillow
 	};
 }
 Q_DECLARE_TYPEINFO(Pillow::HttpHeaderRef, Q_PRIMITIVE_TYPE);
-
 
 namespace Pillow
 {

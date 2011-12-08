@@ -101,7 +101,7 @@ namespace Pillow
 			return 0;
 		}
 
-		inline int percentDecode(char* data, int size)
+		inline int percentDecodeInPlace(char* data, int size)
 		{
 			const char* inData = data;
 			const char* inDataE = data + size;
@@ -131,12 +131,12 @@ namespace Pillow
 			{
 				char buffer[1024];
 				memcpy(buffer, byteArray.constData(), byteArray.size());
-				return QString::fromUtf8(buffer, percentDecode(buffer, byteArray.size()));
+				return QString::fromUtf8(buffer, percentDecodeInPlace(buffer, byteArray.size()));
 			}
 			else
 			{
 				QByteArray temp = byteArray; temp.detach();
-				return QString::fromUtf8(temp.constData(), percentDecode(temp.data(), byteArray.size()));
+				return QString::fromUtf8(temp.constData(), percentDecodeInPlace(temp.data(), byteArray.size()));
 			}
 		}
 
@@ -147,12 +147,12 @@ namespace Pillow
 			{
 				char buffer[1024];
 				memcpy(buffer, data, size);
-				return QString::fromUtf8(buffer, percentDecode(buffer, size));
+				return QString::fromUtf8(buffer, percentDecodeInPlace(buffer, size));
 			}
 			else
 			{
 				QByteArray temp(data, size);
-				return QString::fromUtf8(temp.constData(), percentDecode(temp.data(), size));
+				return QString::fromUtf8(temp.constData(), percentDecodeInPlace(temp.data(), size));
 			}
 		}
 

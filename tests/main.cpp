@@ -11,6 +11,8 @@ template<class T> int execTest()
 	T t; return QTest::qExec(&t);
 }
 
+extern int exec_ByteArrayHelpersTest();
+
 int main(int argc, char *argv[])
 {
 	QCoreApplication a(argc, argv);
@@ -27,5 +29,6 @@ int main(int argc, char *argv[])
 	result += execTest<HttpHandlerFileTest>();
 	result += execTest<HttpHandlerSimpleRouterTest>();
 	result += execTest<HttpHandlerProxyTest>();
+	result += exec_ByteArrayHelpersTest();
 	return result;
 }
