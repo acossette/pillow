@@ -70,7 +70,7 @@ namespace Pillow
 		mutable QString _requestUriDecoded, _requestFragmentDecoded, _requestPathDecoded, _requestQueryStringDecoded;
 		QVarLengthArray<Pillow::HttpHeaderRef, 32> _requestHeadersRef;
 		Pillow::HttpHeaderCollection _requestHeaders;
-		int _requestContentLength;
+		int _requestContentLength; int _requestContentLengthHeaderIndex;
 		bool _requestHttp11;
 		Pillow::HttpParamCollection _requestParams;
 
@@ -82,6 +82,7 @@ namespace Pillow
 		bool _responseChunkedTransferEncoding;
 
 	private:
+		void setupRequestHeaders();
 		void transitionToReceivingHeaders();
 		void transitionToReceivingContent();
 		void transitionToSendingHeaders();

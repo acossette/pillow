@@ -110,17 +110,12 @@ void HttpConnection::processInput()
 	if (_state == ReceivingHeaders)
 	{
 		if (!_requestBuffer.isEmpty())
-		{
-			if (_requestBuffer.size() > MaximumRequestHeaderLength)
-				return writeRequestErrorResponse(400); // Bad client Request!
-			else
-				thin_http_parser_execute(&_parser, _requestBuffer.constData(), _requestBuffer.size(), _parser.nread);
-		}
+			thin_http_parser_execute(&_parser, _requestBuffer.constData(), _requestBuffer.size(), _parser.nread);
 
-		if (thin_http_parser_is_finished(&_parser))
-			transitionToReceivingContent();
-		else if (thin_http_parser_has_error(&_parser))
+		if (_parser.nread > MaximumRequestHeaderLength || thin_http_parser_has_error(&_parser))
 			return writeRequestErrorResponse(400); // Bad client Request!
+		else if (thin_http_parser_is_finished(&_parser))
+			transitionToReceivingContent();
 	}
 	else if (_state == ReceivingContent)
 	{
@@ -136,7 +131,24 @@ void HttpConnection::transitionToReceivingHeaders()
 
 	thin_http_parser_init(&_parser);
 	_requestContentLength = 0;
+	_requestContentLengthHeaderIndex = -1;
 	_requestHttp11 = false;
+}
+
+void Pillow::HttpConnection::setupRequestHeaders()
+{
+	char* data = _requestBuffer.data();
+
+	while (_requestHeaders.size() > _requestHeadersRef.size()) _requestHeaders.pop_back();
+	if (_requestHeaders.capacity() == 0 && _requestHeadersRef.size() > 0) _requestHeaders.resize(_requestHeadersRef.size());
+	else while (_requestHeaders.size() < _requestHeadersRef.size()) _requestHeaders.push_back(HttpHeader());
+
+	HttpHeader* header = _requestHeaders.begin();
+	for (const HttpHeaderRef* ref = _requestHeadersRef.data(), *refE = _requestHeadersRef.data() + _requestHeadersRef.size(); ref < refE; ++ref, ++header)
+	{
+		setFromRawDataAndNullterm(header->first, data, ref->fieldPos, ref->fieldLength);
+		setFromRawDataAndNullterm(header->second, data, ref->valuePos, ref->valueLength);
+	}
 }
 
 void HttpConnection::transitionToReceivingContent()
@@ -144,9 +156,52 @@ void HttpConnection::transitionToReceivingContent()
 	if (_state == ReceivingContent) return;
 	_state = ReceivingContent;
 
+	setupRequestHeaders();
+
+	bool contentLengthParseOk = true;
+	if (_requestContentLengthHeaderIndex >= 0)
+		_requestContentLength = _requestHeaders.at(_requestContentLengthHeaderIndex).second.toInt(&contentLengthParseOk);
+
+	// Exit early if the client sent an incorrect or unacceptable content-length.
+	if (_requestContentLength < 0)
+		return writeRequestErrorResponse(400); // Invalid request: negative content length does not make sense.
+	else if (_requestContentLength > MaximumRequestContentLength || !contentLengthParseOk)
+		return writeRequestErrorResponse(413); // Request entity too large.
+
+	if (_requestContentLength > 0)
+	{
+		if (requestHeaderValue(expectToken) == hundredDashContinueToken)
+			_outputDevice->write("HTTP/1.1 100 Continue\r\n\r\n");// The client politely wanted to know if it could proceed with his payload. All clear!
+
+		// Resize the request buffer right away to avoid too many reallocs later.
+		// NOTE: This invalidates the request headers QByteArrays if the reallocation
+		// changes the buffer's address (very likely unless the content-length is tiny).
+		_requestBuffer.reserve(_parser.body_start + _requestContentLength + 1);
+
+		// So do invalidate the request headers.
+		if (_requestHeaders.size() > 0) _requestHeaders.pop_back();
+
+		// Pump; the content may already be sitting in the buffers.
+		processInput();
+	}
+	else
+	{
+		transitionToSendingHeaders(); // No content to receive. Go straight to sending headers.
+	}
+}
+
+void HttpConnection::transitionToSendingHeaders()
+{
+	if (_state == SendingHeaders) return;
+	_state = SendingHeaders;
+
+	// Prepare and null terminate the request fields.
+
+	if (_requestHeaders.size() != _requestHeadersRef.size())
+		setupRequestHeaders();
+
 	char* data = _requestBuffer.data();
 
-	// Prepare and null terminate the fields.
 	if (_parser.query_string_len == 0)
 	{
 		// The request uri has no query string, we can use the data straight because it means that inserting null after the path
@@ -169,38 +224,7 @@ void HttpConnection::transitionToReceivingContent()
 	if (!_requestPathDecoded.isEmpty())_requestPathDecoded = QString();
 	if (!_requestQueryStringDecoded.isEmpty())_requestQueryStringDecoded = QString();
 
-	while (_requestHeaders.size() > _requestHeadersRef.size()) _requestHeaders.pop_back();
-	if (_requestHeaders.capacity() == 0 && _requestHeadersRef.size() > 0) _requestHeaders.resize(_requestHeadersRef.size());
-	else while (_requestHeaders.size() < _requestHeadersRef.size()) _requestHeaders.push_back(HttpHeader());
-
-	HttpHeader* header = _requestHeaders.begin();
-	for (const HttpHeaderRef* ref = _requestHeadersRef.data(), *refE = _requestHeadersRef.data() + _requestHeadersRef.size(); ref < refE; ++ref, ++header)
-	{
-		setFromRawDataAndNullterm(header->first, data, ref->fieldPos, ref->fieldLength);
-		setFromRawDataAndNullterm(header->second, data, ref->valuePos, ref->valueLength);
-	}
-
-	const QByteArray& requestContentLengthValue = requestHeaderValue(contentLengthToken); bool parseOk = true;
-	_requestContentLength = requestContentLengthValue.isEmpty() ? 0 : requestContentLengthValue.toInt(&parseOk);
-
 	_requestHttp11 = _requestHttpVersion == httpSlash11Token;
-
-	if (_requestContentLength < 0)
-		return writeRequestErrorResponse(400); // Invalid request: negative content length does not make sense.
-	else if (_requestContentLength > MaximumRequestContentLength || !parseOk)
-		return writeRequestErrorResponse(413); // Request entity too large.
-	else if (_requestContentLength == 0)
-		transitionToSendingHeaders(); // No content to receive. Go straight to sending headers.
-	else if (requestHeaderValue(expectToken) == hundredDashContinueToken)
-		_outputDevice->write("HTTP/1.1 100 Continue\r\n\r\n");// The client politely wanted to know if it could proceed with his payload. All clear!
-
-	processInput();
-}
-
-void HttpConnection::transitionToSendingHeaders()
-{
-	if (_state == SendingHeaders) return;
-	_state = SendingHeaders;
 
 	setFromRawData(_requestContent, _requestBuffer.constData(), _parser.body_start, _requestContentLength);
 
@@ -298,8 +322,10 @@ void HttpConnection::flush()
 {
 	if (_outputDevice->bytesToWrite() > 0)
 	{
-		if (qobject_cast<QTcpSocket*>(_outputDevice)) static_cast<QTcpSocket*>(_outputDevice)->flush();
-		else if (qobject_cast<QLocalSocket*>(_outputDevice)) static_cast<QLocalSocket*>(_outputDevice)->flush();
+		if (qobject_cast<QTcpSocket*>(_outputDevice))
+			static_cast<QTcpSocket*>(_outputDevice)->flush();
+		else if (qobject_cast<QLocalSocket*>(_outputDevice))
+			static_cast<QLocalSocket*>(_outputDevice)->flush();
 	}
 }
 
@@ -592,6 +618,8 @@ QHostAddress HttpConnection::remoteAddress() const
 void HttpConnection::parser_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {
 	HttpConnection* request = reinterpret_cast<HttpConnection*>(data);
+	if (flen == 14 && asciiEqualsCaseInsensitive(field, 14, "content-length", 14))
+		request->_requestContentLengthHeaderIndex = request->_requestHeadersRef.size();
 	const char* begin = request->_requestBuffer.constData();
 	request->_requestHeadersRef.append(HttpHeaderRef(field - begin, flen, value - begin, vlen));
 }

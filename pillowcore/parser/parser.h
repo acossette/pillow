@@ -19,7 +19,7 @@ extern "C" {
 typedef void (*element_cb)(void *data, const char *at, size_t length);
 typedef void (*field_cb)(void *data, const char *field, size_t flen, const char *value, size_t vlen);
 
-typedef struct http_parser { 
+typedef struct http_parser {
   int cs;
   size_t body_start;
   int content_len;
@@ -32,14 +32,14 @@ typedef struct http_parser {
   void *data;
 
   field_cb http_field;
-  int request_method_start, request_method_len; element_cb request_method;
-  int request_uri_start, request_uri_len; element_cb request_uri;
-  int fragment_start, fragment_len; element_cb fragment;
-  int request_path_start, request_path_len; element_cb request_path;
-  int query_string_start, query_string_len; element_cb query_string;
-  int http_version_start, http_version_len; element_cb http_version;
+  int request_method_start, request_method_len;
+  int request_uri_start, request_uri_len;
+  int fragment_start, fragment_len;
+  int request_path_start, request_path_len;
+  int query_string_start, query_string_len;
+  int http_version_start, http_version_len;
   element_cb header_done;
-  
+
 } http_parser;
 
 int thin_http_parser_init(http_parser *parser);
@@ -48,7 +48,7 @@ size_t thin_http_parser_execute(http_parser *parser, const char *data, size_t le
 int thin_http_parser_has_error(http_parser *parser);
 int thin_http_parser_is_finished(http_parser *parser);
 
-#define http_parser_nread(parser) (parser)->nread 
+#define http_parser_nread(parser) (parser)->nread
 
 #if defined(__cplusplus)
 }
