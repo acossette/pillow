@@ -943,13 +943,12 @@ HttpConnectionTcpSocketTest::HttpConnectionTcpSocketTest()
 
 void HttpConnectionTcpSocketTest::server_newConnection()
 {
-	if (reuseConnection && connection)
+	QIODevice* device = server->nextPendingConnection();
+	if (!reuseConnection || connection == 0)
 	{
-		QIODevice* device = server->nextPendingConnection();
-		connection->initialize(device, device);
+		connection = new HttpConnection();
 	}
-	else
-		connection = new HttpConnection(server->nextPendingConnection());
+	connection->initialize(device, device);
 }
 
 void HttpConnectionTcpSocketTest::init()
@@ -1055,7 +1054,9 @@ HttpConnectionSslSocketTest::HttpConnectionSslSocketTest()
 
 void HttpConnectionSslSocketTest::server_newConnection()
 {
-	connection = new HttpConnection(server->nextPendingConnection());
+	QIODevice* device = server->nextPendingConnection();
+	connection = new HttpConnection();
+	connection->initialize(device, device);
 }
 
 void HttpConnectionSslSocketTest::sslSocket_encrypted()
@@ -1157,7 +1158,9 @@ HttpConnectionLocalSocketTest::HttpConnectionLocalSocketTest()
 
 void HttpConnectionLocalSocketTest::server_newConnection()
 {
-	connection = new HttpConnection(server->nextPendingConnection());
+	QIODevice* device = server->nextPendingConnection();
+	connection = new HttpConnection();
+	connection->initialize(device, device);
 }
 
 void HttpConnectionLocalSocketTest::init()
@@ -1233,7 +1236,8 @@ void HttpConnectionBufferTest::init()
 	inputBuffer = new QBuffer(); inputBuffer->open(QIODevice::ReadWrite);
 	outputBuffer = new QBuffer(); outputBuffer->open(QIODevice::ReadWrite);
 
-	connection = new HttpConnection(inputBuffer, outputBuffer, NULL);
+	connection = new HttpConnection(NULL);
+	connection->initialize(inputBuffer, outputBuffer);
 
 	readySpy = new QSignalSpy(connection, SIGNAL(requestReady(Pillow::HttpConnection*)));
 	completedSpy = new QSignalSpy(connection, SIGNAL(requestCompleted(Pillow::HttpConnection*)));
