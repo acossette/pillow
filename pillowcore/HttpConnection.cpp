@@ -37,6 +37,26 @@ namespace Tokens
 using namespace Pillow::ByteArrayHelpers;
 using namespace Tokens;
 
+namespace Pillow
+{
+	struct HttpHeaderRef
+	{
+		int fieldPos, fieldLength, valuePos, valueLength;
+		inline HttpHeaderRef(int fieldPos, int fieldLength, int valuePos, int valueLength)
+			: fieldPos(fieldPos), fieldLength(fieldLength), valuePos(valuePos), valueLength(valueLength) {}
+		inline HttpHeaderRef() {}
+	};
+}
+Q_DECLARE_TYPEINFO(Pillow::HttpHeaderRef, Q_PRIMITIVE_TYPE);
+
+#define PERCENT_DECODABLE(fieldName) \
+	QByteArray _##fieldName; \
+	mutable QString _##fieldName##Decoded; \
+	inline const QString& fieldName##Decoded() const { if (_##fieldName##Decoded.isEmpty() && !_##fieldName.isEmpty()) _##fieldName##Decoded = Pillow::ByteArrayHelpers::percentDecode(_##fieldName); return _##fieldName##Decoded; }
+#define FORWARD_PERCENT_DECODABLE(fieldName) \
+	const QByteArray& Pillow::HttpConnection::fieldName() const { return d_ptr->_##fieldName; } \
+	const QString& Pillow::HttpConnection::fieldName##Decoded() const { return d_ptr->fieldName##Decoded(); }
+
 //
 // HttpConnectionPrivate
 //
@@ -58,8 +78,11 @@ namespace Pillow
 
 		// Request fields.
 		QByteArray _requestBuffer;
-		QByteArray _requestMethod, _requestUri, _requestFragment, _requestPath, _requestQueryString, _requestHttpVersion, _requestContent;
-		mutable QString _requestUriDecoded, _requestFragmentDecoded, _requestPathDecoded, _requestQueryStringDecoded;
+		QByteArray _requestMethod, _requestHttpVersion, _requestContent;
+		PERCENT_DECODABLE(requestUri)
+		PERCENT_DECODABLE(requestFragment)
+		PERCENT_DECODABLE(requestPath)
+		PERCENT_DECODABLE(requestQueryString)
 		QVarLengthArray<Pillow::HttpHeaderRef, 32> _requestHeadersRef;
 		Pillow::HttpHeaderCollection _requestHeaders;
 		int _requestContentLength; int _requestContentLengthHeaderIndex;
@@ -97,7 +120,7 @@ Pillow::HttpConnectionPrivate::HttpConnectionPrivate(HttpConnection *connection)
 {
 }
 
-void Pillow::HttpConnectionPrivate::initialize()
+inline void Pillow::HttpConnectionPrivate::initialize()
 {
 	memset(&_parser, 0, sizeof(http_parser));
 	_parser.data = this;
@@ -115,7 +138,7 @@ void Pillow::HttpConnectionPrivate::initialize()
 	if (_inputDevice->bytesAvailable() > 0) QTimer::singleShot(0, q_ptr, SLOT(processInput()));
 }
 
-void Pillow::HttpConnectionPrivate::processInput()
+inline void Pillow::HttpConnectionPrivate::processInput()
 {
 	if (_state != Pillow::HttpConnection::ReceivingHeaders && _state != Pillow::HttpConnection::ReceivingContent) return;
 
@@ -146,7 +169,7 @@ void Pillow::HttpConnectionPrivate::processInput()
 	}
 }
 
-void Pillow::HttpConnectionPrivate::parser_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen)
+inline void Pillow::HttpConnectionPrivate::parser_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {
 	Pillow::HttpConnectionPrivate* request = reinterpret_cast<Pillow::HttpConnectionPrivate*>(data);
 	if (flen == 14 && asciiEqualsCaseInsensitive(field, 14, "content-length", 14))
@@ -155,7 +178,7 @@ void Pillow::HttpConnectionPrivate::parser_http_field(void *data, const char *fi
 	request->_requestHeadersRef.append(HttpHeaderRef(field - begin, flen, value - begin, vlen));
 }
 
-void Pillow::HttpConnectionPrivate::transitionToReceivingHeaders()
+inline void Pillow::HttpConnectionPrivate::transitionToReceivingHeaders()
 {
 	if (_state == Pillow::HttpConnection::ReceivingHeaders) return;
 	_state = Pillow::HttpConnection::ReceivingHeaders;
@@ -166,7 +189,7 @@ void Pillow::HttpConnectionPrivate::transitionToReceivingHeaders()
 	_requestHttp11 = false;
 }
 
-void Pillow::HttpConnectionPrivate::setupRequestHeaders()
+inline void Pillow::HttpConnectionPrivate::setupRequestHeaders()
 {
 	char* data = _requestBuffer.data();
 
@@ -182,7 +205,7 @@ void Pillow::HttpConnectionPrivate::setupRequestHeaders()
 	}
 }
 
-void Pillow::HttpConnectionPrivate::transitionToReceivingContent()
+inline void Pillow::HttpConnectionPrivate::transitionToReceivingContent()
 {
 	if (_state == Pillow::HttpConnection::ReceivingContent) return;
 	_state = Pillow::HttpConnection::ReceivingContent;
@@ -221,7 +244,7 @@ void Pillow::HttpConnectionPrivate::transitionToReceivingContent()
 	}
 }
 
-void Pillow::HttpConnectionPrivate::transitionToSendingHeaders()
+inline void Pillow::HttpConnectionPrivate::transitionToSendingHeaders()
 {
 	if (_state == Pillow::HttpConnection::SendingHeaders) return;
 	_state = Pillow::HttpConnection::SendingHeaders;
@@ -267,7 +290,7 @@ void Pillow::HttpConnectionPrivate::transitionToSendingHeaders()
 	emit q_ptr->requestReady(q_ptr);
 }
 
-void Pillow::HttpConnectionPrivate::transitionToSendingContent()
+inline void Pillow::HttpConnectionPrivate::transitionToSendingContent()
 {
 	if (_state == Pillow::HttpConnection::SendingContent) return;
 	_state = Pillow::HttpConnection::SendingContent;
@@ -287,7 +310,7 @@ void Pillow::HttpConnectionPrivate::transitionToSendingContent()
 	}
 }
 
-void Pillow::HttpConnectionPrivate::transitionToCompleted()
+inline void Pillow::HttpConnectionPrivate::transitionToCompleted()
 {
 	if (_state == Pillow::HttpConnection::Completed) return;
 	if (_state == Pillow::HttpConnection::Closed)
@@ -323,7 +346,7 @@ void Pillow::HttpConnectionPrivate::transitionToCompleted()
 	}
 }
 
-void Pillow::HttpConnectionPrivate::flush()
+inline void Pillow::HttpConnectionPrivate::flush()
 {
 	if (_outputDevice != 0 && _outputDevice->bytesToWrite() > 0)
 	{
@@ -334,14 +357,14 @@ void Pillow::HttpConnectionPrivate::flush()
 	}
 }
 
-void Pillow::HttpConnectionPrivate::drain()
+inline void Pillow::HttpConnectionPrivate::drain()
 {
 	if (_state != Pillow::HttpConnection::Flushing) return;
 	flush();
 	if (_outputDevice != 0 && _outputDevice->bytesToWrite() == 0) transitionToClosed();
 }
 
-void Pillow::HttpConnectionPrivate::transitionToFlushing()
+inline void Pillow::HttpConnectionPrivate::transitionToFlushing()
 {
 	// This is a transient state that is meant to fully drain the write buffers and
 	// wait for all the data to make it to the kernel before closing the connection.
@@ -353,7 +376,7 @@ void Pillow::HttpConnectionPrivate::transitionToFlushing()
 		QObject::connect(_outputDevice, SIGNAL(bytesWritten(qint64)), q_ptr, SLOT(drain()));
 }
 
-void Pillow::HttpConnectionPrivate::transitionToClosed()
+inline void Pillow::HttpConnectionPrivate::transitionToClosed()
 {
 	if (_state == Pillow::HttpConnection::Closed) return;
 	_state = Pillow::HttpConnection::Closed;
@@ -727,67 +750,24 @@ QHostAddress HttpConnection::remoteAddress() const
 	return qobject_cast<QAbstractSocket*>(d_ptr->_inputDevice) ? static_cast<QAbstractSocket*>(d_ptr->_inputDevice)->peerAddress() : QHostAddress();
 }
 
-const QByteArray &HttpConnection::requestMethod()
+const QByteArray &HttpConnection::requestMethod() const
 {
 	return d_ptr->_requestMethod;
 }
 
-const QByteArray &HttpConnection::requestUri()
-{
-	return d_ptr->_requestUri;
-}
+FORWARD_PERCENT_DECODABLE(requestUri)
+FORWARD_PERCENT_DECODABLE(requestFragment)
+FORWARD_PERCENT_DECODABLE(requestPath)
+FORWARD_PERCENT_DECODABLE(requestQueryString)
 
-const QByteArray &HttpConnection::requestFragment()
-{
-	return d_ptr->_requestFragment;
-}
-
-const QByteArray &HttpConnection::requestPath()
-{
-	return d_ptr->_requestPath;
-}
-
-const QByteArray &HttpConnection::requestQueryString()
-{
-	return d_ptr->_requestQueryString;
-}
-
-const QByteArray &HttpConnection::requestHttpVersion()
+const QByteArray &HttpConnection::requestHttpVersion() const
 {
 	return d_ptr->_requestHttpVersion;
 }
 
-const QByteArray &HttpConnection::requestContent()
+const QByteArray &HttpConnection::requestContent() const
 {
 	return d_ptr->_requestContent;
-}
-
-const QString & Pillow::HttpConnection::requestUriDecoded() const
-{
-	if (d_ptr->_requestUriDecoded.isEmpty() && !d_ptr->_requestUri.isEmpty())
-		d_ptr->_requestUriDecoded = percentDecode(d_ptr->_requestUri);
-	return d_ptr->_requestUriDecoded;
-}
-
-const QString & Pillow::HttpConnection::requestFragmentDecoded() const
-{
-	if (d_ptr->_requestFragmentDecoded.isEmpty() && !d_ptr->_requestFragment.isEmpty())
-		d_ptr->_requestFragmentDecoded = percentDecode(d_ptr->_requestFragment);
-	return d_ptr->_requestFragmentDecoded;
-}
-
-const QString & Pillow::HttpConnection::requestPathDecoded() const
-{
-	if (d_ptr->_requestPathDecoded.isEmpty() && !d_ptr->_requestPath.isEmpty())
-		d_ptr->_requestPathDecoded = percentDecode(d_ptr->_requestPath);
-	return d_ptr->_requestPathDecoded;
-}
-
-const QString & Pillow::HttpConnection::requestQueryStringDecoded() const
-{
-	if (d_ptr->_requestQueryStringDecoded.isEmpty() && !d_ptr->_requestQueryString.isEmpty())
-		d_ptr->_requestQueryStringDecoded = percentDecode(d_ptr->_requestQueryString);
-	return d_ptr->_requestQueryStringDecoded;
 }
 
 const HttpHeaderCollection &HttpConnection::requestHeaders() const

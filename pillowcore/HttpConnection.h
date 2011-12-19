@@ -18,19 +18,6 @@ namespace Pillow
 	typedef QVector<HttpHeader> HttpHeaderCollection;
 	typedef QPair<QString, QString> HttpParam;
 	typedef QVector<HttpParam> HttpParamCollection;
-
-	struct HttpHeaderRef
-	{
-		int fieldPos, fieldLength, valuePos, valueLength;
-		inline HttpHeaderRef(int fieldPos, int fieldLength, int valuePos, int valueLength)
-			: fieldPos(fieldPos), fieldLength(fieldLength), valuePos(valuePos), valueLength(valueLength) {}
-		inline HttpHeaderRef() {}
-	};
-}
-Q_DECLARE_TYPEINFO(Pillow::HttpHeaderRef, Q_PRIMITIVE_TYPE);
-
-namespace Pillow
-{
 	class HttpConnectionPrivate;
 
 	//
@@ -41,13 +28,13 @@ namespace Pillow
 	{
 		Q_OBJECT
 		Q_PROPERTY(State state READ state)
-		Q_PROPERTY(QByteArray requestMethod READ requestMethod)
-		Q_PROPERTY(QByteArray requestUri READ requestUri)
-		Q_PROPERTY(QByteArray requestPath READ requestPath)
-		Q_PROPERTY(QByteArray requestQueryString READ requestQueryString)
-		Q_PROPERTY(QByteArray requestFragment READ requestFragment)
-		Q_PROPERTY(QByteArray requestHttpVersion READ requestHttpVersion)
-		Q_PROPERTY(QByteArray requestContent READ requestContent)
+		Q_PROPERTY(QByteArray requestMethod READ requestMethod NOTIFY requestReady)
+		Q_PROPERTY(QByteArray requestUri READ requestUri NOTIFY requestReady)
+		Q_PROPERTY(QByteArray requestPath READ requestPath NOTIFY requestReady)
+		Q_PROPERTY(QByteArray requestQueryString READ requestQueryString NOTIFY requestReady)
+		Q_PROPERTY(QByteArray requestFragment READ requestFragment NOTIFY requestReady)
+		Q_PROPERTY(QByteArray requestHttpVersion READ requestHttpVersion NOTIFY requestReady)
+		Q_PROPERTY(QByteArray requestContent READ requestContent NOTIFY requestReady)
 
 	public:
 		enum State { Uninitialized, ReceivingHeaders, ReceivingContent, SendingHeaders, SendingContent, Completed, Flushing, Closed };
@@ -69,13 +56,13 @@ namespace Pillow
 
 		// Request members. Note: the underlying shared QByteArray data remains valid until either the requestCompleted()
 		// or closed() signals are emitted. Call detach() on your copy of the QByteArrays if you wish to keep it longer.
-		const QByteArray& requestMethod();
-		const QByteArray& requestUri();
-		const QByteArray& requestFragment();
-		const QByteArray& requestPath();
-		const QByteArray& requestQueryString();
-		const QByteArray& requestHttpVersion();
-		const QByteArray& requestContent();
+		const QByteArray& requestMethod() const;
+		const QByteArray& requestUri() const;
+		const QByteArray& requestFragment() const;
+		const QByteArray& requestPath() const;
+		const QByteArray& requestQueryString() const;
+		const QByteArray& requestHttpVersion() const;
+		const QByteArray& requestContent() const;
 
 		// Request members, decoded version. Use those rather than manually decoding the raw data returned by the methods
 		// above when decoded values are desired (they are cached).
