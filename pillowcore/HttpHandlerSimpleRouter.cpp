@@ -16,26 +16,26 @@ namespace Pillow
 		QByteArray method;
 		QRegExp regExp;
 		QStringList paramNames;
-		
+
 		virtual bool invoke(Pillow::HttpConnection* request) = 0;
 	};
-	
+
 	struct HandlerRoute : public Route
 	{
 		QPointer<Pillow::HttpHandler> handler;
-		
+
 		virtual bool invoke(Pillow::HttpConnection *request)
 		{
 			if (!handler) return false;
 			return handler->handleRequest(request);
 		}
 	};
-	
+
 	struct QObjectMetaCallRoute : public Route
 	{
 		QPointer<QObject> object;
 		QByteArray member;
-		
+
 		virtual bool invoke(Pillow::HttpConnection *request)
 		{
 			if (!object) return false;
@@ -47,25 +47,38 @@ namespace Pillow
 	{
 		QPointer<QObject> object;
 		QMetaMethod metaMethod;
-		
+
 		virtual bool invoke(Pillow::HttpConnection *request)
 		{
 			if (!object) return false;
 			return metaMethod.invoke(object, Q_ARG(Pillow::HttpConnection*, request));
 		}
 	};
-	
+
+#ifdef Q_COMPILER_LAMBDA
+	struct FunctorCallRoute : public Route
+	{
+		std::function<void(Pillow::HttpConnection*)> func;
+
+		virtual bool invoke(Pillow::HttpConnection *request)
+		{
+			func(request);
+			return true;
+		}
+	};
+#endif // Q_COMPILER_LAMBDA
+
 	struct StaticRoute : public Route
 	{
 		int statusCode;
 		Pillow::HttpHeaderCollection headers;
 		QByteArray content;
-		
+
 		virtual bool invoke(Pillow::HttpConnection *request)
 		{
 			request->writeResponse(statusCode, headers, content);
 			return true;
-		}		
+		}
 	};
 
 	//
@@ -119,7 +132,7 @@ void HttpHandlerSimpleRouter::addRoute(const QByteArray& method, const QString& 
 	}
 	else if (member == NULL || member[0] == 0)
 	{
-		qWarning() << "HttpHandlerSimpleRouter::addRoute: NULL or empty member specified while adding route for" << path << "- not adding route";		
+		qWarning() << "HttpHandlerSimpleRouter::addRoute: NULL or empty member specified while adding route for" << path << "- not adding route";
 		return;
 	}
 
@@ -130,7 +143,7 @@ void HttpHandlerSimpleRouter::addRoute(const QByteArray& method, const QString& 
 	}
 	int methodIndex = object->metaObject()->indexOfSlot(member);
 	if (methodIndex == -1) object->metaObject()->indexOfMethod(member);
-	
+
 	if (methodIndex == -1)
 	{
 		// Not a normalised method name. Still give a chance and invoke the member by name.
@@ -162,6 +175,17 @@ void HttpHandlerSimpleRouter::addRoute(const QByteArray& method, const QString& 
 	route->content = content;
 	d_ptr->routes.append(route);
 }
+
+#ifdef Q_COMPILER_LAMBDA
+void HttpHandlerSimpleRouter::addRoute(const QByteArray &method, const QString &path, const std::function<void(HttpConnection *)> &func)
+{
+	FunctorCallRoute* route = new FunctorCallRoute();
+	route->method = method;
+	route->regExp = pathToRegExp(path, &route->paramNames);
+	route->func = func;
+	d_ptr->routes.append(route);
+}
+#endif // Q_COMPILER_LAMBDA
 
 QRegExp Pillow::HttpHandlerSimpleRouter::pathToRegExp(const QString &p, QStringList* outParamNames)
 {
@@ -196,7 +220,7 @@ QRegExp Pillow::HttpHandlerSimpleRouter::pathToRegExp(const QString &p, QStringL
 
 	if (outParamNames)
 		*outParamNames = paramNames;
-	
+
 	path = "^" + path + "$";
 	return QRegExp(path);
 }
@@ -212,15 +236,15 @@ bool HttpHandlerSimpleRouter::handleRequest(Pillow::HttpConnection *request)
 		if (!methodParam.isEmpty())
 			requestMethod = methodParam.toAscii();
 	}
-	
-	QString requestPath = QUrl::fromPercentEncoding(request->requestPath());	
-			
-	foreach (Route* route, d_ptr->routes) 
+
+	QString requestPath = QUrl::fromPercentEncoding(request->requestPath());
+
+	foreach (Route* route, d_ptr->routes)
 	{
 		if (route->regExp.indexIn(requestPath) != -1)
 		{
 			matchedRoutes.append(route);
-			if (route->method.isEmpty() || 
+			if (route->method.isEmpty() ||
 				(route->method.size() == requestMethod.size() && qstricmp(route->method, requestMethod) == 0))
 			{
 				for (int i = 0, iE = route->paramNames.size(); i < iE; ++i)
@@ -230,7 +254,7 @@ bool HttpHandlerSimpleRouter::handleRequest(Pillow::HttpConnection *request)
 			}
 		}
 	}
-	
+
 	if (matchedRoutes.isEmpty())
 	{
 		if (unmatchedRequestAction() == Return4xxResponse)
@@ -253,7 +277,7 @@ bool HttpHandlerSimpleRouter::handleRequest(Pillow::HttpConnection *request)
 			return true;
 		}
 	}
-	
+
 	return false;
 }
 
