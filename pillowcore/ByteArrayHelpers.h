@@ -7,6 +7,9 @@
 #ifndef QSTRING_H
 #include <QtCore/QString>
 #endif // QSTRING_H
+#ifndef QSTRINGBUILDER_H
+#include <QtCore/QStringBuilder>
+#endif // QSTRINGBUILDER_H
 
 namespace Pillow
 {
@@ -86,6 +89,19 @@ namespace Pillow
 			for (register int i = 0; i < first.size(); ++i)
 			{
 				register char f = first.at(i), s = second.at(i);
+				bool good = (f == s) || ((f - s) == 32 && f >= 'a' && f <= 'z') || ((f - s) == -32 && f >= 'A' && f <= 'Z');
+				if (!good) return false;
+			}
+			return true;
+		}
+
+		inline bool asciiEqualsCaseInsensitive(const QByteArray& first, const QLatin1Literal& second)
+		{
+			if (first.size() != second.size()) return false;
+			const char* sec = second.data();
+			for (register int i = 0; i < first.size(); ++i)
+			{
+				register char f = first.at(i), s = sec[i];
 				bool good = (f == s) || ((f - s) == 32 && f >= 'a' && f <= 'z') || ((f - s) == -32 && f >= 'A' && f <= 'Z');
 				if (!good) return false;
 			}

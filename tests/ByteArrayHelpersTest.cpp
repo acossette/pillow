@@ -128,14 +128,22 @@ private slots:
 
 	void test_asciiEqualsCaseInsensitive()
 	{
-		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("", ""));
-		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", "hello"));
-		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", "hElLo"));
-		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello123", "hElLo123"));
-		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("12345", "12345"));
-		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello123", "hElLo1234"));
-		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", "World"));
-		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", "hello\1"));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("", QByteArray("")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QByteArray("hello")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QByteArray("hElLo")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello123", QByteArray("hElLo123")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("12345", QByteArray("12345")));
+		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello123", QByteArray("hElLo1234")));
+		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QByteArray("World")));
+		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QByteArray("hello\1")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("", QLatin1Literal("")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QLatin1Literal("hello")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QLatin1Literal("hElLo")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello123", QLatin1Literal("hElLo123")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("12345", QLatin1Literal("12345")));
+		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello123", QLatin1Literal("hElLo1234")));
+		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QLatin1Literal("World")));
+		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QLatin1Literal("hello\1")));
 	}
 
 	void test_unhex()
