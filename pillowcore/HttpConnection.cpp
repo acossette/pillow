@@ -1,6 +1,6 @@
 #include "HttpConnection.h"
 #include "HttpHelpers.h"
-#include "ByteArrayHelpers.h"
+#include "private/ByteArray.h"
 #include "parser/parser.h"
 #include <QtCore/QIODevice>
 #include <QtCore/QTimer>
@@ -18,27 +18,27 @@ namespace Pillow
 {
 	namespace Tokens
 	{
-		#define DEFINE_TOKEN(tokenName, tokenValue) static const QLatin1Literal tokenName##Token(tokenValue)
-
-//		#define DEFINE_TOKEN(tokenName, tokenValue) static const QByteArray tokenName##Token(tokenValue)
+		#define DEFINE_TOKEN(tokenName, tokenValue) static const Pillow::Token tokenName##Token(tokenValue)
+		#define DEFINE_LOWERCASE_TOKEN(tokenName, tokenValue)  static const Pillow::LowerCaseToken tokenName##Token(tokenValue)
 		DEFINE_TOKEN(crLf, "\r\n");
-		DEFINE_TOKEN(connection, "connection");
-		DEFINE_TOKEN(contentLength, "content-length");
 		DEFINE_TOKEN(contentLengthOut, "Content-Length: ");
-		DEFINE_TOKEN(contentType, "content-type");
-		DEFINE_TOKEN(expect, "expect");
-		DEFINE_TOKEN(hundredDashContinue, "100-continue");
-		DEFINE_TOKEN(keepAlive, "keep-alive");
-		DEFINE_TOKEN(colonSpace, ": ");
-		DEFINE_TOKEN(close, "close");
 		DEFINE_TOKEN(contentTypeTextPlainTokenHeader, "Content-Type: text/plain\r\n");
 		DEFINE_TOKEN(connectionKeepAliveHeader, "Connection: keep-alive\r\n");
 		DEFINE_TOKEN(connectionCloseHeader, "Connection: close\r\n");
-		DEFINE_TOKEN(transferEncoding, "transfer-encoding");
-		DEFINE_TOKEN(chunked, "chunked");
 		DEFINE_TOKEN(httpSlash11, "HTTP/1.1");
 		DEFINE_TOKEN(head, "HEAD");
+		DEFINE_TOKEN(colonSpace, ": ");
+		DEFINE_LOWERCASE_TOKEN(connection, "connection");
+		DEFINE_LOWERCASE_TOKEN(contentLength, "content-length");
+		DEFINE_LOWERCASE_TOKEN(contentType, "content-type");
+		DEFINE_LOWERCASE_TOKEN(expect, "expect");
+		DEFINE_LOWERCASE_TOKEN(hundredDashContinue, "100-continue");
+		DEFINE_LOWERCASE_TOKEN(keepAlive, "keep-alive");
+		DEFINE_LOWERCASE_TOKEN(close, "close");
+		DEFINE_LOWERCASE_TOKEN(transferEncoding, "transfer-encoding");
+		DEFINE_LOWERCASE_TOKEN(chunked, "chunked");
 		#undef DEFINE_TOKEN
+		#undef DEFINE_LOWERCASE_TOKEN
 	}
 
 	struct HttpHeaderRef
@@ -47,107 +47,6 @@ namespace Pillow
 		inline HttpHeaderRef(int fieldPos, int fieldLength, int valuePos, int valueLength)
 			: fieldPos(fieldPos), fieldLength(fieldLength), valuePos(valuePos), valueLength(valueLength) {}
 		inline HttpHeaderRef() {}
-	};
-
-	class ByteArray : public QByteArray
-	{
-	public:
-		inline ByteArray& operator =(const QByteArray& other)
-		{
-			QByteArray::operator =(other);
-			return *this;
-		}
-
-		inline bool operator==(const QLatin1Literal& literal) const
-		{
-			return size() == literal.size() && qstrncmp(constData(), literal.data(), size()) == 0;
-		}
-
-		inline bool operator!=(const QLatin1Literal& literal) const
-		{
-			return size() != literal.size() || qstrncmp(constData(), literal.data(), size()) != 0;
-		}
-
-		inline ByteArray& append(const Pillow::HttpHeader& header)
-		{
-			const int requiredSpace = header.first.size() + 2 + header.second.size() + 2;
-			if (capacity() >= size() + requiredSpace)
-			{
-				// Common case where there is enough space.
-				char* d = data() + size();
-				memcpy(d, header.first.constData(), header.first.size()); d += header.first.size();
-				d[0] = ':'; d[1] = ' '; d += 2;
-				memcpy(d, header.second.constData(), header.second.size()); d += header.second.size();
-				d[0] = '\r'; d[1] = '\n';
-				data_ptr()->size += requiredSpace;
-			}
-			else
-				QByteArray::append(header.first).append(": ", 2).append(header.second).append("\r\n", 2);
-			return *this;
-		}
-
-		inline ByteArray& append(const QLatin1Literal& literal)
-		{
-			if (literal.size() > 0)
-			{
-				if (capacity() >= size() + literal.size())
-				{
-					memcpy(data() + size(), literal.data(), literal.size());
-					data_ptr()->size += literal.size();
-				}
-				else
-					QByteArray::append(literal.data(), literal.size());
-			}
-			return *this;
-		}
-
-		inline ByteArray& append(const QByteArray& a)
-		{
-			if (a.size() > 0)
-			{
-				if (capacity() >= size() + a.size())
-				{
-					memcpy(data() + size(), a.constData(), a.size());
-					data_ptr()->size += a.size();
-				}
-				else
-					QByteArray::append(a);
-			}
-			return *this;
-//			return reinterpret_cast<ByteArray&>(QByteArray::append(a));
-		}
-
-		inline ByteArray& append(const char* s, int len)
-		{
-			if (len > 0)
-			{
-				if (capacity() >= size() + len)
-				{
-					memcpy(data() + size(), s, len);
-					data_ptr()->size += len;
-				}
-				else
-					QByteArray::append(s, len);
-			}
-			return *this;
-			//			return reinterpret_cast<ByteArray&>(QByteArray::append(s, len));
-		}
-
-		inline ByteArray& append(const char* s)
-		{
-			return reinterpret_cast<ByteArray&>(QByteArray::append(s));
-		}
-
-		inline ByteArray& append(char c)
-		{
-			if (capacity() >= size() + 1)
-			{
-				data()[size()] = c;
-				data_ptr()->size += 1;
-			}
-			return *this;
-//			return reinterpret_cast<ByteArray&>(QByteArray::append(c));
-		}
 	};
 }
 Q_DECLARE_TYPEINFO(Pillow::HttpHeaderRef, Q_PRIMITIVE_TYPE);
@@ -229,7 +128,7 @@ namespace Pillow
 		void close();
 
 		QByteArray requestHeaderValue(const QByteArray& field);
-		const QByteArray& requestHeaderValue(const QLatin1Literal& field);
+		template <typename Literal> const QByteArray& requestHeaderValue(const Literal& field);
 	};
 }
 
@@ -511,7 +410,8 @@ void Pillow::HttpConnectionPrivate::writeRequestErrorResponse(int statusCode)
 	qDebug() << "HttpConnection: request error. Sending http status" << statusCode << "and closing connection.";
 
 	ByteArray _responseHeadersBuffer; _responseHeadersBuffer.reserve(1024);
-	_responseHeadersBuffer.append("HTTP/1.0 ").append(HttpProtocol::StatusCodes::getStatusCodeAndMessage(statusCode)).append(crLfToken);
+	const char* status = HttpProtocol::StatusCodes::getStatusCodeAndMessage(statusCode);
+	_responseHeadersBuffer.append("HTTP/1.0 ").append(status, strlen(status)).append(crLfToken);
 	_responseHeadersBuffer.append("Connection: close").append(crLfToken);
 	_responseHeadersBuffer.append(crLfToken); // End of headers.
 	_outputDevice->write(_responseHeadersBuffer);
@@ -561,7 +461,7 @@ inline void Pillow::HttpConnectionPrivate::writeHeaders(int statusCode, const Ht
 	if (_responseHeadersBuffer.capacity() == 0)
 		_responseHeadersBuffer.reserve(1024);
 
-	_responseHeadersBuffer.append(_requestHttpVersion).append(' ').append(statusCodeAndMessage).append(crLfToken);
+	_responseHeadersBuffer.append(_requestHttpVersion).append(' ').append(statusCodeAndMessage, strlen(statusCodeAndMessage)).append(crLfToken);
 
 	const HttpHeader* contentTypeHeader = 0;
 	const HttpHeader* connectionHeader = 0;
@@ -723,7 +623,8 @@ inline QByteArray Pillow::HttpConnectionPrivate::requestHeaderValue(const QByteA
 	return QByteArray();
 }
 
-inline const QByteArray& Pillow::HttpConnectionPrivate::requestHeaderValue(const QLatin1Literal &field)
+template <typename Literal>
+inline const QByteArray& Pillow::HttpConnectionPrivate::requestHeaderValue(const Literal &field)
 {
 	const char* fieldData = field.data(); int fieldLength = field.size();
 	for (const HttpHeader* header = _requestHeaders.constBegin(), *headerE = _requestHeaders.constEnd(); header != headerE; ++header)

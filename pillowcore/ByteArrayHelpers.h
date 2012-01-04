@@ -14,6 +14,37 @@
 namespace Pillow
 {
 	//
+	// Pillow::Token. A char array literal. See QLatin1Literal.
+	//
+	class Token
+	{
+	public:
+		inline int size() const { return m_size; }
+		inline const char* data() const { return m_data; }
+		inline char at(int index) const { return m_data[index]; }
+		template <int N> inline Token(const char (&str)[N]) : m_size(N - 1), m_data(str) {}
+	private:
+		const int m_size;
+		const char * const m_data;
+	};
+
+	//
+	// Pillow::Token. A char array literal with the user-given assertion that it only contains lowercase data.
+	//
+	class LowerCaseToken
+	{
+	public:
+		inline int size() const { return m_size; }
+		inline const char* data() const { return m_data; }
+		inline char at(int index) const { return m_data[index]; }
+		template <int N> inline LowerCaseToken(const char (&str)[N]) : m_size(N - 1), m_data(str) {}
+	private:
+		const int m_size;
+		const char * const m_data;
+	};
+
+
+	//
 	// Pillow::ByteArrayHelpers
 	//
 	// This namespace contains functions that augment or replaces methods already
@@ -115,6 +146,30 @@ namespace Pillow
 			{
 				register char f = first[i], s = second[i];
 				bool good = (f == s) || ((f - s) == 32 && f >= 'a' && f <= 'z') || ((f - s) == -32 && f >= 'A' && f <= 'Z');
+				if (!good) return false;
+			}
+			return true;
+		}
+
+		inline bool asciiEqualsCaseInsensitive(const QByteArray& first, const Pillow::Token& second)
+		{
+			if (first.size() != second.size()) return false;
+			for (register int i = 0; i < first.size(); ++i)
+			{
+				register char f = first.at(i), s = second.at(i);
+				bool good = (f == s) || ((f - s) == 32 && f >= 'a' && f <= 'z') || ((f - s) == -32 && f >= 'A' && f <= 'Z');
+				if (!good) return false;
+			}
+			return true;
+		}
+
+		inline bool asciiEqualsCaseInsensitive(const QByteArray& first, const Pillow::LowerCaseToken& second)
+		{
+			if (first.size() != second.size()) return false;
+			for (register int i = 0; i < first.size(); ++i)
+			{
+				register char f = first.at(i), s = second.at(i);
+				bool good = (f == s) || ((f - s) == -32 && f >= 'A' && f <= 'Z');
 				if (!good) return false;
 			}
 			return true;
