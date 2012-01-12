@@ -1,6 +1,8 @@
 #include <QtTest/QTest>
 #include <QtCore/QObject>
 #include "ByteArrayHelpers.h"
+#include "HttpConnection.h"
+#include "private/ByteArray.h"
 
 class ByteArrayHelpersTest : public QObject
 {
@@ -128,14 +130,22 @@ private slots:
 
 	void test_asciiEqualsCaseInsensitive()
 	{
-		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("", ""));
-		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", "hello"));
-		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", "hElLo"));
-		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello123", "hElLo123"));
-		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("12345", "12345"));
-		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello123", "hElLo1234"));
-		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", "World"));
-		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", "hello\1"));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("", QByteArray("")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QByteArray("hello")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QByteArray("hElLo")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello123", QByteArray("hElLo123")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("12345", QByteArray("12345")));
+		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello123", QByteArray("hElLo1234")));
+		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QByteArray("World")));
+		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QByteArray("hello\1")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("", QLatin1Literal("")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QLatin1Literal("hello")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QLatin1Literal("hElLo")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello123", QLatin1Literal("hElLo123")));
+		QVERIFY(Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("12345", QLatin1Literal("12345")));
+		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello123", QLatin1Literal("hElLo1234")));
+		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QLatin1Literal("World")));
+		QVERIFY(!Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive("hello", QLatin1Literal("hello\1")));
 	}
 
 	void test_unhex()
@@ -159,6 +169,194 @@ private slots:
 		QCOMPARE(Pillow::ByteArrayHelpers::percentDecode("hello%20%20world100%25"), QString("hello  world100%"));
 		QCOMPARE(Pillow::ByteArrayHelpers::percentDecode("hello%20%20world%2f%2F!"), QString("hello  world//!"));
 	}
+
+	void test_byteArray_equals_latin1Literal()
+	{
+		Pillow::ByteArray ba; ba = QByteArray("Some-string");
+		QVERIFY(ba == QLatin1Literal("Some-string"));
+		QVERIFY(!(ba == QLatin1Literal("Some-other-string")));
+		QVERIFY(ba != QLatin1Literal("Some-other-string"));
+		QVERIFY(!(ba != QLatin1Literal("Some-string")));
+	}
+
+	void test_byteArray_equals_pillowToken()
+	{
+		Pillow::ByteArray ba; ba = QByteArray("Some-string");
+		QVERIFY(ba == Pillow::Token("Some-string"));
+		QVERIFY(!(ba == Pillow::Token("Some-other-string")));
+		QVERIFY(ba != Pillow::Token("Some-other-string"));
+		QVERIFY(!(ba != Pillow::Token("Some-string")));
+	}
+
+	void test_byteArray_equals_pillowLowerCaseToken()
+	{
+		Pillow::ByteArray ba; ba = QByteArray("some-string");
+		QVERIFY(ba == Pillow::LowerCaseToken("some-string"));
+		QVERIFY(!(ba == Pillow::LowerCaseToken("some-other-string")));
+		QVERIFY(ba != Pillow::LowerCaseToken("some-other-string"));
+		QVERIFY(!(ba != Pillow::LowerCaseToken("some-string")));
+	}
+
+	void test_byteArray_append_Header()
+	{
+		Pillow::ByteArray ba;
+
+		// When there is not enough reserved space, append should work but the buffer might change.
+		QByteArray::DataPtr d = ba.data_ptr();
+		ba.append(Pillow::HttpHeader("Hello", "World"));
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("Hello: World\r\n"));
+		QVERIFY(ba.data_ptr() != d);
+
+		// When there is enough reserved space
+		ba.clear(); ba.reserve(128);
+		d = ba.data_ptr();
+		ba.append(Pillow::HttpHeader("Some", "Test"));
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("Some: Test\r\n"));
+		QVERIFY(ba.data_ptr() == d);
+	}
+
+	void test_byteArray_append_latin1Literal()
+	{
+		Pillow::ByteArray ba;
+
+		// When there is not enough reserved space, append should work but the buffer might change.
+		QByteArray::DataPtr d = ba.data_ptr();
+		ba.append(QLatin1Literal("12345678"));
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("12345678"));
+		QVERIFY(ba.data_ptr() != d);
+
+		// When there is enough reserved space
+		ba.clear(); ba.reserve(10); QVERIFY(ba.capacity() == 10);
+		d = ba.data_ptr();
+		ba.append(QLatin1Literal("abcdefgh"));
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("abcdefgh"));
+		QVERIFY(ba.data_ptr() == d);
+
+		// Trigger a realloc
+		ba.append(QLatin1Literal("12345678"));
+		QVERIFY(ba.capacity() > 10);
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("abcdefgh12345678"));
+	}
+
+	void test_byteArray_append_token()
+	{
+		Pillow::ByteArray ba;
+
+		// When there is not enough reserved space, append should work but the buffer might change.
+		QByteArray::DataPtr d = ba.data_ptr();
+		ba.append(Pillow::Token("12345678"));
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("12345678"));
+		QVERIFY(ba.data_ptr() != d);
+
+
+		// When there is enough reserved space
+		ba.clear(); ba.reserve(10); QVERIFY(ba.capacity() == 10);
+		d = ba.data_ptr();
+		ba.append(Pillow::Token("abcdefgh"));
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("abcdefgh"));
+		QVERIFY(ba.data_ptr() == d);
+
+		// Trigger a realloc
+		ba.append(Pillow::Token("12345678"));
+		QVERIFY(ba.capacity() > 10);
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("abcdefgh12345678"));
+	}
+
+	void test_byteArray_append_lowerCaseToken()
+	{
+		Pillow::ByteArray ba;
+
+		// When there is not enough reserved space, append should work but the buffer might change.
+		QByteArray::DataPtr d = ba.data_ptr();
+		ba.append(Pillow::LowerCaseToken("12345678"));
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("12345678"));
+		QVERIFY(ba.data_ptr() != d);
+
+		// When there is enough reserved space
+		ba.clear(); ba.reserve(10); QVERIFY(ba.capacity() == 10);
+		d = ba.data_ptr();
+		ba.append(Pillow::LowerCaseToken("abcdefgh"));
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("abcdefgh"));
+		QVERIFY(ba.data_ptr() == d);
+
+		// Trigger a realloc
+		ba.append(Pillow::LowerCaseToken("12345678"));
+		QVERIFY(ba.capacity() > 10);
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("abcdefgh12345678"));
+	}
+
+	void test_byteArray_append_constChar()
+	{
+		Pillow::ByteArray ba;
+
+		// When there is not enough reserved space, append should work but the buffer might change.
+		QByteArray::DataPtr d = ba.data_ptr();
+		ba.append("12345678");
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("12345678"));
+		QVERIFY(ba.data_ptr() != d);
+
+		// When there is enough reserved space
+		ba.clear(); ba.reserve(10); QVERIFY(ba.capacity() == 10);
+		d = ba.data_ptr();
+		ba.append("abcdefgh");
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("abcdefgh"));
+		QVERIFY(ba.data_ptr() == d);
+
+		// Trigger a realloc
+		ba.append("12345678");
+		QVERIFY(ba.capacity() > 10);
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("abcdefgh12345678"));
+	}
+
+	void test_byteArray_append_constCharPtr_len()
+	{
+		Pillow::ByteArray ba;
+
+		// When there is not enough reserved space, append should work but the buffer might change.
+		QByteArray::DataPtr d = ba.data_ptr();
+		ba.append("12345678", 4);
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("1234"));
+		QVERIFY(ba.data_ptr() != d);
+
+		// When there is enough reserved space
+		ba.clear(); ba.reserve(10); QVERIFY(ba.capacity() == 10);
+		d = ba.data_ptr();
+		ba.append("abcdefgh", 3);
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("abc"));
+		QVERIFY(ba.data_ptr() == d);
+
+		// Trigger a realloc
+		ba.append("12345678", 8);
+		QVERIFY(ba.capacity() > 10);
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("abc12345678"));
+	}
+
+	void test_byteArray_append_char()
+	{
+		Pillow::ByteArray ba;
+
+		// When there is not enough reserved space, append should work but the buffer might change.
+		QByteArray::DataPtr d = ba.data_ptr();
+		ba.append('a');
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("a"));
+		QVERIFY(ba.data_ptr() != d);
+
+		// When there is enough reserved space
+		ba.clear(); ba.reserve(2); QVERIFY(ba.capacity() == 2);
+		d = ba.data_ptr();
+		ba.append('1');
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("1"));
+		QVERIFY(ba.data_ptr() == d);
+		ba.append('2');
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("12"));
+		QVERIFY(ba.data_ptr() == d);
+
+		// Trigger a realloc
+		ba.append('3');
+		QVERIFY(ba.capacity() > 2);
+		QCOMPARE(static_cast<QByteArray&>(ba), QByteArray("123"));
+	}
+
 };
 
 int exec_ByteArrayHelpersTest()

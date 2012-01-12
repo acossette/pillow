@@ -1,101 +1,163 @@
 #include "HttpConnection.h"
 #include "HttpHelpers.h"
-#include "ByteArrayHelpers.h"
+#include "private/ByteArray.h"
+#include "parser/parser.h"
 #include <QtCore/QIODevice>
 #include <QtCore/QTimer>
 #include <QtCore/QUrl>
+#include <QtCore/QStringBuilder>
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QLocalSocket>
+#include <QtCore/QVarLengthArray>
 
 //
-// HttpConnection
+// Helpers
 //
 
-namespace Tokens
+namespace Pillow
 {
-	static const QByteArray crLfToken("\r\n");
-	static const QByteArray connectionToken("connection");
-	static const QByteArray contentLengthToken("content-length");
-	static const QByteArray contentLengthOutToken("Content-Length: ");
-	static const QByteArray contentTypeToken("content-type");
-	static const QByteArray expectToken("expect");
-	static const QByteArray hundredDashContinueToken("100-continue");
-	static const QByteArray keepAliveToken("keep-alive");
-	static const QByteArray colonSpaceToken(": ");
-	static const QByteArray closeToken("close");
-	static const QByteArray contentTypeTextPlainTokenHeaderToken("Content-Type: text/plain\r\n");
-	static const QByteArray connectionKeepAliveHeaderToken("Connection: keep-alive\r\n");
-	static const QByteArray connectionCloseHeaderToken("Connection: close\r\n");
-	static const QByteArray transferEncodingToken("transfer-encoding");
-	static const QByteArray chunkedToken("chunked");
-	static const QByteArray httpSlash11Token("HTTP/1.1");
-	static const QByteArray headToken("HEAD");
-}
+	namespace Tokens
+	{
+		#define DEFINE_TOKEN(tokenName, tokenValue) static const Pillow::Token tokenName##Token(tokenValue)
+		#define DEFINE_LOWERCASE_TOKEN(tokenName, tokenValue)  static const Pillow::LowerCaseToken tokenName##Token(tokenValue)
+		DEFINE_TOKEN(crLf, "\r\n");
+		DEFINE_TOKEN(contentLengthOut, "Content-Length: ");
+		DEFINE_TOKEN(contentTypeTextPlainTokenHeader, "Content-Type: text/plain\r\n");
+		DEFINE_TOKEN(connectionKeepAliveHeader, "Connection: keep-alive\r\n");
+		DEFINE_TOKEN(connectionCloseHeader, "Connection: close\r\n");
+		DEFINE_TOKEN(httpSlash11, "HTTP/1.1");
+		DEFINE_TOKEN(head, "HEAD");
+		DEFINE_TOKEN(colonSpace, ": ");
+		DEFINE_LOWERCASE_TOKEN(connection, "connection");
+		DEFINE_LOWERCASE_TOKEN(contentLength, "content-length");
+		DEFINE_LOWERCASE_TOKEN(contentType, "content-type");
+		DEFINE_LOWERCASE_TOKEN(expect, "expect");
+		DEFINE_LOWERCASE_TOKEN(hundredDashContinue, "100-continue");
+		DEFINE_LOWERCASE_TOKEN(keepAlive, "keep-alive");
+		DEFINE_LOWERCASE_TOKEN(close, "close");
+		DEFINE_LOWERCASE_TOKEN(transferEncoding, "transfer-encoding");
+		DEFINE_LOWERCASE_TOKEN(chunked, "chunked");
+		#undef DEFINE_TOKEN
+		#undef DEFINE_LOWERCASE_TOKEN
+	}
 
-using namespace Pillow;
+	struct HttpHeaderRef
+	{
+		int fieldPos, fieldLength, valuePos, valueLength;
+		inline HttpHeaderRef(int fieldPos, int fieldLength, int valuePos, int valueLength)
+			: fieldPos(fieldPos), fieldLength(fieldLength), valuePos(valuePos), valueLength(valueLength) {}
+		inline HttpHeaderRef() {}
+	};
+}
+Q_DECLARE_TYPEINFO(Pillow::HttpHeaderRef, Q_PRIMITIVE_TYPE);
+
+using namespace Pillow::Tokens;
 using namespace Pillow::ByteArrayHelpers;
-using namespace Tokens;
 
-inline void appendHeader(QByteArray& byteArray, const HttpHeader& header)
+//
+// HttpConnectionPrivate
+//
+
+#define PERCENT_DECODABLE(fieldName) \
+	Pillow::ByteArray _##fieldName; \
+	mutable QString _##fieldName##Decoded; \
+	inline const QString& fieldName##Decoded() const { if (_##fieldName##Decoded.isEmpty() && !_##fieldName.isEmpty()) _##fieldName##Decoded = Pillow::ByteArrayHelpers::percentDecode(_##fieldName); return _##fieldName##Decoded; }
+#define FORWARD_PERCENT_DECODABLE(fieldName) \
+	const QByteArray& Pillow::HttpConnection::fieldName() const { return d_ptr->_##fieldName; } \
+	const QString& Pillow::HttpConnection::fieldName##Decoded() const { return d_ptr->fieldName##Decoded(); }
+
+namespace Pillow
 {
-	byteArray.append(header.first).append(colonSpaceToken).append(header.second).append(crLfToken);
+	class HttpConnectionPrivate
+	{
+		Q_DECLARE_PUBLIC(HttpConnection)
+		HttpConnection* q_ptr;
+
+	public:
+		HttpConnectionPrivate(HttpConnection* connection);
+
+	public:
+		Pillow::HttpConnection::State _state;
+		QIODevice* _inputDevice,* _outputDevice;
+		http_parser _parser;
+
+		// Request fields.
+		ByteArray _requestBuffer;
+		ByteArray _requestMethod, _requestHttpVersion, _requestContent;
+		PERCENT_DECODABLE(requestUri)
+		PERCENT_DECODABLE(requestFragment)
+		PERCENT_DECODABLE(requestPath)
+		PERCENT_DECODABLE(requestQueryString)
+		QVarLengthArray<Pillow::HttpHeaderRef, 32> _requestHeadersRef;
+		Pillow::HttpHeaderCollection _requestHeaders;
+		int _requestContentLength; int _requestContentLengthHeaderIndex;
+		bool _requestHttp11;
+		Pillow::HttpParamCollection _requestParams;
+
+		// Response fields.
+		Pillow::ByteArray _responseHeadersBuffer;
+		int _responseStatusCode;
+		qint64 _responseContentLength, _responseContentBytesSent;
+		bool _responseConnectionKeepAlive;
+		bool _responseChunkedTransferEncoding;
+		const QByteArray nullByteArray;
+
+	public:
+		void initialize();
+		void processInput();
+		void setupRequestHeaders();
+		void transitionToReceivingHeaders();
+		void transitionToReceivingContent();
+		void transitionToSendingHeaders();
+		void transitionToSendingContent();
+		void transitionToCompleted();
+		void flush();
+		void drain();
+		void transitionToFlushing();
+		void transitionToClosed();
+		void writeRequestErrorResponse(int statusCode = 400); // Used internally when an error happens while receiving a request. It sends an error response to the client and closes the connection right away.
+
+		static void parser_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen);
+
+	public: // From public interface.
+		void writeResponse(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QByteArray& content = QByteArray());
+		void writeResponseString(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QString& content = QString());
+		void writeHeaders(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection());
+		void writeContent(const QByteArray& content);
+		void endContent();
+		void close();
+
+		QByteArray requestHeaderValue(const QByteArray& field);
+		template <typename Literal> const QByteArray& requestHeaderValue(const Literal& field);
+	};
 }
 
-HttpConnection::HttpConnection(QObject* parent /*= 0*/)
-	: QObject(parent), _state(Uninitialized), _inputDevice(NULL), _outputDevice(NULL)
+Pillow::HttpConnectionPrivate::HttpConnectionPrivate(HttpConnection *connection)
+	: q_ptr(connection), _state(Pillow::HttpConnection::Uninitialized), _inputDevice(0), _outputDevice(0)
 {
 }
 
-HttpConnection::HttpConnection(QIODevice* inputOutputDevice, QObject* parent /* = 0 */)
-	: QObject(parent), _state(Uninitialized), _inputDevice(NULL), _outputDevice(NULL)
-{
-	initialize(inputOutputDevice, inputOutputDevice);
-}
-
-HttpConnection::HttpConnection(QIODevice* inputDevice, QIODevice* outputDevice, QObject* parent /*= 0*/)
-	: QObject(parent), _state(Uninitialized), _inputDevice(NULL), _outputDevice(NULL)
-{
-	initialize(inputDevice, outputDevice);
-}
-
-HttpConnection::~HttpConnection()
-{}
-
-void HttpConnection::initialize(QIODevice* inputDevice, QIODevice* outputDevice)
+inline void Pillow::HttpConnectionPrivate::initialize()
 {
 	memset(&_parser, 0, sizeof(http_parser));
 	_parser.data = this;
-	_parser.http_field = &HttpConnection::parser_http_field;
+	_parser.http_field = &HttpConnectionPrivate::parser_http_field;
 
 	// Clear any leftover data from a previous potentially failed request (that would not have gone though "transitionToCompleted")
-	if (_requestBuffer.capacity() <= MaximumRequestHeaderLength) _requestBuffer.data_ptr()->size = 0;
+	if (_requestBuffer.capacity() <= Pillow::HttpConnection::MaximumRequestHeaderLength) _requestBuffer.data_ptr()->size = 0;
 	else _requestBuffer.clear();
 	_requestHeadersRef.clear();
 	if (_requestParams.capacity() > 16) _requestParams.clear();
 	else while(!_requestParams.isEmpty()) _requestParams.pop_back();
 
-	if (inputDevice != _inputDevice)
-	{
-		_inputDevice = inputDevice;
-
-		connect(_inputDevice, SIGNAL(readyRead()), this, SLOT(processInput()));
-
-		if (qobject_cast<QAbstractSocket*>(_inputDevice) || qobject_cast<QLocalSocket*>(_inputDevice))
-			connect(_inputDevice, SIGNAL(disconnected()), this, SLOT(close()));
-		else
-			connect(_inputDevice, SIGNAL(aboutToClose()), this, SLOT(close()));
-	}
-
-	_outputDevice = outputDevice;
-
 	// Enter the initial working state and schedule processing of any data already available on the device.
 	transitionToReceivingHeaders();
-	if (_inputDevice->bytesAvailable() > 0) QTimer::singleShot(0, this, SLOT(processInput()));
+	if (_inputDevice->bytesAvailable() > 0) QTimer::singleShot(0, q_ptr, SLOT(processInput()));
 }
 
-void HttpConnection::processInput()
+inline void Pillow::HttpConnectionPrivate::processInput()
 {
-	if (_state != ReceivingHeaders && _state != ReceivingContent) return;
+	if (_state != Pillow::HttpConnection::ReceivingHeaders && _state != Pillow::HttpConnection::ReceivingContent) return;
 
 	qint64 bytesAvailable = _inputDevice->bytesAvailable();
 	if (bytesAvailable > 0)
@@ -107,27 +169,27 @@ void HttpConnection::processInput()
 		_requestBuffer.data_ptr()->data[_requestBuffer.data_ptr()->size] = 0;
 	}
 
-	if (_state == ReceivingHeaders)
+	if (_state == Pillow::HttpConnection::ReceivingHeaders)
 	{
 		if (!_requestBuffer.isEmpty())
 			thin_http_parser_execute(&_parser, _requestBuffer.constData(), _requestBuffer.size(), _parser.nread);
 
-		if (_parser.nread > MaximumRequestHeaderLength || thin_http_parser_has_error(&_parser))
+		if (_parser.nread > Pillow::HttpConnection::MaximumRequestHeaderLength || thin_http_parser_has_error(&_parser))
 			return writeRequestErrorResponse(400); // Bad client Request!
 		else if (thin_http_parser_is_finished(&_parser))
 			transitionToReceivingContent();
 	}
-	else if (_state == ReceivingContent)
+	else if (_state == Pillow::HttpConnection::ReceivingContent)
 	{
 		if (_requestBuffer.size() - int(_parser.body_start) >= _requestContentLength)
 			transitionToSendingHeaders(); // Finished receiving the content.
 	}
 }
 
-void HttpConnection::transitionToReceivingHeaders()
+inline void Pillow::HttpConnectionPrivate::transitionToReceivingHeaders()
 {
-	if (_state == ReceivingHeaders) return;
-	_state = ReceivingHeaders;
+	if (_state == Pillow::HttpConnection::ReceivingHeaders) return;
+	_state = Pillow::HttpConnection::ReceivingHeaders;
 
 	thin_http_parser_init(&_parser);
 	_requestContentLength = 0;
@@ -135,7 +197,7 @@ void HttpConnection::transitionToReceivingHeaders()
 	_requestHttp11 = false;
 }
 
-void Pillow::HttpConnection::setupRequestHeaders()
+inline void Pillow::HttpConnectionPrivate::setupRequestHeaders()
 {
 	char* data = _requestBuffer.data();
 
@@ -151,10 +213,10 @@ void Pillow::HttpConnection::setupRequestHeaders()
 	}
 }
 
-void HttpConnection::transitionToReceivingContent()
+inline void Pillow::HttpConnectionPrivate::transitionToReceivingContent()
 {
-	if (_state == ReceivingContent) return;
-	_state = ReceivingContent;
+	if (_state == Pillow::HttpConnection::ReceivingContent) return;
+	_state = Pillow::HttpConnection::ReceivingContent;
 
 	setupRequestHeaders();
 
@@ -165,12 +227,12 @@ void HttpConnection::transitionToReceivingContent()
 	// Exit early if the client sent an incorrect or unacceptable content-length.
 	if (_requestContentLength < 0)
 		return writeRequestErrorResponse(400); // Invalid request: negative content length does not make sense.
-	else if (_requestContentLength > MaximumRequestContentLength || !contentLengthParseOk)
+	else if (_requestContentLength > Pillow::HttpConnection::MaximumRequestContentLength || !contentLengthParseOk)
 		return writeRequestErrorResponse(413); // Request entity too large.
 
 	if (_requestContentLength > 0)
 	{
-		if (requestHeaderValue(expectToken) == hundredDashContinueToken)
+		if (asciiEqualsCaseInsensitive(requestHeaderValue(expectToken), hundredDashContinueToken))
 			_outputDevice->write("HTTP/1.1 100 Continue\r\n\r\n");// The client politely wanted to know if it could proceed with his payload. All clear!
 
 		// Resize the request buffer right away to avoid too many reallocs later.
@@ -190,10 +252,10 @@ void HttpConnection::transitionToReceivingContent()
 	}
 }
 
-void HttpConnection::transitionToSendingHeaders()
+inline void Pillow::HttpConnectionPrivate::transitionToSendingHeaders()
 {
-	if (_state == SendingHeaders) return;
-	_state = SendingHeaders;
+	if (_state == Pillow::HttpConnection::SendingHeaders) return;
+	_state = Pillow::HttpConnection::SendingHeaders;
 
 	// Prepare and null terminate the request fields.
 
@@ -233,13 +295,13 @@ void HttpConnection::transitionToSendingHeaders()
 	_responseContentBytesSent = 0; // No content bytes transfered yet.
 	_responseConnectionKeepAlive = true;
 	_responseChunkedTransferEncoding = false;
-	emit requestReady(this);
+	emit q_ptr->requestReady(q_ptr);
 }
 
-void HttpConnection::transitionToSendingContent()
+inline void Pillow::HttpConnectionPrivate::transitionToSendingContent()
 {
-	if (_state == SendingContent) return;
-	_state = SendingContent;
+	if (_state == Pillow::HttpConnection::SendingContent) return;
+	_state = Pillow::HttpConnection::SendingContent;
 
 	if (_responseHeadersBuffer.capacity() > 4096)
 		_responseHeadersBuffer.clear();
@@ -256,21 +318,21 @@ void HttpConnection::transitionToSendingContent()
 	}
 }
 
-void HttpConnection::transitionToCompleted()
+inline void Pillow::HttpConnectionPrivate::transitionToCompleted()
 {
-	if (_state == Completed) return;
-	if (_state == Closed)
+	if (_state == Pillow::HttpConnection::Completed) return;
+	if (_state == Pillow::HttpConnection::Closed)
 	{
 		qWarning() << "HttpConnection::transitionToCompleted called while the request is in the closed state.";
 	}
-	_state = Completed;
-	emit requestCompleted(this);
+	_state = Pillow::HttpConnection::Completed;
+	emit q_ptr->requestCompleted(q_ptr);
 
 	// Preserve any existing data in the request buffer that did not belong to the completed request.
 	// Reuse the already allocated buffer if it is not too large.
 	int remainingBytes = _requestBuffer.size() - int(_parser.body_start) - _requestContentLength;
 	if (remainingBytes > 0) _requestBuffer = _requestBuffer.right(remainingBytes);
-	else if (_requestBuffer.capacity() <= MaximumRequestHeaderLength) _requestBuffer.data_ptr()->size = 0;
+	else if (_requestBuffer.capacity() <= Pillow::HttpConnection::MaximumRequestHeaderLength) _requestBuffer.data_ptr()->size = 0;
 	else _requestBuffer.clear();
 
 	_requestHeadersRef.clear();
@@ -292,35 +354,9 @@ void HttpConnection::transitionToCompleted()
 	}
 }
 
-void HttpConnection::transitionToFlushing()
+inline void Pillow::HttpConnectionPrivate::flush()
 {
-	// This is a transient state that is meant to fully drain the write buffers and
-	// wait for all the data to make it to the kernel before closing the connection.
-	if (_state == Flushing) return;
-	_state = Flushing;
-
-	drain(); // Will transition to closed also if there was no data at all to flush.
-	if (_state == Flushing) // A first flush was not enough. Schedule more flushes.
-		connect(_outputDevice, SIGNAL(bytesWritten(qint64)), this, SLOT(drain()));
-}
-
-void HttpConnection::transitionToClosed()
-{
-	if (_state == Closed) return;
-	_state = Closed;
-
-	if (_inputDevice && _inputDevice->isOpen()) _inputDevice->close();
-	if (_outputDevice && (_inputDevice != _outputDevice) && _outputDevice->isOpen()) _outputDevice->close();
-	emit closed(this);
-
-	disconnect(_inputDevice, NULL, this, NULL);
-	_inputDevice = NULL;
-	_outputDevice = NULL;
-}
-
-void HttpConnection::flush()
-{
-	if (_outputDevice->bytesToWrite() > 0)
+	if (_outputDevice != 0 && _outputDevice->bytesToWrite() > 0)
 	{
 		if (qobject_cast<QTcpSocket*>(_outputDevice))
 			static_cast<QTcpSocket*>(_outputDevice)->flush();
@@ -329,16 +365,43 @@ void HttpConnection::flush()
 	}
 }
 
-void HttpConnection::drain()
+inline void Pillow::HttpConnectionPrivate::drain()
 {
-	if (_state != Flushing) return;
+	if (_state != Pillow::HttpConnection::Flushing) return;
 	flush();
-	if (_outputDevice->bytesToWrite() == 0) transitionToClosed();
+	if (_outputDevice != 0 && _outputDevice->bytesToWrite() == 0) transitionToClosed();
 }
 
-void HttpConnection::writeRequestErrorResponse(int statusCode)
+inline void Pillow::HttpConnectionPrivate::transitionToFlushing()
 {
-	if (_state == Closed)
+	// This is a transient state that is meant to fully drain the write buffers and
+	// wait for all the data to make it to the kernel before closing the connection.
+	if (_state == Pillow::HttpConnection::Flushing) return;
+	_state = Pillow::HttpConnection::Flushing;
+
+	drain(); // Will transition to closed also if there was no data at all to flush.
+	if (_state == Pillow::HttpConnection::Flushing) // A first flush was not enough. Schedule more flushes.
+		QObject::connect(_outputDevice, SIGNAL(bytesWritten(qint64)), q_ptr, SLOT(drain()));
+}
+
+inline void Pillow::HttpConnectionPrivate::transitionToClosed()
+{
+	if (_state == Pillow::HttpConnection::Closed) return;
+	_state = Pillow::HttpConnection::Closed;
+
+	if (_inputDevice && _inputDevice->isOpen()) _inputDevice->close();
+	if (_outputDevice && (_inputDevice != _outputDevice) && _outputDevice->isOpen()) _outputDevice->close();
+	emit q_ptr->closed(q_ptr);
+
+	QObject::disconnect(_inputDevice, 0, q_ptr, 0);
+	if (_inputDevice != _outputDevice) QObject::disconnect(_outputDevice, 0, q_ptr, 0);
+	_inputDevice = 0;
+	_outputDevice = 0;
+}
+
+void Pillow::HttpConnectionPrivate::writeRequestErrorResponse(int statusCode)
+{
+	if (_state == Pillow::HttpConnection::Closed)
 	{
 		qWarning() << "HttpConnection::writeRequestErrorResponse called while state is already 'Closed'";
 		return;
@@ -346,17 +409,27 @@ void HttpConnection::writeRequestErrorResponse(int statusCode)
 
 	qDebug() << "HttpConnection: request error. Sending http status" << statusCode << "and closing connection.";
 
-	QByteArray _responseHeadersBuffer; _responseHeadersBuffer.reserve(1024);
-	_responseHeadersBuffer.append("HTTP/1.0 ").append(HttpProtocol::StatusCodes::getStatusCodeAndMessage(statusCode)).append(crLfToken);
+	ByteArray _responseHeadersBuffer; _responseHeadersBuffer.reserve(1024);
+	const char* status = HttpProtocol::StatusCodes::getStatusCodeAndMessage(statusCode);
+	_responseHeadersBuffer.append("HTTP/1.0 ").append(status, strlen(status)).append(crLfToken);
 	_responseHeadersBuffer.append("Connection: close").append(crLfToken);
 	_responseHeadersBuffer.append(crLfToken); // End of headers.
 	_outputDevice->write(_responseHeadersBuffer);
 	transitionToFlushing();
 }
 
-void HttpConnection::writeResponse(int statusCode, const HttpHeaderCollection& headers, const QByteArray& content)
+inline void Pillow::HttpConnectionPrivate::parser_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {
-	if (_state != SendingHeaders)
+	Pillow::HttpConnectionPrivate* request = reinterpret_cast<Pillow::HttpConnectionPrivate*>(data);
+	if (flen == 14 && asciiEqualsCaseInsensitive(field, 14, "content-length", 14))
+		request->_requestContentLengthHeaderIndex = request->_requestHeadersRef.size();
+	const char* begin = request->_requestBuffer.constData();
+	request->_requestHeadersRef.append(HttpHeaderRef(field - begin, flen, value - begin, vlen));
+}
+
+inline void Pillow::HttpConnectionPrivate::writeResponse(int statusCode, const HttpHeaderCollection &headers, const QByteArray &content)
+{
+	if (_state != Pillow::HttpConnection::SendingHeaders)
 	{
 		qWarning() << "HttpConnection::writeResponse called while state is not 'SendingHeaders', not proceeding with sending headers.";
 		return;
@@ -368,14 +441,9 @@ void HttpConnection::writeResponse(int statusCode, const HttpHeaderCollection& h
 	if (!content.isEmpty() && _requestMethod != headToken) writeContent(content);
 }
 
-void HttpConnection::writeResponseString(int statusCode, const HttpHeaderCollection& headers, const QString& content)
+inline void Pillow::HttpConnectionPrivate::writeHeaders(int statusCode, const HttpHeaderCollection &headers)
 {
-	writeResponse(statusCode, headers, content.toUtf8());
-}
-
-void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& headers)
-{
-	if (_state != SendingHeaders)
+	if (_state != Pillow::HttpConnection::SendingHeaders)
 	{
 		qWarning() << "HttpConnection::writeHeaders called while state is not 'SendingHeaders', not proceeding with sending headers.";
 		return;
@@ -393,7 +461,7 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 	if (_responseHeadersBuffer.capacity() == 0)
 		_responseHeadersBuffer.reserve(1024);
 
-	_responseHeadersBuffer.append(_requestHttpVersion).append(' ').append(statusCodeAndMessage).append(crLfToken);
+	_responseHeadersBuffer.append(_requestHttpVersion).append(' ').append(statusCodeAndMessage, strlen(statusCodeAndMessage)).append(crLfToken);
 
 	const HttpHeader* contentTypeHeader = 0;
 	const HttpHeader* connectionHeader = 0;
@@ -419,7 +487,7 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 		else
 		{
 			// Not a special header for us. Write it out to the buffer.
-			appendHeader(_responseHeadersBuffer, *header);
+			_responseHeadersBuffer.append(*header);
 		}
 	}
 
@@ -474,17 +542,17 @@ void HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& he
 
 	// Automatically add essential headers.
 	if (_responseContentLength != -1) { _responseHeadersBuffer.append(contentLengthOutToken); appendNumber<int, 10>(_responseHeadersBuffer, _responseContentLength); _responseHeadersBuffer.append(crLfToken); }
-	if (contentTypeHeader) { appendHeader(_responseHeadersBuffer, *contentTypeHeader); } else if (_responseContentLength > 0) { _responseHeadersBuffer.append(contentTypeTextPlainTokenHeaderToken); }
+	if (contentTypeHeader) { _responseHeadersBuffer.append(*contentTypeHeader); } else if (_responseContentLength > 0) { _responseHeadersBuffer.append(contentTypeTextPlainTokenHeaderToken); }
 	if (!_requestHttp11 || !_responseConnectionKeepAlive) _responseHeadersBuffer.append(_responseConnectionKeepAlive ? connectionKeepAliveHeaderToken : connectionCloseHeaderToken);
-	if (transferEncodingHeader) { appendHeader(_responseHeadersBuffer, *transferEncodingHeader); }
+	if (transferEncodingHeader) { _responseHeadersBuffer.append(*transferEncodingHeader); }
 	_responseHeadersBuffer.append(crLfToken); // End of headers.
 	_outputDevice->write(_responseHeadersBuffer);
 	transitionToSendingContent();
 }
 
-void HttpConnection::writeContent(const QByteArray& content)
+inline void Pillow::HttpConnectionPrivate::writeContent(const QByteArray &content)
 {
-	if (_state != SendingContent)
+	if (_state != Pillow::HttpConnection::SendingContent)
 	{
 		qWarning() << "HttpConnection::writeContent called while state is not 'SendingContent'. Not proceeding with sending content of size" << content.size() << "bytes.";
 		return;
@@ -500,27 +568,27 @@ void HttpConnection::writeContent(const QByteArray& content)
 		return;
 	}
 
-	if (content.size() > 0 && _requestMethod != "HEAD")
+	if (content.size() > 0 && _requestMethod != headToken)
 	{
 		_responseContentBytesSent += content.size();
 		if (_responseChunkedTransferEncoding)
 		{
-			QByteArray buffer; appendNumber<int, 16>(buffer, content.size()); buffer.append(crLfToken);
+			QByteArray buffer; appendNumber<int, 16>(buffer, content.size()); buffer.append("\r\n", 2);
 			_outputDevice->write(buffer);
 		}
 		_outputDevice->write(content);
 
 		if (_responseChunkedTransferEncoding)
-			_outputDevice->write(crLfToken);
+			_outputDevice->write("\r\n", 2);
 
 		if (_responseContentBytesSent == _responseContentLength)
 			transitionToCompleted();
 	}
 }
 
-void HttpConnection::endContent()
+inline void Pillow::HttpConnectionPrivate::endContent()
 {
-	if (_state != SendingContent)
+	if (_state != Pillow::HttpConnection::SendingContent)
 	{
 		qWarning() << "HttpConnection::endContent called while state is not 'SendingContent'. Not proceeding.";
 		return;
@@ -540,13 +608,12 @@ void HttpConnection::endContent()
 	transitionToCompleted();
 }
 
-void Pillow::HttpConnection::close()
+inline void Pillow::HttpConnectionPrivate::close()
 {
-	if (_state != Closed)
-		transitionToClosed();
+	transitionToClosed();
 }
 
-QByteArray HttpConnection::requestHeaderValue(const QByteArray &field)
+inline QByteArray Pillow::HttpConnectionPrivate::requestHeaderValue(const QByteArray &field)
 {
 	for (const HttpHeader* header = _requestHeaders.constBegin(), *headerE = _requestHeaders.constEnd(); header != headerE; ++header)
 	{
@@ -555,13 +622,134 @@ QByteArray HttpConnection::requestHeaderValue(const QByteArray &field)
 	}
 	return QByteArray();
 }
+
+template <typename Literal>
+inline const QByteArray& Pillow::HttpConnectionPrivate::requestHeaderValue(const Literal &field)
+{
+	const char* fieldData = field.data(); int fieldLength = field.size();
+	for (const HttpHeader* header = _requestHeaders.constBegin(), *headerE = _requestHeaders.constEnd(); header != headerE; ++header)
+	{
+		if (asciiEqualsCaseInsensitive(header->first.constData(), header->first.size(), fieldData, fieldLength))
+			return header->second;
+	}
+	return nullByteArray;
+}
+
+
+//
+// HttpConnection
+//
+
+Pillow::HttpConnection::HttpConnection(QObject* parent /*= 0*/)
+	: QObject(parent), d_ptr(new Pillow::HttpConnectionPrivate(this))
+{
+}
+
+Pillow::HttpConnection::~HttpConnection()
+{
+	delete d_ptr;
+}
+
+void Pillow::HttpConnection::initialize(QIODevice* inputDevice, QIODevice* outputDevice)
+{
+	if (inputDevice != d_ptr->_inputDevice)
+	{
+		d_ptr->_inputDevice = inputDevice;
+
+		connect(d_ptr->_inputDevice, SIGNAL(readyRead()), this, SLOT(processInput()));
+
+		if (qobject_cast<QAbstractSocket*>(d_ptr->_inputDevice) || qobject_cast<QLocalSocket*>(d_ptr->_inputDevice))
+			connect(d_ptr->_inputDevice, SIGNAL(disconnected()), this, SLOT(close()));
+		else
+			connect(d_ptr->_inputDevice, SIGNAL(aboutToClose()), this, SLOT(close()));
+	}
+
+	d_ptr->_outputDevice = outputDevice;
+	d_ptr->initialize();
+}
+
+Pillow::HttpConnection::State Pillow::HttpConnection::state() const
+{
+	return d_ptr->_state;
+}
+
+QIODevice *Pillow::HttpConnection::inputDevice() const
+{
+	return d_ptr->_inputDevice;
+}
+
+QIODevice *Pillow::HttpConnection::outputDevice() const
+{
+	return d_ptr->_outputDevice;
+}
+
+void Pillow::HttpConnection::processInput()
+{
+	d_ptr->processInput();
+}
+
+void Pillow::HttpConnection::flush()
+{
+	d_ptr->flush();
+}
+
+void Pillow::HttpConnection::drain()
+{
+	d_ptr->drain();
+}
+
+void Pillow::HttpConnection::writeResponse(int statusCode, const HttpHeaderCollection& headers, const QByteArray& content)
+{
+	d_ptr->writeResponse(statusCode, headers, content);
+}
+
+void Pillow::HttpConnection::writeResponseString(int statusCode, const HttpHeaderCollection& headers, const QString& content)
+{
+	d_ptr->	writeResponse(statusCode, headers, content.toUtf8());
+}
+
+void Pillow::HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& headers)
+{
+	d_ptr->writeHeaders(statusCode, headers);
+}
+
+void Pillow::HttpConnection::writeContent(const QByteArray& content)
+{
+	d_ptr->writeContent(content);
+}
+
+void Pillow::HttpConnection::endContent()
+{
+	d_ptr->endContent();
+}
+
+void Pillow::HttpConnection::close()
+{
+	d_ptr->close();
+}
+
+int Pillow::HttpConnection::responseStatusCode() const
+{
+	return d_ptr->_responseStatusCode;
+}
+
+qint64 Pillow::HttpConnection::responseContentLength() const
+{
+	return d_ptr->_responseContentLength;
+}
+
+QByteArray Pillow::HttpConnection::requestHeaderValue(const QByteArray &field)
+{
+	return d_ptr->requestHeaderValue(field);
+}
+
 const Pillow::HttpParamCollection& Pillow::HttpConnection::requestParams()
 {
-	if (_requestParams.isEmpty() && !_requestQueryString.isEmpty())
+	if (d_ptr->_requestParams.isEmpty() && !d_ptr->_requestQueryString.isEmpty())
 	{
 		// The params have not yet been initialized. Parse them.
 		const char paramDelimiter = '&', keyValueDelimiter = '=';
-		for (const char* c = _requestQueryString.constBegin(), *cE = _requestQueryString.constEnd(); c < cE;)
+		for (const char* c = d_ptr->_requestQueryString.constBegin(), *cE = d_ptr->_requestQueryString.constEnd(); c < cE;)
 		{
 			const char *paramEnd, *keyEnd;
 			for (paramEnd = c; paramEnd < cE; ++paramEnd) if (*paramEnd == paramDelimiter) break; // Find the param delimiter, or the end of string.
@@ -570,25 +758,25 @@ const Pillow::HttpParamCollection& Pillow::HttpConnection::requestParams()
 			if (keyEnd < paramEnd)
 			{
 				// Key-value pair.
-				_requestParams << HttpParam(percentDecode(c, keyEnd - c), percentDecode(keyEnd + 1, paramEnd - (keyEnd + 1)));
+				d_ptr->_requestParams << HttpParam(percentDecode(c, keyEnd - c), percentDecode(keyEnd + 1, paramEnd - (keyEnd + 1)));
 			}
 			else
 			{
 				// Key without value.
-				_requestParams << HttpParam(percentDecode(c, paramEnd - c), QString());
+				d_ptr->_requestParams << HttpParam(percentDecode(c, paramEnd - c), QString());
 			}
 			c = paramEnd + 1;
 		}
 	}
-	return _requestParams;
+	return d_ptr->_requestParams;
 }
 
 QString Pillow::HttpConnection::requestParamValue(const QString &name)
 {
 	requestParams();
-	for (int i = 0, iE = _requestParams.size(); i < iE; ++i)
+	for (int i = 0, iE = d_ptr->_requestParams.size(); i < iE; ++i)
 	{
-		const HttpParam& param = _requestParams.at(i);
+		const HttpParam& param = d_ptr->_requestParams.at(i);
 		if (param.first.compare(name, Qt::CaseInsensitive) == 0)
 			return param.second;
 	}
@@ -598,56 +786,44 @@ QString Pillow::HttpConnection::requestParamValue(const QString &name)
 void Pillow::HttpConnection::setRequestParam(const QString &name, const QString &value)
 {
 	requestParams();
-	for (int i = 0, iE = _requestParams.size(); i < iE; ++i)
+	for (int i = 0, iE = d_ptr->_requestParams.size(); i < iE; ++i)
 	{
-		const HttpParam& param = _requestParams.at(i);
+		const HttpParam& param = d_ptr->_requestParams.at(i);
 		if (param.first.compare(name, Qt::CaseInsensitive) == 0)
 		{
-			_requestParams[i] = HttpParam(name, value);
+			d_ptr->_requestParams[i] = HttpParam(name, value);
 			return;
 		}
 	}
-	_requestParams << HttpParam(name, value);
+	d_ptr->_requestParams << HttpParam(name, value);
 }
 
-QHostAddress HttpConnection::remoteAddress() const
+QHostAddress Pillow::HttpConnection::remoteAddress() const
 {
-	return qobject_cast<QAbstractSocket*>(_inputDevice) ? static_cast<QAbstractSocket*>(_inputDevice)->peerAddress() : QHostAddress();
+	return qobject_cast<QAbstractSocket*>(d_ptr->_inputDevice) ? static_cast<QAbstractSocket*>(d_ptr->_inputDevice)->peerAddress() : QHostAddress();
 }
 
-void HttpConnection::parser_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen)
+const QByteArray &Pillow::HttpConnection::requestMethod() const
 {
-	HttpConnection* request = reinterpret_cast<HttpConnection*>(data);
-	if (flen == 14 && asciiEqualsCaseInsensitive(field, 14, "content-length", 14))
-		request->_requestContentLengthHeaderIndex = request->_requestHeadersRef.size();
-	const char* begin = request->_requestBuffer.constData();
-	request->_requestHeadersRef.append(HttpHeaderRef(field - begin, flen, value - begin, vlen));
+	return d_ptr->_requestMethod;
 }
 
-const QString & Pillow::HttpConnection::requestUriDecoded() const
+FORWARD_PERCENT_DECODABLE(requestUri)
+FORWARD_PERCENT_DECODABLE(requestFragment)
+FORWARD_PERCENT_DECODABLE(requestPath)
+FORWARD_PERCENT_DECODABLE(requestQueryString)
+
+const QByteArray &Pillow::HttpConnection::requestHttpVersion() const
 {
-	if (_requestUriDecoded.isEmpty() && !_requestUri.isEmpty())
-		_requestUriDecoded = percentDecode(_requestUri);
-	return _requestUriDecoded;
+	return d_ptr->_requestHttpVersion;
 }
 
-const QString & Pillow::HttpConnection::requestFragmentDecoded() const
+const QByteArray &Pillow::HttpConnection::requestContent() const
 {
-	if (_requestFragmentDecoded.isEmpty() && !_requestFragment.isEmpty())
-		_requestFragmentDecoded = percentDecode(_requestFragment);
-	return _requestFragmentDecoded;
+	return d_ptr->_requestContent;
 }
 
-const QString & Pillow::HttpConnection::requestPathDecoded() const
+const Pillow::HttpHeaderCollection &Pillow::HttpConnection::requestHeaders() const
 {
-	if (_requestPathDecoded.isEmpty() && !_requestPath.isEmpty())
-		_requestPathDecoded = percentDecode(_requestPath);
-	return _requestPathDecoded;
-}
-
-const QString & Pillow::HttpConnection::requestQueryStringDecoded() const
-{
-	if (_requestQueryStringDecoded.isEmpty() && !_requestQueryString.isEmpty())
-		_requestQueryStringDecoded = percentDecode(_requestQueryString);
-	return _requestQueryStringDecoded;
+	return d_ptr->_requestHeaders;
 }

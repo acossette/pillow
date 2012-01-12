@@ -4,18 +4,12 @@
 #ifndef QOBJECT_H
 #include <QObject>
 #endif // QOBJECT_H
-#ifndef http11_parser_h
-#include "parser/parser.h"
-#endif // http11_parser_h
 #ifndef QHOSTADDRESS_H
 #include <QtNetwork/QHostAddress>
 #endif // QHOSTADDRESS_H
 #ifndef QVECTOR_H
 #include <QtCore/QVector>
 #endif // QVECTOR_H
-#ifndef QVARLENGTHARRAY_H
-#include <QtCore/QVarLengthArray>
-#endif // QVARLENGTHARRAY_H
 class QIODevice;
 
 namespace Pillow
@@ -24,19 +18,8 @@ namespace Pillow
 	typedef QVector<HttpHeader> HttpHeaderCollection;
 	typedef QPair<QString, QString> HttpParam;
 	typedef QVector<HttpParam> HttpParamCollection;
+	class HttpConnectionPrivate;
 
-	struct HttpHeaderRef
-	{
-		int fieldPos, fieldLength, valuePos, valueLength;
-		inline HttpHeaderRef(int fieldPos, int fieldLength, int valuePos, int valueLength)
-			: fieldPos(fieldPos), fieldLength(fieldLength), valuePos(valuePos), valueLength(valueLength) {}
-		inline HttpHeaderRef() {}
-	};
-}
-Q_DECLARE_TYPEINFO(Pillow::HttpHeaderRef, Q_PRIMITIVE_TYPE);
-
-namespace Pillow
-{
 	//
 	// HttpConnection
 	//
@@ -45,13 +28,13 @@ namespace Pillow
 	{
 		Q_OBJECT
 		Q_PROPERTY(State state READ state)
-		Q_PROPERTY(QByteArray requestMethod READ requestMethod)
-		Q_PROPERTY(QByteArray requestUri READ requestUri)
-		Q_PROPERTY(QByteArray requestPath READ requestPath)
-		Q_PROPERTY(QByteArray requestQueryString READ requestQueryString)
-		Q_PROPERTY(QByteArray requestFragment READ requestFragment)
-		Q_PROPERTY(QByteArray requestHttpVersion READ requestHttpVersion)
-		Q_PROPERTY(QByteArray requestContent READ requestContent)
+		Q_PROPERTY(QByteArray requestMethod READ requestMethod NOTIFY requestReady)
+		Q_PROPERTY(QByteArray requestUri READ requestUri NOTIFY requestReady)
+		Q_PROPERTY(QByteArray requestPath READ requestPath NOTIFY requestReady)
+		Q_PROPERTY(QByteArray requestQueryString READ requestQueryString NOTIFY requestReady)
+		Q_PROPERTY(QByteArray requestFragment READ requestFragment NOTIFY requestReady)
+		Q_PROPERTY(QByteArray requestHttpVersion READ requestHttpVersion NOTIFY requestReady)
+		Q_PROPERTY(QByteArray requestContent READ requestContent NOTIFY requestReady)
 
 	public:
 		enum State { Uninitialized, ReceivingHeaders, ReceivingContent, SendingHeaders, SendingContent, Completed, Flushing, Closed };
@@ -59,68 +42,27 @@ namespace Pillow
 		enum { MaximumRequestContentLength = 128 * 1024 * 1024 };
 		Q_ENUMS(State);
 
-	private:
-		State _state;
-		QIODevice* _inputDevice,* _outputDevice;
-		http_parser _parser;
-
-		// Request fields.
-		QByteArray _requestBuffer;
-		QByteArray _requestMethod, _requestUri, _requestFragment, _requestPath, _requestQueryString, _requestHttpVersion, _requestContent;
-		mutable QString _requestUriDecoded, _requestFragmentDecoded, _requestPathDecoded, _requestQueryStringDecoded;
-		QVarLengthArray<Pillow::HttpHeaderRef, 32> _requestHeadersRef;
-		Pillow::HttpHeaderCollection _requestHeaders;
-		int _requestContentLength; int _requestContentLengthHeaderIndex;
-		bool _requestHttp11;
-		Pillow::HttpParamCollection _requestParams;
-
-		// Response fields.
-		QByteArray _responseHeadersBuffer;
-		int _responseStatusCode;
-		qint64 _responseContentLength, _responseContentBytesSent;
-		bool _responseConnectionKeepAlive;
-		bool _responseChunkedTransferEncoding;
-
-	private:
-		void setupRequestHeaders();
-		void transitionToReceivingHeaders();
-		void transitionToReceivingContent();
-		void transitionToSendingHeaders();
-		void transitionToSendingContent();
-		void transitionToCompleted();
-		void transitionToFlushing();
-		void transitionToClosed();
-		void writeRequestErrorResponse(int statusCode = 400); // Used internally when an error happens while receiving a request. It sends an error response to the client and closes the connection right away.
-		static void parser_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen);
-
-	private slots:
-		void processInput();
-		void flush();
-		void drain();
-
 	public:
 		HttpConnection(QObject* parent = 0);
-		HttpConnection(QIODevice* inputOutputDevice, QObject* parent = 0);
-		HttpConnection(QIODevice* inputDevice, QIODevice* outputDevice, QObject* parent = 0);
 		~HttpConnection();
 
-		void initialize(QIODevice* inputDevice, QIODevice* outputDevice);
+		void initialize(QIODevice* inputDevice, QIODevice* outputDevice = 0);
 
-		inline QIODevice* inputDevice() const { return _inputDevice; }
-		inline QIODevice* outputDevice() const { return _outputDevice; }
-		inline State state() const { return _state; }
+		QIODevice* inputDevice() const;
+		QIODevice* outputDevice() const;
+		State state() const;
 
 		QHostAddress remoteAddress() const;
 
-		// Request members. Note: the underlying shared QByteArray data remains valid until either the completed()
-		// or closed()  signals is emitted. Call detach() on your copy of the QByteArrays if you wish to keep it longer.
-		inline const QByteArray& requestMethod() const { return _requestMethod; }
-		inline const QByteArray& requestUri() const { return _requestUri; }
-		inline const QByteArray& requestFragment() const { return _requestFragment; }
-		inline const QByteArray& requestPath() const { return _requestPath; }
-		inline const QByteArray& requestQueryString() const { return _requestQueryString; }
-		inline const QByteArray& requestHttpVersion() const { return _requestHttpVersion; }
-		inline const QByteArray& requestContent() const { return _requestContent; }
+		// Request members. Note: the underlying shared QByteArray data remains valid until either the requestCompleted()
+		// or closed() signals are emitted. Call detach() on your copy of the QByteArrays if you wish to keep it longer.
+		const QByteArray& requestMethod() const;
+		const QByteArray& requestUri() const;
+		const QByteArray& requestFragment() const;
+		const QByteArray& requestPath() const;
+		const QByteArray& requestQueryString() const;
+		const QByteArray& requestHttpVersion() const;
+		const QByteArray& requestContent() const;
 
 		// Request members, decoded version. Use those rather than manually decoding the raw data returned by the methods
 		// above when decoded values are desired (they are cached).
@@ -129,9 +71,8 @@ namespace Pillow
 		const QString& requestPathDecoded() const;
 		const QString& requestQueryStringDecoded() const;
 
-	public slots:
 		// Request headers.
-		inline const Pillow::HttpHeaderCollection& requestHeaders() const { return _requestHeaders; }
+		const Pillow::HttpHeaderCollection& requestHeaders() const;
 		QByteArray requestHeaderValue(const QByteArray& field);
 
 		// Request params.
@@ -139,6 +80,7 @@ namespace Pillow
 		QString requestParamValue(const QString& name);
 		void setRequestParam(const QString& name, const QString& value);
 
+	public slots:
 		// Response members.
 		void writeResponse(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QByteArray& content = QByteArray());
 		void writeResponseString(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QString& content = QString());
@@ -146,15 +88,26 @@ namespace Pillow
 		void writeContent(const QByteArray& content);
 		void endContent();
 
-		int responseStatusCode() const { return _responseStatusCode; }
-		qint64 responseContentLength() const { return _responseContentLength; }
-
+		void flush();
 		void close(); // Close communication channels right away, no matter if a response was sent or not.
+
+		// Information about the currentlly outgoing response. Valid between a call to writeHeaders until
+		// the requestCompleted signal is emitted.
+		int responseStatusCode() const;
+		qint64 responseContentLength() const;
 
 	signals:
 		void requestReady(Pillow::HttpConnection* self);     // The request is ready to be processed, all request headers and content have been received.
 		void requestCompleted(Pillow::HttpConnection* self); // The response is completed, all response headers and content have been sent.
 		void closed(Pillow::HttpConnection* self);			 // The connection is closing, no further requests will arrive on this object.
+
+	private slots:
+		void processInput();
+		void drain();
+
+	private:
+		Q_DECLARE_PRIVATE(HttpConnection)
+		Pillow::HttpConnectionPrivate* d_ptr;
 	};
 }
 

@@ -31,8 +31,9 @@ Pillow::HttpConnection * HttpHandlerTestBase::createRequest(const QByteArray &me
 	QBuffer* outputBuffer = new QBuffer(); outputBuffer->open(QIODevice::ReadWrite);
 	connect(outputBuffer, SIGNAL(bytesWritten(qint64)), this, SLOT(outputBuffer_bytesWritten()));
 
-	Pillow::HttpConnection* connection = new Pillow::HttpConnection(inputBuffer, outputBuffer, this);
+	Pillow::HttpConnection* connection = new Pillow::HttpConnection(this);
 	connect(connection, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
+	connection->initialize(inputBuffer, outputBuffer);
 	inputBuffer->setParent(connection);
 	outputBuffer->setParent(connection);
 

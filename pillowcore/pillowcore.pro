@@ -32,6 +32,7 @@ HEADERS += \
 	HttpHandlerSimpleRouter.h \
 	HttpConnection.h \
 	HttpHandlerProxy.h \
-    ByteArrayHelpers.h
+	ByteArrayHelpers.h \
+	private/ByteArray.h
 
 OTHER_FILES +=
