@@ -174,6 +174,8 @@ namespace Pillow
 				data()[size()] = c;
 				data_ptr()->size += 1;
 			}
+			else
+				QByteArray::append(c);
 			return *this;
 		}
 	};
