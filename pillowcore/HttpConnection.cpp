@@ -658,8 +658,15 @@ void Pillow::HttpConnection::initialize(QIODevice* inputDevice, QIODevice* outpu
 
 		connect(d_ptr->_inputDevice, SIGNAL(readyRead()), this, SLOT(processInput()));
 
-		if (qobject_cast<QAbstractSocket*>(d_ptr->_inputDevice) || qobject_cast<QLocalSocket*>(d_ptr->_inputDevice))
+		if (qobject_cast<QAbstractSocket*>(d_ptr->_inputDevice))
 			connect(d_ptr->_inputDevice, SIGNAL(disconnected()), this, SLOT(close()));
+		else if (qobject_cast<QLocalSocket*>(d_ptr->_inputDevice))
+		{
+			connect(d_ptr->_inputDevice, SIGNAL(disconnected()), this, SLOT(close()));
+			connect(d_ptr->_inputDevice, SIGNAL(aboutToClose()), this, SLOT(close()));
+			connect(d_ptr->_inputDevice, SIGNAL(readChannelFinished()), this, SLOT(close()));
+
+		}
 		else
 			connect(d_ptr->_inputDevice, SIGNAL(aboutToClose()), this, SLOT(close()));
 	}
