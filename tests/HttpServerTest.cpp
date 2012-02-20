@@ -90,7 +90,7 @@ void HttpServerTestBase::testHandlesConnectionsAsRequests()
 
 void HttpServerTestBase::testHandlesConcurrentConnections()
 {
-	const int clientCount = 30; // Note: on Windows the maximum number of concurrent QLocalSocket clients is 62, so putting this below the limit.
+	const int clientCount = 10; // Note: on Windows the maximum number of concurrent QLocalSocket clients is 62, so putting this well below the limit.
 	QVector<QIODevice*> clients;
 	for (int i = 0; i < clientCount; ++i)
 		clients << createClientConnection();

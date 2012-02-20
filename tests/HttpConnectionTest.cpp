@@ -173,7 +173,7 @@ void HttpConnectionTest::testIncrementalPost()
 
 void HttpConnectionTest::testHugePost()
 {
-	// Note: this test is very timing dependent!
+	// Note: this test is very timing dependent, especially on windows.
 
 	QByteArray postData(8 * 1024 * 1024, '*');
 	QByteArray clientRequest;
@@ -621,8 +621,12 @@ void HttpConnectionTest::testWriteIncrementalResponseContent()
 	QCOMPARE(readySpy->size(), 1);
 	QCOMPARE(completedSpy->size(), 0);
 
-	connection->writeContent(QByteArray(32 * 1024, '*'));
-	QCOMPARE(clientReadAll(), QByteArray(32 * 1024, '*'));
+	QByteArray expected = QByteArray(32 * 1024, '*');
+	connection->writeContent(expected);
+	connection->flush();
+	wait();
+	QByteArray actual = clientReadAll();
+	QCOMPARE(actual, expected);
 	QCOMPARE(connection->state(), HttpConnection::SendingContent);
 	QVERIFY(isClientConnected());
 	QCOMPARE(readySpy->size(), 1);
