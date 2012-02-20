@@ -14,25 +14,25 @@ namespace Pillow
 	{
 	public:
 		enum { MaximumReserveCount = 25 };
-		
+
 	public:
 		QObject* q_ptr;
 		QList<HttpConnection*> reservedConnections;
-		
+
 	public:
-		HttpServerPrivate(QObject* server) 
+		HttpServerPrivate(QObject* server)
 			: q_ptr(server)
 		{
 			for (int i = 0; i < MaximumReserveCount; ++i)
 				reservedConnections << createConnection();
 		}
-		
+
 		~HttpServerPrivate()
 		{
 			while (!reservedConnections.isEmpty())
 				delete reservedConnections.takeLast();
 		}
-		
+
 		HttpConnection* createConnection()
 		{
 			HttpConnection* connection = new HttpConnection(q_ptr);
@@ -40,7 +40,7 @@ namespace Pillow
 			QObject::connect(connection, SIGNAL(closed(Pillow::HttpConnection*)), q_ptr, SLOT(connection_closed(Pillow::HttpConnection*)));
 			return connection;
 		}
-		
+
 		HttpConnection* takeConnection()
 		{
 			if (reservedConnections.isEmpty())
@@ -48,7 +48,7 @@ namespace Pillow
 			else
 				return reservedConnections.takeLast();
 		}
-		
+
 		void putConnection(HttpConnection* connection)
 		{
 			while (reservedConnections.size() >= MaximumReserveCount)
@@ -62,11 +62,13 @@ namespace Pillow
 HttpServer::HttpServer(QObject *parent)
 : QTcpServer(parent), d_ptr(new HttpServerPrivate(this))
 {
+	setMaxPendingConnections(128);
 }
 
 HttpServer::HttpServer(const QHostAddress &serverAddress, quint16 serverPort, QObject *parent)
 :	QTcpServer(parent), d_ptr(new HttpServerPrivate(this))
 {
+	setMaxPendingConnections(128);
 	if (!listen(serverAddress, serverPort))
 		qWarning() << QString("HttpServer::HttpServer: could not bind to %1:%2 for listening: %3").arg(serverAddress.toString()).arg(serverPort).arg(errorString());
 }
@@ -83,12 +85,12 @@ void HttpServer::incomingConnection(int socketDescriptor)
 	{
 		addPendingConnection(socket);
 		nextPendingConnection();
-		createHttpConnection()->initialize(socket, socket);		
+		createHttpConnection()->initialize(socket, socket);
 	}
 	else
 	{
 		qWarning() << "HttpServer::incomingConnection: failed to set socket descriptor '" << socketDescriptor << "' on socket.";
-		delete socket; 
+		delete socket;
 	}
 }
 
@@ -110,12 +112,14 @@ HttpConnection* Pillow::HttpServer::createHttpConnection()
 HttpLocalServer::HttpLocalServer(QObject *parent)
 	: QLocalServer(parent), d_ptr(new HttpServerPrivate(this))
 {
+	setMaxPendingConnections(128);
 	connect(this, SIGNAL(newConnection()), this, SLOT(this_newConnection()));
 }
 
 HttpLocalServer::HttpLocalServer(const QString& serverName, QObject *parent /*= 0*/)
 	: QLocalServer(parent), d_ptr(new HttpServerPrivate(this))
 {
+	setMaxPendingConnections(128);
 	connect(this, SIGNAL(newConnection()), this, SLOT(this_newConnection()));
 
 	if (!listen(serverName))
