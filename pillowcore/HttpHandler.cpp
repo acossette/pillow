@@ -117,12 +117,12 @@ bool HttpHandlerFunction::handleRequest(HttpConnection *connection)
 //
 
 HttpHandlerLog::HttpHandlerLog(QObject *parent)
-	: HttpHandler(parent)
+	: HttpHandler(parent), _mode(LogCompletedRequests), _device(0)
 {
 }
 
 HttpHandlerLog::HttpHandlerLog(QIODevice *device, QObject *parent)
-	: HttpHandler(parent), _device(device)
+	: HttpHandler(parent), _mode(LogCompletedRequests), _device(device)
 {
 }
 
@@ -143,6 +143,26 @@ bool HttpHandlerLog::handleRequest(Pillow::HttpConnection *connection)
 	}
 	timer->start();
 
+	if (_mode == LogCompletedRequests)
+	{
+		// Nothing to log here.
+	}
+	else if (_mode == TraceRequests)
+	{
+		QString logEntry = QString("[BEGIN] %1 - - [%2] \"%3 %4 %5\" - - -")
+				.arg(connection->remoteAddress().toString())
+				.arg(QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss"))
+				.arg(QString(connection->requestMethod())).arg(QString(connection->requestUri())).arg(QString(connection->requestHttpVersion()));
+
+		if (_device == NULL)
+			qDebug() << logEntry;
+		else
+		{
+			logEntry.append('\n');
+			_device->write(logEntry.toUtf8());
+		}
+	}
+
 	return false;
 }
 
@@ -151,8 +171,10 @@ void HttpHandlerLog::requestCompleted(Pillow::HttpConnection *connection)
 	QElapsedTimer* timer = _requestTimerMap.value(connection, NULL);
 	if (timer)
 	{
+		const char* formatString = (_mode == LogCompletedRequests) ? "%1 - - [%2] \"%3 %4 %5\" %6 %7 %8" : "[ END ] %1 - - [%2] \"%3 %4 %5\" %6 %7 %8";
+
 		qint64 elapsed = timer->elapsed();
-		QString logEntry = QString("%1 - - [%2] \"%3 %4 %5\" %6 %7 %8")
+		QString logEntry = QString(formatString)
 				.arg(connection->remoteAddress().toString())
 				.arg(QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss"))
 				.arg(QString(connection->requestMethod())).arg(QString(connection->requestUri())).arg(QString(connection->requestHttpVersion()))
@@ -187,6 +209,12 @@ void HttpHandlerLog::requestDestroyed(QObject *r)
 QIODevice * HttpHandlerLog::device() const
 {
 	return _device;
+}
+
+void HttpHandlerLog::setMode(HttpHandlerLog::Mode mode)
+{
+	if (_mode == mode) return;
+	_mode = mode;
 }
 
 void Pillow::HttpHandlerLog::setDevice(QIODevice *device)

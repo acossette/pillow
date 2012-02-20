@@ -1,10 +1,11 @@
+#include <QtTest/QtTest>
+#include <QtTest/QTest>
 #include "HttpHandlerTest.h"
 #include "HttpHandler.h"
 #include "HttpHandlerSimpleRouter.h"
 #include "HttpConnection.h"
 #include <QtCore/QBuffer>
 #include <QtCore/QCoreApplication>
-#include <QtTest/QtTest>
 using namespace Pillow;
 
 Pillow::HttpConnection * HttpHandlerTestBase::createGetRequest(const QByteArray &path, const QByteArray& httpVersion)
@@ -142,7 +143,7 @@ void HttpHandlerTest::testHandlerFunction()
 	QVERIFY(response.startsWith("HTTP/1.0 200 OK"));
 	QVERIFY(response.endsWith("hello from lambda"));
 #else
-	QSKIP("Compiler does not support lambdas or C++0x support is not enabled.", QTest::SkipSingle);
+	QSKIP("Compiler does not support lambdas or C++0x support is not enabled.", SkipSingle);
 #endif
 }
 
@@ -164,6 +165,38 @@ void HttpHandlerTest::testHandlerLog()
 
 	// The log handler should write the log entries as they are completed.
 	buffer.seek(0);
+	QVERIFY(buffer.readLine().contains("GET /third"));
+	QVERIFY(buffer.readLine().contains("GET /first"));
+	QVERIFY(buffer.readLine().contains("GET /second"));
+	QVERIFY(buffer.readLine().isEmpty());
+}
+
+void HttpHandlerTest::testHandlerLogTrace()
+{
+	QBuffer buffer; buffer.open(QIODevice::ReadWrite);
+	Pillow::HttpConnection* request1 = createGetRequest("/first");
+	Pillow::HttpConnection* request2 = createGetRequest("/second");
+	Pillow::HttpConnection* request3 = createGetRequest("/third");
+
+	HttpHandlerLog handler(&buffer, &buffer);
+	handler.setMode(HttpHandlerLog::TraceRequests);
+
+	QVERIFY(!handler.handleRequest(request1));
+	QVERIFY(!buffer.data().isEmpty());
+	QVERIFY(buffer.data().contains("[BEGIN]"));
+	QVERIFY(!buffer.data().contains("[ END ]"));
+	QVERIFY(!handler.handleRequest(request2));
+	QVERIFY(!handler.handleRequest(request3));
+	request3->writeResponse(302);
+	QVERIFY(buffer.data().contains("[ END ]"));
+	request1->writeResponse(200);
+	request2->writeResponse(500);
+
+	// The log handler should write the log entries as they are completed.
+	buffer.seek(0);
+	QVERIFY(buffer.readLine().contains("GET /first"));
+	QVERIFY(buffer.readLine().contains("GET /second"));
+	QVERIFY(buffer.readLine().contains("GET /third"));
 	QVERIFY(buffer.readLine().contains("GET /third"));
 	QVERIFY(buffer.readLine().contains("GET /first"));
 	QVERIFY(buffer.readLine().contains("GET /second"));
@@ -310,7 +343,7 @@ void HttpHandlerSimpleRouterTest::testFuncRoute()
 	QVERIFY(response.endsWith("Delicious Second Route"));
 	response.clear();
 #else
-	QSKIP("Compiler does not support lambdas or C++0x support is not enabled.", QTest::SkipSingle);
+	QSKIP("Compiler does not support lambdas or C++0x support is not enabled.", SkipSingle);
 #endif
 }
 

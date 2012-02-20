@@ -36,6 +36,7 @@ private slots:
 	void testHandler404();
 	void testHandlerFunction();
 	void testHandlerLog();
+	void testHandlerLogTrace();
 };
 
 class HttpHandlerFileTest : public HttpHandlerTestBase

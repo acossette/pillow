@@ -122,29 +122,44 @@ namespace Pillow
 	};
 
 	//
-	// HttpHandlerLog: a handler that logs completed requests.
+	// HttpHandlerLog: a handler that logs requests.
 	//
 
 	class HttpHandlerLog : public HttpHandler
 	{
 		Q_OBJECT
-		QHash<Pillow::HttpConnection*, QElapsedTimer*> _requestTimerMap;
-		QPointer<QIODevice> _device;
+		Q_ENUMS(Mode)
 
-	private slots:
-		void requestCompleted(Pillow::HttpConnection* connection);
-		void requestDestroyed(QObject* connection);
+	public:
+		enum Mode
+		{
+			LogCompletedRequests, // Default: Log requests when they are completed.
+			TraceRequests         // Log requests when they are started until when they complete.
+		};
 
 	public:
 		HttpHandlerLog(QObject* parent = 0);
 		HttpHandlerLog(QIODevice* device, QObject* parent = 0);
 		~HttpHandlerLog();
 
+		inline Mode mode() const { return _mode; }
 		QIODevice* device() const;
+
+	public slots:
+		void setMode(Mode mode);
 		void setDevice(QIODevice* device);
 
 	public:
 		virtual bool handleRequest(Pillow::HttpConnection* connection);
+
+	private slots:
+		void requestCompleted(Pillow::HttpConnection* connection);
+		void requestDestroyed(QObject* connection);
+
+	private:
+		QHash<Pillow::HttpConnection*, QElapsedTimer*> _requestTimerMap;
+		Mode _mode;
+		QPointer<QIODevice> _device;
 	};
 
 	//

@@ -1,8 +1,9 @@
 include(config.pri)
 
 TEMPLATE = subdirs
-CONFIG += ordered
-
 SUBDIRS = pillowcore tests examples
+
+tests.depends = pillowcore
+examples.depends = pillowcore
 
 OTHER_FILES += README
