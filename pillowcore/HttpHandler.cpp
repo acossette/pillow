@@ -121,6 +121,11 @@ HttpHandlerLog::HttpHandlerLog(QObject *parent)
 {
 }
 
+HttpHandlerLog::HttpHandlerLog(HttpHandlerLog::Mode mode, QIODevice *device, QObject *parent)
+	: HttpHandler(parent), _mode(mode), _device(device)
+{
+}
+
 HttpHandlerLog::HttpHandlerLog(QIODevice *device, QObject *parent)
 	: HttpHandler(parent), _mode(LogCompletedRequests), _device(device)
 {
@@ -139,6 +144,7 @@ bool HttpHandlerLog::handleRequest(Pillow::HttpConnection *connection)
 	{
 		timer = _requestTimerMap[connection] = new QElapsedTimer();
 		connect(connection, SIGNAL(requestCompleted(Pillow::HttpConnection*)), this, SLOT(requestCompleted(Pillow::HttpConnection*)));
+		connect(connection, SIGNAL(closed(Pillow::HttpConnection*)), this, SLOT(requestClosed(Pillow::HttpConnection*)));
 		connect(connection, SIGNAL(destroyed(QObject*)), this, SLOT(requestDestroyed(QObject*)));
 	}
 	timer->start();
@@ -154,13 +160,7 @@ bool HttpHandlerLog::handleRequest(Pillow::HttpConnection *connection)
 				.arg(QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss"))
 				.arg(QString(connection->requestMethod())).arg(QString(connection->requestUri())).arg(QString(connection->requestHttpVersion()));
 
-		if (_device == NULL)
-			qDebug() << logEntry;
-		else
-		{
-			logEntry.append('\n');
-			_device->write(logEntry.toUtf8());
-		}
+		log(logEntry);
 	}
 
 	return false;
@@ -181,21 +181,26 @@ void HttpHandlerLog::requestCompleted(Pillow::HttpConnection *connection)
 				.arg(connection->responseStatusCode()).arg(connection->responseContentLength())
 				.arg(elapsed / 1000.0, 3, 'f', 3);
 
-//		QString logEntry = QString()
-//				% connection->remoteAddress().toString()
-//				% " - - [" % QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss") % "] \""
-//				% connection->requestMethod() % ' ' % connection->requestUri() % ' ' % connection->requestHttpVersion() % "\" "
-//				% QString::number(connection->responseStatusCode()) % ' '
-//				% QString::number(connection->responseContentLength()) % ' '
-//				% QString::number(elapsed / 1000.0, 'f', 3);
+		log(logEntry);
+	}
+}
 
-		if (_device == NULL)
-			qDebug() << logEntry;
-		else
-		{
-			logEntry.append('\n');
-			_device->write(logEntry.toUtf8());
-		}
+void HttpHandlerLog::requestClosed(HttpConnection *connection)
+{
+	QElapsedTimer* timer = _requestTimerMap.value(connection, NULL);
+	if (timer && _mode == TraceRequests)
+	{
+		const char* formatString = "[CLOSE] %1 - - [%2] \"%3 %4 %5\" %6 %7 %8";
+
+		qint64 elapsed = timer->elapsed();
+		QString logEntry = QString(formatString)
+				.arg(connection->remoteAddress().toString())
+				.arg(QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss"))
+				.arg(QString(connection->requestMethod())).arg(QString(connection->requestUri())).arg(QString(connection->requestHttpVersion()))
+				.arg(connection->responseStatusCode()).arg(connection->responseContentLength())
+				.arg(elapsed / 1000.0, 3, 'f', 3);
+
+		log(logEntry);
 	}
 }
 
@@ -204,6 +209,17 @@ void HttpHandlerLog::requestDestroyed(QObject *r)
 	HttpConnection* connection = static_cast<HttpConnection*>(r);
 	delete _requestTimerMap.value(connection, NULL);
 	_requestTimerMap.remove(connection);
+}
+
+void HttpHandlerLog::log(const QString &entry)
+{
+	if (_device == NULL)
+		qDebug() << qPrintable(entry);
+	else
+	{
+		_device->write(entry.toUtf8());
+		_device->write("\n", 1);
+	}
 }
 
 QIODevice * HttpHandlerLog::device() const

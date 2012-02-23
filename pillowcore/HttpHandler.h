@@ -139,6 +139,7 @@ namespace Pillow
 
 	public:
 		HttpHandlerLog(QObject* parent = 0);
+		HttpHandlerLog(Mode mode, QIODevice* device, QObject* parent = 0);
 		HttpHandlerLog(QIODevice* device, QObject* parent = 0);
 		~HttpHandlerLog();
 
@@ -154,7 +155,9 @@ namespace Pillow
 
 	private slots:
 		void requestCompleted(Pillow::HttpConnection* connection);
+		void requestClosed(Pillow::HttpConnection* connection);
 		void requestDestroyed(QObject* connection);
+		void log(const QString& entry);
 
 	private:
 		QHash<Pillow::HttpConnection*, QElapsedTimer*> _requestTimerMap;

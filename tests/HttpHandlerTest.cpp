@@ -174,9 +174,9 @@ void HttpHandlerTest::testHandlerLog()
 void HttpHandlerTest::testHandlerLogTrace()
 {
 	QBuffer buffer; buffer.open(QIODevice::ReadWrite);
-	Pillow::HttpConnection* request1 = createGetRequest("/first");
-	Pillow::HttpConnection* request2 = createGetRequest("/second");
-	Pillow::HttpConnection* request3 = createGetRequest("/third");
+	Pillow::HttpConnection* request1 = createGetRequest("/first", "1.1");
+	Pillow::HttpConnection* request2 = createGetRequest("/second", "1.1");
+	Pillow::HttpConnection* request3 = createGetRequest("/third", "1.1");
 
 	HttpHandlerLog handler(&buffer, &buffer);
 	handler.setMode(HttpHandlerLog::TraceRequests);
@@ -191,15 +191,18 @@ void HttpHandlerTest::testHandlerLogTrace()
 	QVERIFY(buffer.data().contains("[ END ]"));
 	request1->writeResponse(200);
 	request2->writeResponse(500);
+	QVERIFY(!buffer.data().contains("[CLOSE]"));
+	request1->close();
+	QVERIFY(buffer.data().contains("[CLOSE]"));
 
-	// The log handler should write the log entries as they are completed.
 	buffer.seek(0);
 	QVERIFY(buffer.readLine().contains("GET /first"));
 	QVERIFY(buffer.readLine().contains("GET /second"));
 	QVERIFY(buffer.readLine().contains("GET /third"));
-	QVERIFY(buffer.readLine().contains("GET /third"));
-	QVERIFY(buffer.readLine().contains("GET /first"));
-	QVERIFY(buffer.readLine().contains("GET /second"));
+	QVERIFY(buffer.readLine().contains("GET /third")); // END
+	QVERIFY(buffer.readLine().contains("GET /first")); // END
+	QVERIFY(buffer.readLine().contains("GET /second")); // END
+	QVERIFY(buffer.readLine().contains("GET /first")); // CLOSE
 	QVERIFY(buffer.readLine().isEmpty());
 }
 
