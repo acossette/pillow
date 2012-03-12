@@ -17,13 +17,15 @@ SOURCES += main.cpp \
     HttpHandlerTest.cpp \
     HttpsServerTest.cpp \
     HttpHandlerProxyTest.cpp \
-    ByteArrayHelpersTest.cpp
+    ByteArrayHelpersTest.cpp \
+    HttpClientTest.cpp
 
 HEADERS += \
     HttpServerTest.h \
     HttpConnectionTest.h \
     HttpHandlerTest.h \
     HttpsServerTest.h \
-    HttpHandlerProxyTest.h
+    HttpHandlerProxyTest.h \
+    Helpers.h
 
 RESOURCES += tests.qrc

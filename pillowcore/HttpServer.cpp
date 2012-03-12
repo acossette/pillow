@@ -81,6 +81,7 @@ HttpServer::~HttpServer()
 void HttpServer::incomingConnection(int socketDescriptor)
 {
 	QTcpSocket* socket = new QTcpSocket();
+	who deletes the socket??
 	if (socket->setSocketDescriptor(socketDescriptor))
 	{
 		addPendingConnection(socket);

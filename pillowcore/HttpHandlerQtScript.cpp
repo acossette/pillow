@@ -7,8 +7,6 @@
 #include <QFileInfo>
 using namespace Pillow;
 
-Q_DECLARE_METATYPE(Pillow::HttpHeaderCollection)
-
 static QScriptValue toScriptValue(QScriptEngine *engine, const Pillow::HttpHeaderCollection &headers)
 {
 	QScriptValue result = engine->newObject();
@@ -91,13 +89,13 @@ bool HttpHandlerQtScript::handleRequest(Pillow::HttpConnection *connection)
 	requestObject.setProperty("requestQueryString", QUrl::fromPercentEncoding(connection->requestQueryString()));
 	requestObject.setProperty("requestHeaders", qScriptValueFromValue(engine, connection->requestHeaders()));
 	requestObject.setProperty("requestContent", QUrl::fromPercentEncoding(connection->requestContent()));
-	
+
 	QList<QPair<QString, QString> > queryParams = QUrl(connection->requestUri()).queryItems();
 	QScriptValue queryParamsObject = engine->newObject();
 	for (int i = 0, iE = queryParams.size(); i < iE; ++i)
 		queryParamsObject.setProperty(queryParams.at(i).first, queryParams.at(i).second);
 	requestObject.setProperty("requestQueryParams", queryParamsObject);
-	
+
 	QScriptValue result = _scriptFunction.call(_scriptFunction, QScriptValueList() << requestObject);
 
 	if (result.isError())
@@ -110,7 +108,7 @@ bool HttpHandlerQtScript::handleRequest(Pillow::HttpConnection *connection)
 		engine->clearExceptions();
 		return true;
 	}
-	
+
 	return result.toBool();
 }
 

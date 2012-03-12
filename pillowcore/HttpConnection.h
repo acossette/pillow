@@ -1,5 +1,5 @@
-#ifndef _PILLOW_HTTPCONNECTION_H_
-#define _PILLOW_HTTPCONNECTION_H_
+#ifndef PILLOW_HTTPCONNECTION_H
+#define PILLOW_HTTPCONNECTION_H
 
 #ifndef QOBJECT_H
 #include <QObject>
@@ -110,5 +110,7 @@ namespace Pillow
 		Pillow::HttpConnectionPrivate* d_ptr;
 	};
 }
+Q_DECLARE_METATYPE(Pillow::HttpHeaderCollection)
+Q_DECLARE_METATYPE(Pillow::HttpHeader)
 
-#endif // _PILLOW_HTTPCONNECTION_H_
+#endif // PILLOW_HTTPCONNECTION_H
