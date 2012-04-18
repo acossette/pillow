@@ -1,5 +1,6 @@
 #include <QtCore/QObject>
 #include <QtTest/QtTest>
+#include <QtNetwork/QTcpSocket>
 #include <HttpClient.h>
 #include <HttpConnection.h>
 #include <HttpServer.h>
@@ -8,6 +9,7 @@
 
 typedef QList<QByteArray> Chunks;
 Q_DECLARE_METATYPE(Chunks)
+Q_DECLARE_METATYPE(QAbstractSocket::SocketState)
 
 class TestServer : public Pillow::HttpServer
 {
@@ -42,6 +44,7 @@ private slots:
 	{
 		receivedRequests << HttpRequestData::fromHttpConnection(request);
 		receivedConnections << request;
+		receivedSockets << qobject_cast<QTcpSocket*>(request->inputDevice());
 	}
 };
 
@@ -65,8 +68,10 @@ private slots:
 		client = new Pillow::HttpClient();
 		QVERIFY(server.receivedRequests.isEmpty());
 		QVERIFY(server.receivedConnections.isEmpty());
+		QVERIFY(server.receivedSockets.isEmpty());
 		QVERIFY(server2.receivedRequests.isEmpty());
 		QVERIFY(server2.receivedConnections.isEmpty());
+		QVERIFY(server2.receivedSockets.isEmpty());
 	}
 
 	void cleanup()
@@ -74,8 +79,10 @@ private slots:
 		delete client; client = 0;
 		server.receivedRequests.clear();
 		server.receivedConnections.clear();
+		server.receivedSockets.clear();
 		server2.receivedRequests.clear();
 		server2.receivedConnections.clear();
+		server2.receivedSockets.clear();
 	}
 
 private:
@@ -89,6 +96,15 @@ private:
 			return false;
 		}
 		return true;
+	}
+
+	template <typename Pred> bool waitFor(const Pred& predicate, int maxTime = 500)
+	{
+		QElapsedTimer t; t.start();
+		bool result = false;
+		while (!(result = predicate()) && !t.hasExpired(maxTime))
+			QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+		return result;
 	}
 
 	QUrl testUrl() { return QUrl("http://127.0.0.1:4569/test");	}
@@ -139,6 +155,18 @@ private slots:
 									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
 													<< Pillow::HttpHeader("X-Some", "Header")
 													<< Pillow::HttpHeader("X-And-Another", "even-better; header"));
+		QTest::newRow("GET with connection: close") << QByteArray("GET")
+									<< QUrl("http://127.0.0.1:4569/")
+									<< (Pillow::HttpHeaderCollection()
+										<< Pillow::HttpHeader("Connection", "close"))
+									<< QByteArray()
+									<< HttpRequestData()
+									   .withMethod("GET")
+									   .withUri("/").withPath("/").withQueryString("").withFragment("")
+									   .withHttpVersion("HTTP/1.1")
+									   .withContent("")
+									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
+													<< Pillow::HttpHeader("Connection", "close"));
 		QTest::newRow("Simple PUT") << QByteArray("PUT")
 									<< QUrl("http://127.0.0.1:4569/some/path")
 									<< (Pillow::HttpHeaderCollection())
@@ -312,12 +340,12 @@ private slots:
 
 	void should_allow_sending_subsequent_requests_to_different_hosts()
 	{
-		// NOTE: connection-oriented device specific
-
 		// First request, to main server.
 		client->get(testUrl());
 		QVERIFY(server.waitForRequest());
 		QVERIFY(server.receivedConnections.size() == 1);
+		QPointer<QObject> firstSocket = server.receivedSockets.first();
+		QVERIFY(firstSocket != 0);
 		QVERIFY(client->responsePending());
 		server.receivedConnections.first()->writeResponse(200);
 		QVERIFY(waitForResponse());
@@ -330,6 +358,7 @@ private slots:
 		QVERIFY(client->responsePending());
 		server2.receivedConnections.first()->writeResponse(200);
 		QVERIFY(waitForResponse());
+		QVERIFY(firstSocket == 0); // The first connection should have been broken by the client connecting to a different host.
 
 		// And back to the first server.
 		QVERIFY(server.receivedConnections.size() == 1);
@@ -338,27 +367,14 @@ private slots:
 		QVERIFY(server.receivedConnections.size() == 2);
 	}
 
-	void should_emit_finished_after_receiving_response()
-	{
-		QSKIP("Not implemented", SkipAll);
-	}
-
-	void should_emit_finished_after_encountering_an_error()
-	{
-		QSKIP("Not implemented", SkipAll);
-	}
-
-	void should_not_be_response_pending_when_finished()
-	{
-		// both for errors and non errors cases.
-		QSKIP("Not implemented", SkipAll);
-	}
-
 	void should_report_network_errors()
 	{
 		client->get(QUrl("http://127.0.0.1:64999/should/not/work"));
+		QVERIFY(client->responsePending());
 		QVERIFY(waitForResponse());
 		QCOMPARE(client->error(), Pillow::HttpClient::NetworkError);
+		QCOMPARE(client->statusCode(), 0);
+		QVERIFY(!client->responsePending());
 
 		client->get(testUrl());
 		QVERIFY(server.waitForRequest());
@@ -372,11 +388,20 @@ private slots:
 		// Else, we may try to reuse a socket where our state is bad with the server.
 		client->get(testUrl());
 		QVERIFY(server.waitForRequest());
+
+		QCOMPARE(server.receivedSockets.size(), 1);
+		QCOMPARE(server.receivedSockets.last()->state(), QAbstractSocket::ConnectedState);
+		QPointer<QTcpSocket> serverSideSocket = server.receivedSockets.last();
+		qRegisterMetaType<QAbstractSocket::SocketState>("QAbstractSocket::SocketState");
+		QSignalSpy serverSocketStateSpy(serverSideSocket, SIGNAL(stateChanged(QAbstractSocket::SocketState)));
+
 		server.receivedConnections.last()->outputDevice()->write("=-=-=-=-=-FFFFFFFUUUUUUUUUUU=-=-=-=-=-=!\r\n");
 		QVERIFY(waitForResponse());
 		QCOMPARE(client->error(), Pillow::HttpClient::ResponseInvalidError);
 
-		... check that the socket is indeed being closed
+		QVERIFY(serverSideSocket == 0);
+		QVERIFY(!serverSocketStateSpy.isEmpty());
+		QCOMPARE(serverSocketStateSpy.last().first().value<QAbstractSocket::SocketState>(), QAbstractSocket::UnconnectedState);
 	}
 
 	void should_clear_a_previous_error_when_sending_a_new_request()
@@ -393,42 +418,183 @@ private slots:
 		server.receivedConnections.last()->writeResponse();
 		QVERIFY(waitForResponse());
 		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 	}
 
-	void should_receive_streaming_responses()
+	void should_report_error_if_server_closes_connection_early()
 	{
-		QSKIP("Not implemented", SkipAll);
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->close();
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->error(), Pillow::HttpClient::RemoteHostClosedError);
+
+		client->get(testUrl());
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse();
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedSockets.last()->write("HTTP/1.1 200 OK\r\n");
+		server.receivedSockets.last()->flush();
+		server.receivedConnections.last()->close();
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->error(), Pillow::HttpClient::RemoteHostClosedError);
+
+		client->get(testUrl());
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(201);
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 201);
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 	}
 
-	void should_be_cancelleable()
+	void should_not_report_error_if_server_closes_connection_after_responding()
 	{
-		QSKIP("Not implemented", SkipAll);
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(201);
+		server.receivedConnections.last()->close();
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 201);
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 	}
 
-	void should_close_connection_when_requesting_a_resource_from_a_different_host()
+	void should_emit_finished_after_receiving_response()
 	{
-		QSKIP("Not implemented", SkipAll);
+		QSignalSpy finishedSpy(client, SIGNAL(finished()));
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.first()->writeResponse(202);
+		QVERIFY(waitForResponse());
+
+		QCOMPARE(client->statusCode(), 202);
+		QCOMPARE(finishedSpy.size(), 1);
 	}
 
-	void should_reuse_existing_connection_from_same_host()
+	void should_emit_finished_after_encountering_an_error()
 	{
-		QSKIP("Not implemented", SkipAll);
+		QSignalSpy finishedSpy(client, SIGNAL(finished()));
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.first()->close();
+		QVERIFY(waitForResponse());
+
+		QCOMPARE(client->statusCode(), 0);
+		QCOMPARE(finishedSpy.size(), 1);
 	}
 
-	void should_detect_redirects()
+	void should_be_abortable()
 	{
-		QSKIP("Not implemented", SkipAll);
+		QTest::ignoreMessage(QtWarningMsg, "Pillow::HttpClient::abort(): called while not running.");
+		client->abort(); // Should not do anything besides a warning.
+		QVERIFY(client->error() == Pillow::HttpClient::NoError);
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		client->abort();
+		server.receivedConnections.last()->writeResponse(202);
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 0);
+		QCOMPARE(client->error(), Pillow::HttpClient::AbortedError);
+
+		// And recover from it.
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(202);
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 202);
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 	}
 
-	void should_follow_redirects_when_told_so()
+	void should_close_connection_if_aborted_while_waiting_for_response()
 	{
-		QSKIP("Not implemented", SkipAll);
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		QVERIFY(server.receivedSockets.last()->state() == QAbstractSocket::ConnectedState);
+		QPointer<QTcpSocket> socket = server.receivedSockets.last();
+		QVERIFY(socket != 0);
+		client->abort();
+		QVERIFY(waitForResponse());
+		QVERIFY(waitFor([=]{ return socket == 0; })); // The socket should get closed and deleted.
+
+		// Different case: say we have an existing connection but no pending response. Aborting should not close it.
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200);
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 200);
+
+		socket = server.receivedSockets.last();
+		QVERIFY(socket != 0);
+		QTest::ignoreMessage(QtWarningMsg, "Pillow::HttpClient::abort(): called while not running.");
+		client->abort();
+		QTest::qWait(10);
+		QVERIFY(socket != 0);
 	}
 
-	void should_ignore_100_continue_responses()
+	void should_reuse_existing_connection_to_same_host_and_port()
 	{
-		QSKIP("Not implemented", SkipAll);
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200);
+		QVERIFY(waitForResponse());
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(201);
+		QVERIFY(waitForResponse());
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(202);
+		QVERIFY(waitForResponse());
+
+		QCOMPARE(server.receivedSockets.size(), 3);
+		QVERIFY(server.receivedSockets.at(0) == server.receivedSockets.at(1) && server.receivedSockets.at(1) == server.receivedSockets.at(2));
 	}
+
+//	void should_receive_streaming_responses()
+//	{
+//		QSKIP("Not implemented", SkipAll);
+//	}
+
+//	void should_close_connection_when_requesting_a_resource_from_a_different_host()
+//	{
+//		QSKIP("Not implemented", SkipAll);
+//	}
+
+//	void should_reuse_existing_connection_from_same_host()
+//	{
+//		QSKIP("Not implemented", SkipAll);
+//	}
+
+//	void should_detect_redirects()
+//	{
+//		QSKIP("Not implemented", SkipAll);
+//	}
+
+//	void should_follow_redirects_when_told_so()
+//	{
+//		QSKIP("Not implemented", SkipAll);
+//	}
+
+//	void should_ignore_100_continue_responses()
+//	{
+//		QSKIP("Not implemented", SkipAll);
+//	}
+
+//	void should_have_a_configurable_receive_buffer()
+//	{
+//		QSKIP("Not implemented", SkipAll);
+//	}
 };
 PILLOW_TEST_DECLARE(HttpClientTest)
 

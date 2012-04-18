@@ -122,7 +122,9 @@ namespace Pillow
 			NoError,				// There was no error in sending and receiving the previous request (if any),
 									// including the 4xx and 5xx responses with represent client and server errors.
 			NetworkError,			// There was a network error (unable to connect, could not resolve host, etc.).
-			ResponseInvalidError	// The response from the server could not be parsed as a valid Http response.
+			ResponseInvalidError,	// The response from the server could not be parsed as a valid Http response.
+			RemoteHostClosedError,  // The remote server has closed the connection before sending a full reply.
+			AbortedError            // The request was aborted before a pending response was completed.
 			//, HttpError?
 		};
 
@@ -138,6 +140,8 @@ namespace Pillow
 		void deleteResource(const QUrl& url, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection());
 		void request(const QByteArray& method, const QUrl& url, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QByteArray& data = QByteArray());
 
+		void abort();
+
 	public:
 		// Response Members.
 		bool responsePending() const;
@@ -147,8 +151,11 @@ namespace Pillow
 		inline Pillow::HttpHeaderCollection headers() const { return HttpResponseParser::headers(); }
 		inline const QByteArray& content() const { return HttpResponseParser::content(); }
 
+	signals:
+		void finished();
+
 	private slots:
-		void device_networkError(QAbstractSocket::SocketError);
+		void device_error(QAbstractSocket::SocketError error);
 		void device_connected();
 		void device_readyRead();
 

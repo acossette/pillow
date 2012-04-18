@@ -203,7 +203,7 @@ Pillow::HttpClient::HttpClient(QObject *parent)
 	: QObject(parent), _responsePending(false), _error(NoError)
 {
 	_device = new QTcpSocket(this);
-	connect(_device, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(device_networkError(QAbstractSocket::SocketError)));
+	connect(_device, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(device_error(QAbstractSocket::SocketError)));
 	connect(_device, SIGNAL(connected()), this, SLOT(device_connected()));
 	connect(_device, SIGNAL(readyRead()), this, SLOT(device_readyRead()));
 	_requestWriter.setDevice(_device);
@@ -279,10 +279,38 @@ void Pillow::HttpClient::request(const QByteArray &method, const QUrl &url, cons
 	}
 }
 
-void Pillow::HttpClient::device_networkError(QAbstractSocket::SocketError)
+void Pillow::HttpClient::abort()
 {
+	if (!_responsePending)
+	{
+		qWarning("Pillow::HttpClient::abort(): called while not running.");
+		return;
+	}
+	if (_device) _device->close();
 	_responsePending = false;
-	_error = NetworkError;
+	_error = AbortedError;
+}
+
+void Pillow::HttpClient::device_error(QAbstractSocket::SocketError error)
+{
+	if (!_responsePending)
+	{
+		// Errors that happen while we are not waiting for a response are ok. We'll try to
+		// recover on the next time we get a request.
+		return;
+	}
+
+	switch (error)
+	{
+	case QAbstractSocket::RemoteHostClosedError:
+		_error = RemoteHostClosedError;
+		break;
+	default:
+		_error = NetworkError;
+	}
+
+	_responsePending = false;
+	emit finished();
 }
 
 void Pillow::HttpClient::device_connected()
@@ -299,6 +327,7 @@ void Pillow::HttpClient::device_readyRead()
 	{
 		_responsePending = false;
 		_error = ResponseInvalidError;
+		_device->close();
 	}
 }
 
@@ -332,4 +361,5 @@ void Pillow::HttpClient::headersComplete()
 void Pillow::HttpClient::messageComplete()
 {
 	_responsePending = false;
+	emit finished();
 }
