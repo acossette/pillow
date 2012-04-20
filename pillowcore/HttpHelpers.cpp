@@ -8,6 +8,7 @@ namespace Pillow
 		{
 			if (filename.endsWith(".html", Qt::CaseInsensitive)) return "text/html";
 			if (filename.endsWith(".jpg", Qt::CaseInsensitive)) return "image/jpeg";
+			if (filename.endsWith(".jpeg", Qt::CaseInsensitive)) return "image/jpeg";
 			if (filename.endsWith(".png", Qt::CaseInsensitive)) return "image/png";
 			if (filename.endsWith(".gif", Qt::CaseInsensitive)) return "image/gif";
 			if (filename.endsWith(".css", Qt::CaseInsensitive)) return "text/css";

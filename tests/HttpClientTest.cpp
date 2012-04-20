@@ -98,6 +98,12 @@ private:
 		return true;
 	}
 
+	bool waitForContentReadyRead(int maxTime = 500)
+	{
+		QSignalSpy signalSpy(client, SIGNAL(contentReadyRead()));
+		return waitFor([&]{ return signalSpy.size() > 0; }, maxTime);
+	}
+
 	template <typename Pred> bool waitFor(const Pred& predicate, int maxTime = 500)
 	{
 		QElapsedTimer t; t.start();
@@ -465,6 +471,11 @@ private slots:
 		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 	}
 
+	void should_report_error_if_server_sends_unexpected_data()
+	{
+		QSKIP("Not Implemented", SkipAll);
+	}
+
 	void should_emit_finished_after_receiving_response()
 	{
 		QSignalSpy finishedSpy(client, SIGNAL(finished()));
@@ -542,39 +553,69 @@ private slots:
 
 	void should_reuse_existing_connection_to_same_host_and_port()
 	{
-		client->get(testUrl());
-		QVERIFY(server.waitForRequest());
-		server.receivedConnections.last()->writeResponse(200);
-		QVERIFY(waitForResponse());
+		client->get(testUrl()); QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200); QVERIFY(waitForResponse());
 
-		client->get(testUrl());
-		QVERIFY(server.waitForRequest());
-		server.receivedConnections.last()->writeResponse(201);
-		QVERIFY(waitForResponse());
+		client->get(testUrl()); QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(201); QVERIFY(waitForResponse());
 
-		client->get(testUrl());
-		QVERIFY(server.waitForRequest());
-		server.receivedConnections.last()->writeResponse(202);
-		QVERIFY(waitForResponse());
+		client->get(testUrl()); QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(202); QVERIFY(waitForResponse());
 
 		QCOMPARE(server.receivedSockets.size(), 3);
 		QVERIFY(server.receivedSockets.at(0) == server.receivedSockets.at(1) && server.receivedSockets.at(1) == server.receivedSockets.at(2));
 	}
 
-//	void should_receive_streaming_responses()
-//	{
-//		QSKIP("Not implemented", SkipAll);
-//	}
+	void should_allow_consuming_partial_responses_to_support_streaming()
+	{
+		// With chunked transfer encoding.
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeHeaders(201, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("Transfer-Encoding", "chunked"));
+		server.receivedConnections.last()->writeContent("hello");
+		QVERIFY(waitForContentReadyRead());
+		QCOMPARE(client->statusCode(), 201);
+		QCOMPARE(client->content(), QByteArray("hello"));
+		QCOMPARE(client->consumeContent(), QByteArray("hello"));
+		QCOMPARE(client->content(), QByteArray());
+		QCOMPARE(client->consumeContent(), QByteArray());
 
-//	void should_close_connection_when_requesting_a_resource_from_a_different_host()
-//	{
-//		QSKIP("Not implemented", SkipAll);
-//	}
+		server.receivedConnections.last()->writeContent(" ");
+		QVERIFY(waitForContentReadyRead());
+		QCOMPARE(client->consumeContent(), QByteArray(" "));
 
-//	void should_reuse_existing_connection_from_same_host()
-//	{
-//		QSKIP("Not implemented", SkipAll);
-//	}
+		server.receivedConnections.last()->writeContent("world!");
+		QVERIFY(waitForContentReadyRead());
+		QCOMPARE(client->consumeContent(), QByteArray("world!"));
+
+		server.receivedConnections.last()->endContent();
+		QVERIFY(waitForResponse());
+
+		QCOMPARE(client->content(), QByteArray());
+		QCOMPARE(client->consumeContent(), QByteArray());
+
+		// Without chunked transfer encoding.
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeHeaders(202);
+		server.receivedConnections.last()->writeContent("hello");
+		QVERIFY(waitForContentReadyRead());
+		QCOMPARE(client->statusCode(), 202);
+		QCOMPARE(client->content(), QByteArray("hello"));
+		QCOMPARE(client->consumeContent(), QByteArray("hello"));
+		QCOMPARE(client->content(), QByteArray());
+		QCOMPARE(client->consumeContent(), QByteArray());
+
+		server.receivedConnections.last()->writeContent(" world!");
+		QVERIFY(waitForContentReadyRead());
+		QCOMPARE(client->consumeContent(), QByteArray(" world!"));
+
+		server.receivedConnections.last()->endContent();
+		QVERIFY(waitForResponse());
+
+		QCOMPARE(client->content(), QByteArray());
+		QCOMPARE(client->consumeContent(), QByteArray());
+	}
 
 //	void should_detect_redirects()
 //	{
@@ -586,15 +627,25 @@ private slots:
 //		QSKIP("Not implemented", SkipAll);
 //	}
 
-//	void should_ignore_100_continue_responses()
-//	{
-//		QSKIP("Not implemented", SkipAll);
-//	}
+	void should_ignore_100_continue_responses()
+	{
+		client->post(testUrl(), Pillow::HttpHeaderCollection() << Pillow::HttpHeader("Expect", "100-continue"), "post data");
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(201, Pillow::HttpHeaderCollection(), "content");
+		QVERIFY(waitForResponse(500));
+		QCOMPARE(client->statusCode(), 201);
+		QCOMPARE(client->content(), QByteArray("content"));
+	}
 
 //	void should_have_a_configurable_receive_buffer()
 //	{
 //		QSKIP("Not implemented", SkipAll);
 //	}
+
+	void should_allow_specifying_connection_keep_alive_timeout()
+	{
+
+	}
 };
 PILLOW_TEST_DECLARE(HttpClientTest)
 

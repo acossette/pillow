@@ -78,9 +78,10 @@ namespace Pillow
 		inline bool completesOnEof() const { return http_message_needs_eof(const_cast<http_parser*>(&parser)); }
 
 	protected:
-		virtual void messageBegin();
-		virtual void headersComplete();
-		virtual void messageComplete();
+		virtual void messageBegin();    // Defaults to clearing previous response members.
+		virtual void headersComplete(); // Defaults to doing nothing.
+		virtual void messageContent(const char *data, int length); // Defaults to append to "content()"
+		virtual void messageComplete(); // Defaults to doing nothing.
 
 	private:
 		static int parser_on_message_begin(http_parser* parser);
@@ -99,6 +100,8 @@ namespace Pillow
 		http_parser_settings parser_settings;
 		QByteArray _field, _value;
 		bool _lastWasValue;
+
+	protected:
 		Pillow::HttpHeaderCollection _headers;
 		QByteArray _content;
 	};
@@ -151,7 +154,10 @@ namespace Pillow
 		inline Pillow::HttpHeaderCollection headers() const { return HttpResponseParser::headers(); }
 		inline const QByteArray& content() const { return HttpResponseParser::content(); }
 
+		QByteArray consumeContent(); // Get the value of "content()" and clear the internal buffer.
+
 	signals:
+		void contentReadyRead(); // Some new data is available in the response content.
 		void finished();
 
 	private slots:
@@ -165,6 +171,7 @@ namespace Pillow
 	protected:
 		void messageBegin();
 		void headersComplete();
+		void messageContent(const char *data, int length);
 		void messageComplete();
 
 	private:

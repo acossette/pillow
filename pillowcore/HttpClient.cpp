@@ -131,6 +131,11 @@ void Pillow::HttpResponseParser::headersComplete()
 {
 }
 
+void Pillow::HttpResponseParser::messageContent(const char *data, int length)
+{
+	_content.append(data, length);
+}
+
 void Pillow::HttpResponseParser::messageComplete()
 {
 }
@@ -169,7 +174,7 @@ int Pillow::HttpResponseParser::parser_on_headers_complete(http_parser *parser)
 int Pillow::HttpResponseParser::parser_on_body(http_parser *parser, const char *at, size_t length)
 {
 	Pillow::HttpResponseParser* self = reinterpret_cast<Pillow::HttpResponseParser*>(parser->data);
-	self->_content.append(at, length);
+	self->messageContent(at, static_cast<int>(length));
 	return 0;
 }
 
@@ -219,6 +224,13 @@ bool Pillow::HttpClient::responsePending() const
 Pillow::HttpClient::Error Pillow::HttpClient::error() const
 {
 	return _error;
+}
+
+QByteArray Pillow::HttpClient::consumeContent()
+{
+	QByteArray c = _content;
+	_content = QByteArray();
+	return c;
 }
 
 void Pillow::HttpClient::get(const QUrl &url, const Pillow::HttpHeaderCollection &headers)
@@ -322,7 +334,16 @@ void Pillow::HttpClient::device_readyRead()
 {
 	//TODO: if (!responsePending()) return;
 
-	inject(_device->readAll());
+	QByteArray data = _device->readAll();
+	int consumed = inject(data);
+
+	if (!hasError() && consumed < data.size() && responsePending())
+	{
+		// We had multiple responses in the buffer?
+		// It was a 100 Continue since we are still response pending.
+		consumed += inject(data.constData() + consumed, data.size() - consumed);
+	}
+
 	if (Pillow::HttpResponseParser::hasError())
 	{
 		_responsePending = false;
@@ -352,14 +373,26 @@ void Pillow::HttpClient::sendRequest()
 
 void Pillow::HttpClient::messageBegin()
 {
+	Pillow::HttpResponseParser::messageBegin();
 }
 
 void Pillow::HttpClient::headersComplete()
 {
+	Pillow::HttpResponseParser::headersComplete();
+}
+
+void Pillow::HttpClient::messageContent(const char *data, int length)
+{
+	Pillow::HttpResponseParser::messageContent(data, length);
+	emit contentReadyRead();
 }
 
 void Pillow::HttpClient::messageComplete()
 {
-	_responsePending = false;
-	emit finished();
+	if (statusCode() != 100) // Ignore 100 Continue responses.
+	{
+		Pillow::HttpResponseParser::messageComplete();
+		_responsePending = false;
+		emit finished();
+	}
 }
