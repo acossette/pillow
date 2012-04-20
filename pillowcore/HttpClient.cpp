@@ -332,7 +332,13 @@ void Pillow::HttpClient::device_connected()
 
 void Pillow::HttpClient::device_readyRead()
 {
-	//TODO: if (!responsePending()) return;
+	if (!responsePending())
+	{
+		// Not supposed to be receiving data at this point. Just
+		// ignore it and close the connection.
+		_device->close();
+		return;
+	}
 
 	QByteArray data = _device->readAll();
 	int consumed = inject(data);
@@ -354,7 +360,7 @@ void Pillow::HttpClient::device_readyRead()
 
 void Pillow::HttpClient::sendRequest()
 {
-	//TODO: support cancelling? if (!responsePending()) return;
+	if (!responsePending()) return;
 
 	QByteArray uri = _request.url.encodedPath();
 	const QByteArray query = _request.url.encodedQuery();

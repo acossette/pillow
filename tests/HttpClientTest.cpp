@@ -471,9 +471,33 @@ private slots:
 		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 	}
 
-	void should_report_error_if_server_sends_unexpected_data()
+	void should_silently_ignore_unexpected_data_received_while_not_waiting_for_response_and_close_connection()
 	{
-		QSKIP("Not Implemented", SkipAll);
+		// Example where server returns an extra, valid HTTP response, such as a
+		// server indicating a timeout on a keep-alive connection.
+		client->get(testUrl()); QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(202); QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 202);
+
+		QPointer<QTcpSocket> socket = server.receivedSockets.last();
+		socket->write("HTTP/1.0 400 Bad Request\r\nConnection: close\r\n\r\nThis connection was inactive for too long!");
+
+		waitFor([&]{ return socket == 0; }); // The client should close the socket, which will close and delete it on the server.
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QCOMPARE(client->statusCode(), 202);
+
+		// Example where server returns extra junk.
+		client->get(testUrl()); QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(202); QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 202);
+
+		socket = server.receivedSockets.last();
+		socket->write("=-=-=-=-=-FFFFFFFUUUUUUUUUUUU!");
+
+		waitFor([&]{ return socket == 0; }); // The client should close the socket, which will close and delete it on the server.
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QCOMPARE(client->statusCode(), 202);
+
 	}
 
 	void should_emit_finished_after_receiving_response()
@@ -617,16 +641,6 @@ private slots:
 		QCOMPARE(client->consumeContent(), QByteArray());
 	}
 
-//	void should_detect_redirects()
-//	{
-//		QSKIP("Not implemented", SkipAll);
-//	}
-
-//	void should_follow_redirects_when_told_so()
-//	{
-//		QSKIP("Not implemented", SkipAll);
-//	}
-
 	void should_ignore_100_continue_responses()
 	{
 		client->post(testUrl(), Pillow::HttpHeaderCollection() << Pillow::HttpHeader("Expect", "100-continue"), "post data");
@@ -637,14 +651,14 @@ private slots:
 		QCOMPARE(client->content(), QByteArray("content"));
 	}
 
-//	void should_have_a_configurable_receive_buffer()
-//	{
-//		QSKIP("Not implemented", SkipAll);
-//	}
+	void should_have_a_configurable_receive_buffer()
+	{
+		QSKIP("Not implemented", SkipAll);
+	}
 
 	void should_allow_specifying_connection_keep_alive_timeout()
 	{
-
+		QSKIP("Not implemented", SkipAll);
 	}
 };
 PILLOW_TEST_DECLARE(HttpClientTest)
