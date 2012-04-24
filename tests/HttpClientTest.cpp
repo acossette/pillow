@@ -184,6 +184,17 @@ private slots:
 									   .withContent("Some sent data")
 									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
 													<< Pillow::HttpHeader("Content-Length", "14"));
+		QTest::newRow("Large POST") << QByteArray("POST")
+									<< QUrl("http://127.0.0.1:4569/some/large/path")
+									<< (Pillow::HttpHeaderCollection())
+									<< QByteArray(128 * 1024, '*')
+									<< HttpRequestData()
+									   .withMethod("POST")
+									   .withUri("/some/large/path").withPath("/some/large/path").withQueryString("").withFragment("")
+									   .withHttpVersion("HTTP/1.1")
+									   .withContent(QByteArray(128 * 1024, '*'))
+									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
+													<< Pillow::HttpHeader("Content-Length", "131072"));
 	}
 
 	void should_send_valid_requests()
@@ -740,7 +751,7 @@ private slots:
 		QCOMPARE(readAll(), QByteArray("PUT /some/path.txt HTTP/1.1\r\n\r\n"));
 
 		w.put("/other/path.txt", Pillow::HttpHeaderCollection() << Pillow::HttpHeader("One", "Header"), QByteArray("Some Data"));
-		QCOMPARE(readAll(), QByteArray("PUT /other/path.txt HTTP/1.1\r\nOne: Header\r\nContent-Length: 9\r\nr\nSome Data"));
+		QCOMPARE(readAll(), QByteArray("PUT /other/path.txt HTTP/1.1\r\nOne: Header\r\nContent-Length: 9\r\n\r\nSome Data"));
 	}
 
 	void test_write_deleteResource()
@@ -1604,11 +1615,6 @@ private slots:
 		QCOMPARE(p.messageBeginCount, 2);
 		QCOMPARE(p.headersCompleteCount, 2);
 		QCOMPARE(p.messageCompleteCount, 2);
-	}
-
-	void should_ignore_100_continue()
-	{
-		QSKIP("Not implemented", SkipAll);
 	}
 };
 PILLOW_TEST_DECLARE(HttpResponseParserTest)

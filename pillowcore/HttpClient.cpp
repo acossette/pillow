@@ -4,6 +4,23 @@
 #include <QtCore/QUrl>
 #include <QtNetwork/QTcpSocket>
 
+namespace Pillow
+{
+	namespace HttpClientTokens
+	{
+		const QByteArray getMethodToken("GET");
+		const QByteArray headMethodToken("HEAD");
+		const QByteArray postMethodToken("POST");
+		const QByteArray putMethodToken("PUT");
+		const QByteArray deleteMethodToken("DELETE");
+		const QByteArray crlfToken("\r\n");
+		const QByteArray colonSpaceToken(": ");
+		const QByteArray httpOneOneCrlfToken(" HTTP/1.1\r\n");
+		const QByteArray contentLengthColonSpaceToken("Content-Length: ");
+		const Pillow::HttpHeader acceptHeader("Accept", "*");
+	}
+}
+
 //
 // Pillow::HttpRequestWriter
 //
@@ -15,27 +32,27 @@ Pillow::HttpRequestWriter::HttpRequestWriter(QObject *parent)
 
 void Pillow::HttpRequestWriter::get(const QByteArray &path, const Pillow::HttpHeaderCollection &headers)
 {
-	write("GET", path, headers);
+	write(Pillow::HttpClientTokens::getMethodToken, path, headers);
 }
 
 void Pillow::HttpRequestWriter::head(const QByteArray &path, const Pillow::HttpHeaderCollection &headers)
 {
-	write("HEAD", path, headers);
+	write(Pillow::HttpClientTokens::headMethodToken, path, headers);
 }
 
 void Pillow::HttpRequestWriter::post(const QByteArray &path, const Pillow::HttpHeaderCollection &headers, const QByteArray &data)
 {
-	write("POST", path, headers, data);
+	write(Pillow::HttpClientTokens::postMethodToken, path, headers, data);
 }
 
 void Pillow::HttpRequestWriter::put(const QByteArray &path, const Pillow::HttpHeaderCollection &headers, const QByteArray &data)
 {
-	write("PUT", path, headers, data);
+	write(Pillow::HttpClientTokens::putMethodToken, path, headers, data);
 }
 
 void Pillow::HttpRequestWriter::deleteResource(const QByteArray &path, const Pillow::HttpHeaderCollection &headers)
 {
-	write("DELETE", path, headers);
+	write(Pillow::HttpClientTokens::deleteMethodToken, path, headers);
 }
 
 void Pillow::HttpRequestWriter::write(const QByteArray &method, const QByteArray &path, const Pillow::HttpHeaderCollection &headers, const QByteArray &data)
@@ -46,35 +63,51 @@ void Pillow::HttpRequestWriter::write(const QByteArray &method, const QByteArray
 		return;
 	}
 
-	QByteArray buffer;
-	buffer.reserve(8192);
-	buffer.append(method).append(' ').append(path).append(" HTTP/1.1\r\n");
+	if (_builder.capacity() < 8192)
+		_builder.reserve(8192);
+
+	_builder.append(method).append(' ').append(path).append(Pillow::HttpClientTokens::httpOneOneCrlfToken);
 
 	for (const Pillow::HttpHeader *h = headers.constBegin(), *hE = headers.constEnd(); h < hE; ++h)
-		buffer.append(h->first).append(": ").append(h->second).append("\r\n");
+		_builder.append(h->first).append(Pillow::HttpClientTokens::colonSpaceToken).append(h->second).append(Pillow::HttpClientTokens::crlfToken);
 
 	if (!data.isEmpty())
 	{
-		buffer.append("Content-Length: ");
-		Pillow::ByteArrayHelpers::appendNumber<int, 10>(buffer, data.size());
-		buffer.append("\r\n");
+		_builder.append(Pillow::HttpClientTokens::contentLengthColonSpaceToken);
+		Pillow::ByteArrayHelpers::appendNumber<int, 10>(_builder, data.size());
+		_builder.append(Pillow::HttpClientTokens::crlfToken);
 	}
 
-	buffer.append("\r\n");
+	_builder.append(Pillow::HttpClientTokens::crlfToken);
 
-	if (!data.isEmpty())
+	if (data.isEmpty())
 	{
-		buffer.append(data);
+		_device->write(_builder);
+	}
+	else
+	{
+		if (data.size() < 4096)
+		{
+			_builder.append(data);
+			_device->write(_builder);
+		}
+		else
+		{
+			_device->write(_builder);
+			_device->write(data);
+		}
 	}
 
-	_device->write(buffer);
+	if (_builder.size() > 16384)
+		_builder.clear();
+	else
+		_builder.data_ptr()->size = 0;
 }
 
 void Pillow::HttpRequestWriter::setDevice(QIODevice *device)
 {
 	if (_device == device) return;
 	_device = device;
-	/* emit deviceChanged(); */
 }
 
 //
@@ -110,7 +143,7 @@ void Pillow::HttpResponseParser::injectEof()
 void Pillow::HttpResponseParser::clear()
 {
 	http_parser_init(&parser, HTTP_RESPONSE);
-	_headers.clear();
+	while (!_headers.isEmpty()) _headers.pop_back();
 	_content.clear();
 }
 
@@ -122,7 +155,7 @@ QByteArray Pillow::HttpResponseParser::errorString() const
 
 void Pillow::HttpResponseParser::messageBegin()
 {
-	_headers.clear();
+	while (!_headers.isEmpty()) _headers.pop_back();
 	_content.clear();
 	_lastWasValue = false;
 }
@@ -213,7 +246,7 @@ Pillow::HttpClient::HttpClient(QObject *parent)
 	connect(_device, SIGNAL(readyRead()), this, SLOT(device_readyRead()));
 	_requestWriter.setDevice(_device);
 
-	_baseRequestHeaders << Pillow::HttpHeader("Accept", "*");
+	_baseRequestHeaders << Pillow::HttpClientTokens::acceptHeader;
 }
 
 bool Pillow::HttpClient::responsePending() const
@@ -235,27 +268,27 @@ QByteArray Pillow::HttpClient::consumeContent()
 
 void Pillow::HttpClient::get(const QUrl &url, const Pillow::HttpHeaderCollection &headers)
 {
-	request("GET", url, headers);
+	request(Pillow::HttpClientTokens::getMethodToken, url, headers);
 }
 
 void Pillow::HttpClient::head(const QUrl &url, const Pillow::HttpHeaderCollection &headers)
 {
-	request("HEAD", url, headers);
+	request(Pillow::HttpClientTokens::headMethodToken, url, headers);
 }
 
 void Pillow::HttpClient::post(const QUrl &url, const Pillow::HttpHeaderCollection &headers, const QByteArray &data)
 {
-	request("POST", url, headers, data);
+	request(Pillow::HttpClientTokens::postMethodToken, url, headers, data);
 }
 
 void Pillow::HttpClient::put(const QUrl &url, const Pillow::HttpHeaderCollection &headers, const QByteArray &data)
 {
-	request("PUT", url, headers, data);
+	request(Pillow::HttpClientTokens::putMethodToken, url, headers, data);
 }
 
 void Pillow::HttpClient::deleteResource(const QUrl &url, const Pillow::HttpHeaderCollection &headers)
 {
-	request("DELETE", url, headers);
+	request(Pillow::HttpClientTokens::deleteMethodToken, url, headers);
 }
 
 void Pillow::HttpClient::request(const QByteArray &method, const QUrl &url, const Pillow::HttpHeaderCollection &headers, const QByteArray &data)

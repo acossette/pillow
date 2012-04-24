@@ -33,8 +33,8 @@ int main(int argc, char *argv[])
 //	result += exec_ByteArrayHelpersTest();
 
 	PILLOW_TEST_RUN(HttpClientTest, result);
-	//PILLOW_TEST_RUN(HttpRequestWriterTest, result);
-	//PILLOW_TEST_RUN(HttpResponseParserTest, result);
+	PILLOW_TEST_RUN(HttpRequestWriterTest, result);
+	PILLOW_TEST_RUN(HttpResponseParserTest, result);
 
 	return result;
 }

@@ -2,11 +2,11 @@
 #define PILLOW_HTTPCLIENT_H
 
 #ifndef QOBJECT_H
-#include <QObject>
+#include <QtCore/QObject>
 #endif // QOBJECT_H
 #ifndef QURL_H
-#include <QUrl>
-#endif // QWURL_H
+#include <QtCore/QUrl>
+#endif // QURL_H
 #ifndef PILLOW_HTTPCONNECTION_H
 #include "HttpConnection.h"
 #endif // PILLOW_HTTPCONNECTION_H
@@ -42,6 +42,7 @@ namespace Pillow
 
 	private:
 		QIODevice* _device;
+		QByteArray _builder;
 	};
 
 	class HttpResponseParser
