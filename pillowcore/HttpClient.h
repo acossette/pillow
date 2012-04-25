@@ -183,6 +183,7 @@ namespace Pillow
 		Pillow::HttpResponseParser _responseParser;
 		bool _responsePending;
 		Error _error;
+		QByteArray _buffer;
 	};
 } // namespace Pillow
 

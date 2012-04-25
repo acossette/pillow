@@ -373,15 +373,32 @@ void Pillow::HttpClient::device_readyRead()
 		return;
 	}
 
-	QByteArray data = _device->readAll();
-	int consumed = inject(data);
+	qint64 bytesAvailable = _device->bytesAvailable();
+	if (bytesAvailable == 0) return;
 
-	if (!hasError() && consumed < data.size() && responsePending())
+	if (_buffer.capacity() < _buffer.size() + bytesAvailable)
+		_buffer.reserve(_buffer.size() + bytesAvailable);
+
+	qint64 bytesRead = _device->read(_buffer.data() + _buffer.size(), bytesAvailable);
+	_buffer.data_ptr()->size += bytesRead;
+
+	int consumed = inject(_buffer);
+
+	if (!hasError() && consumed < _buffer.size() && responsePending())
 	{
 		// We had multiple responses in the buffer?
 		// It was a 100 Continue since we are still response pending.
-		consumed += inject(data.constData() + consumed, data.size() - consumed);
+		consumed += inject(_buffer.constData() + consumed, _buffer.size() - consumed);
 	}
+
+	if (consumed < _buffer.size())
+		qDebug() << "Pillow::HttpClient::device_readyRead(): not all request data was consumed.";
+
+	// Reuse the read buffer if it is not overly large.
+	if (_buffer.capacity() > 128 * 1024)
+		_buffer.clear();
+	else
+		_buffer.data_ptr()->size = 0;
 
 	if (Pillow::HttpResponseParser::hasError())
 	{
