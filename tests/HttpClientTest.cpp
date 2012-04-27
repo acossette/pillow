@@ -1,6 +1,7 @@
 #include <QtCore/QObject>
 #include <QtTest/QtTest>
 #include <QtNetwork/QTcpSocket>
+#include <QtNetwork/QNetworkReply>
 #include <HttpClient.h>
 #include <HttpConnection.h>
 #include <HttpServer.h>
@@ -11,42 +12,57 @@ typedef QList<QByteArray> Chunks;
 Q_DECLARE_METATYPE(Chunks)
 Q_DECLARE_METATYPE(QAbstractSocket::SocketState)
 
-class TestServer : public Pillow::HttpServer
+class NetworkAccessManagerTest : public QObject
 {
 	Q_OBJECT
-
-public:
-	TestServer()
-	{
-		connect(this, SIGNAL(requestReady(Pillow::HttpConnection*)), this, SLOT(self_requestReady(Pillow::HttpConnection*)));
-	}
-
-	QList<HttpRequestData> receivedRequests;
-	QList<Pillow::HttpConnection*> receivedConnections;
-	QList<QTcpSocket*> receivedSockets;
-
-	bool waitForRequest(int maxTime = 500)
-	{
-		QElapsedTimer t; t.start();
-		int initialRequests = receivedRequests.size();
-		while (receivedRequests.size() == initialRequests && t.elapsed() < maxTime) QCoreApplication::processEvents();
-		if (receivedRequests.size() == initialRequests)
-		{
-			qWarning() << "Timed out waiting for request";
-			return false;
-		}
-		return true;
-	}
+	Pillow::NetworkAccessManager *nam;
+	TestServer server;
 
 private slots:
-
-	void self_requestReady(Pillow::HttpConnection* request)
+	void initTestCase()
 	{
-		receivedRequests << HttpRequestData::fromHttpConnection(request);
-		receivedConnections << request;
-		receivedSockets << qobject_cast<QTcpSocket*>(request->inputDevice());
+		QVERIFY(server.listen(QHostAddress::LocalHost, 4571));
 	}
+
+	void init()
+	{
+		nam = new Pillow::NetworkAccessManager();
+		QVERIFY(server.receivedRequests.isEmpty());
+		QVERIFY(server.receivedConnections.isEmpty());
+		QVERIFY(server.receivedSockets.isEmpty());
+	}
+
+	void cleanup()
+	{
+		delete nam; nam = 0;
+		server.receivedRequests.clear();
+		server.receivedConnections.clear();
+		server.receivedSockets.clear();
+	}
+
+private:
+	QUrl testUrl() const { return QUrl("http://127.0.0.1:4571/test/path"); }
+
+private slots:
+	void should_send_valid_requests()
+	{
+		QNetworkRequest request(testUrl());
+		nam = new Pillow::NetworkAccessManager();
+		//QNetworkAccessManager *nam = new QNetworkAccessManager();
+		QNetworkReply *r = nam->get(request);
+		QVERIFY(server.waitForRequest(5000));
+		server.receivedConnections.last()->writeResponse(201, Pillow::HttpHeaderCollection(), "Hello World!");
+
+		QSignalSpy finishedSpy(r, SIGNAL(finished()));
+		QVERIFY(waitFor([&]{ return finishedSpy.size() > 0; }));
+
+		QCOMPARE(r->readAll(), QByteArray("Hello World!"));
+
+
+	}
+
 };
+PILLOW_TEST_DECLARE(NetworkAccessManagerTest)
 
 class HttpClientTest : public QObject
 {
@@ -102,15 +118,6 @@ private:
 	{
 		QSignalSpy signalSpy(client, SIGNAL(contentReadyRead()));
 		return waitFor([&]{ return signalSpy.size() > 0; }, maxTime);
-	}
-
-	template <typename Pred> bool waitFor(const Pred& predicate, int maxTime = 500)
-	{
-		QElapsedTimer t; t.start();
-		bool result = false;
-		while (!(result = predicate()) && !t.hasExpired(maxTime))
-			QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
-		return result;
 	}
 
 	QUrl testUrl() { return QUrl("http://127.0.0.1:4569/test");	}
@@ -660,6 +667,16 @@ private slots:
 		QVERIFY(waitForResponse(500));
 		QCOMPARE(client->statusCode(), 201);
 		QCOMPARE(client->content(), QByteArray("content"));
+	}
+
+	void should_report_error_given_an_unsupported_request()
+	{
+		QSKIP("Not implemented", SkipAll);
+	}
+
+	void should_support_head_requests()
+	{
+		QSKIP("Not implemented", SkipAll);
 	}
 
 	void should_have_a_configurable_receive_buffer()

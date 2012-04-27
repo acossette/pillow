@@ -7,6 +7,9 @@
 #ifndef QURL_H
 #include <QtCore/QUrl>
 #endif // QURL_H
+#ifndef QNETWORKACCESSMANAGER_H
+#include <QtNetwork/QNetworkAccessManager>
+#endif // QNETWORKACCESSMANAGER_H
 #ifndef PILLOW_HTTPCONNECTION_H
 #include "HttpConnection.h"
 #endif // PILLOW_HTTPCONNECTION_H
@@ -125,6 +128,7 @@ namespace Pillow
 		{
 			NoError,				// There was no error in sending and receiving the previous request (if any),
 									// including the 4xx and 5xx responses with represent client and server errors.
+			// RequestError,
 			NetworkError,			// There was a network error (unable to connect, could not resolve host, etc.).
 			ResponseInvalidError,	// The response from the server could not be parsed as a valid Http response.
 			RemoteHostClosedError,  // The remote server has closed the connection before sending a full reply.
@@ -150,6 +154,7 @@ namespace Pillow
 		// Response Members.
 		bool responsePending() const;
 		Error error() const;
+		// QString errorString() const;
 
 		inline int statusCode() const { return static_cast<int>(HttpResponseParser::statusCode()); }
 		inline Pillow::HttpHeaderCollection headers() const { return HttpResponseParser::headers(); }
@@ -185,6 +190,23 @@ namespace Pillow
 		Error _error;
 		QByteArray _buffer;
 	};
+
+	class NetworkAccessManager : public QNetworkAccessManager
+	{
+		Q_OBJECT
+
+	public:
+		NetworkAccessManager(QObject *parent = 0);
+
+	protected:
+		QNetworkReply *createRequest(Operation op, const QNetworkRequest &request, QIODevice *outgoingData = 0);
+
+	private:
+		typedef QMultiHash<QString, Pillow::HttpClient*> UrlClientsMap;
+		QList<Pillow::HttpClient*> _clients;
+		UrlClientsMap _urlToClientsMap;
+	};
+
 } // namespace Pillow
 
 #endif // PILLOW_HTTPCLIENT_H

@@ -3,6 +3,7 @@
 #include <QtCore/QIODevice>
 #include <QtCore/QUrl>
 #include <QtNetwork/QTcpSocket>
+#include <QtNetwork/QNetworkReply>
 
 namespace Pillow
 {
@@ -452,3 +453,132 @@ void Pillow::HttpClient::messageComplete()
 		emit finished();
 	}
 }
+
+//
+// Pillow::NetworkReply
+//
+
+namespace Pillow
+{
+	class NetworkReply : public QNetworkReply
+	{
+		Q_OBJECT
+
+	public:
+		NetworkReply(Pillow::HttpClient *client)
+			:_client(client), _contentPos(0)
+		{
+			connect(client, SIGNAL(contentReadyRead()), this, SLOT(client_contentReadyRead()));
+			connect(client, SIGNAL(finished()), this, SLOT(client_finished()));
+
+			// TODO: Cookies
+			// TODO: Authentication
+		}
+
+	private slots:
+		void client_contentReadyRead()
+		{
+			// TODO
+		}
+
+		void client_finished()
+		{
+			setAttribute(QNetworkRequest::HttpStatusCodeAttribute, _client->statusCode());
+			//TODO: setAttribute(QNetworkRequest::HttpReasonPhraseAttribute, );
+			//TODO: setAttribute(QNetworkRequest::RedirectionTargetAttribute, );
+			foreach (const Pillow::HttpHeader &header, _client->headers())
+				setRawHeader(header.first, header.second);
+
+			open(QIODevice::ReadOnly);
+			_content = _client->content();
+
+			disconnect(_client, 0, this, 0);
+			_client = 0;
+
+			setFinished(true);
+			emit finished();
+		}
+
+	public:
+		void abort()
+		{
+
+		}
+
+	protected:
+		qint64 readData(char *data, qint64 maxSize)
+		{
+			if (_contentPos >= _content.size()) return -1;
+			qint64 bytesRead = qMin(maxSize, static_cast<qint64>(_content.size() - _contentPos));
+			memcpy(data, _content.constData() + _contentPos, bytesRead);
+			_contentPos += bytesRead;
+			return bytesRead;
+		}
+
+	private:
+		Pillow::HttpClient *_client;
+		QByteArray _content;
+		int _contentPos;
+	};
+}
+
+//
+// Pillow::NetworkAccessManager
+//
+
+Pillow::NetworkAccessManager::NetworkAccessManager(QObject *parent)
+	: QNetworkAccessManager(parent)
+{
+}
+
+
+QNetworkReply *Pillow::NetworkAccessManager::createRequest(QNetworkAccessManager::Operation op, const QNetworkRequest &request, QIODevice *outgoingData)
+{
+	// TODO: use base implementation for unsupported schemes.
+
+	UrlClientsMap::Iterator it = _urlToClientsMap.find(request.url().authority());
+	Pillow::HttpClient *client = 0;
+	if (it != _urlToClientsMap.end())
+	{
+		_urlToClientsMap.erase(it);
+		client = it.value();
+	}
+	if (client == 0)
+	{
+		client = new Pillow::HttpClient(this);
+		_clients << client;
+	}
+
+	Pillow::NetworkReply *reply = new Pillow::NetworkReply(client);
+
+	Pillow::HttpHeaderCollection headers;
+
+	switch (op)
+	{
+	case QNetworkAccessManager::HeadOperation:
+		client->head(request.url(), headers);
+		break;
+	case QNetworkAccessManager::GetOperation:
+		client->get(request.url(), headers);
+		break;
+	case QNetworkAccessManager::PutOperation:
+		client->put(request.url(), headers, outgoingData ? outgoingData->readAll() : QByteArray());
+		break;
+	case QNetworkAccessManager::PostOperation:
+		client->post(request.url(), headers, outgoingData ? outgoingData->readAll() : QByteArray());
+		break;
+	case QNetworkAccessManager::DeleteOperation:
+		client->deleteResource(request.url(), headers);
+		break;
+	case QNetworkAccessManager::CustomOperation:
+		client->request(request.attribute(QNetworkRequest::CustomVerbAttribute).toByteArray(), request.url(), headers, outgoingData ? outgoingData->readAll() : QByteArray());
+		break;
+
+	case QNetworkAccessManager::UnknownOperation:
+		break;
+	}
+
+	return reply;
+}
+
+#include "HttpClient.moc"

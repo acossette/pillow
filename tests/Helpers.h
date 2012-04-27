@@ -1,8 +1,12 @@
 #ifndef HELPERS_H
 #define HELPERS_H
 
-#include <QtCore/QDebug>
+#include <QtCore/qdebug.h>
+#include <QtCore/qelapsedtimer.h>
+#include <QtNetwork/qtcpsocket.h>
+#include <QtTest/qtest.h>
 #include <HttpConnection.h>
+#include <HttpServer.h>
 
 #define PILLOW_TEST_DECLARE(TestClass) \
 	int exec_##TestClass() \
@@ -57,6 +61,41 @@ struct HttpRequestData
 };
 Q_DECLARE_METATYPE(HttpRequestData)
 
+class TestServer : public Pillow::HttpServer
+{
+	Q_OBJECT
+
+public:
+	inline TestServer()
+	{
+		connect(this, SIGNAL(requestReady(Pillow::HttpConnection*)), this, SLOT(self_requestReady(Pillow::HttpConnection*)));
+	}
+
+	QList<HttpRequestData> receivedRequests;
+	QList<Pillow::HttpConnection*> receivedConnections;
+	QList<QTcpSocket*> receivedSockets;
+
+	inline bool waitForRequest(int maxTime = 500)
+	{
+		QElapsedTimer t; t.start();
+		int initialRequests = receivedRequests.size();
+		while (receivedRequests.size() == initialRequests && t.elapsed() < maxTime) QCoreApplication::processEvents();
+		if (receivedRequests.size() == initialRequests)
+		{
+			qWarning() << "Timed out waiting for request";
+			return false;
+		}
+		return true;
+	}
+
+private slots:
+	inline void self_requestReady(Pillow::HttpConnection* request)
+	{
+		receivedRequests << HttpRequestData::fromHttpConnection(request);
+		receivedConnections << request;
+		receivedSockets << qobject_cast<QTcpSocket*>(request->inputDevice());
+	}
+};
 
 namespace PillowTest
 {
@@ -152,5 +191,14 @@ do {\
 	if (!PillowTest::pCompare(actual, expected, #actual, #expected, __FILE__, __LINE__))\
 		return;\
 } while (0)
+
+template <typename Pred> bool waitFor(const Pred& predicate, int maxTime = 500)
+{
+	QElapsedTimer t; t.start();
+	bool result = false;
+	while (!(result = predicate()) && !t.hasExpired(maxTime))
+		QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+	return result;
+}
 
 #endif // HELPERS_H

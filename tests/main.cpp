@@ -32,9 +32,10 @@ int main(int argc, char *argv[])
 //	extern int exec_ByteArrayHelpersTest();
 //	result += exec_ByteArrayHelpersTest();
 
-	PILLOW_TEST_RUN(HttpClientTest, result);
-	PILLOW_TEST_RUN(HttpRequestWriterTest, result);
-	PILLOW_TEST_RUN(HttpResponseParserTest, result);
+//	PILLOW_TEST_RUN(HttpRequestWriterTest, result);
+//	PILLOW_TEST_RUN(HttpResponseParserTest, result);
+//	PILLOW_TEST_RUN(HttpClientTest, result);
+	PILLOW_TEST_RUN(NetworkAccessManagerTest, result);
 
 	return result;
 }
