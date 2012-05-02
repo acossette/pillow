@@ -2,6 +2,7 @@
 #include "HttpConnection.h"
 #include <QtCore/QBuffer>
 #include <QtNetwork/QNetworkReply>
+#include <QtNetwork/QNetworkCookieJar>
 
 //
 // Pillow::HttpHandlerProxy
@@ -174,6 +175,12 @@ Pillow::ElasticNetworkAccessManager::ElasticNetworkAccessManager(QObject *parent
 {
 }
 
+Pillow::ElasticNetworkAccessManager::~ElasticNetworkAccessManager()
+{
+	if (cookieJar())
+		cookieJar()->setParent(this);
+}
+
 QNetworkReply * Pillow::ElasticNetworkAccessManager::createRequest(QNetworkAccessManager::Operation op, const QNetworkRequest &request, QIODevice *outgoingData)
 {
 	// Find the first available child QNetworkAccessManager.
@@ -193,9 +200,12 @@ QNetworkReply * Pillow::ElasticNetworkAccessManager::createRequest(QNetworkAcces
 	{
 		// Did not find an available manager. Spawn a new one.
 		nam = new QNetworkAccessManager(this);
+		if (cookieJar())
+		{
+			nam->setCookieJar(cookieJar());
+			cookieJar()->setParent(0);
+		}
 	}
 	
 	return static_cast<NamOpener*>(nam)->doCreateRequest(op, request, outgoingData);
 }
-
-

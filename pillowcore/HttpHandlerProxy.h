@@ -26,6 +26,8 @@ namespace Pillow
 		const QUrl& proxiedUrl() const { return _proxiedUrl; }
 		void setProxiedUrl(const QUrl& proxiedUrl);
 		
+		inline ElasticNetworkAccessManager *networkAccessManager() const { return _networkAccessManager; }
+		
 	protected:
 		virtual QNetworkReply* createProxiedReply(Pillow::HttpConnection* request, QNetworkRequest proxiedRequest);
 		virtual Pillow::HttpHandlerProxyPipe* createPipe(Pillow::HttpConnection* request, QNetworkReply* proxiedReply);
@@ -67,6 +69,7 @@ namespace Pillow
 	
 	public:
 		ElasticNetworkAccessManager(QObject* parent);
+		~ElasticNetworkAccessManager();
 		
 	protected:
 		virtual QNetworkReply* createRequest(Operation op, const QNetworkRequest &request, QIODevice *outgoingData);
