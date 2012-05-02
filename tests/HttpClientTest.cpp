@@ -2,10 +2,12 @@
 #include <QtTest/QtTest>
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QNetworkReply>
+#include <QtNetwork/QNetworkCookie>
 #include <HttpClient.h>
 #include <HttpConnection.h>
 #include <HttpServer.h>
 #include <HttpHandlerSimpleRouter.h>
+#include <HttpHelpers.h>
 #include "Helpers.h"
 
 typedef QList<QByteArray> Chunks;
@@ -44,22 +46,204 @@ private:
 	QUrl testUrl() const { return QUrl("http://127.0.0.1:4571/test/path"); }
 
 private slots:
+	void should_send_valid_requests_data()
+	{
+		QTest::addColumn<QByteArray>("method");
+		QTest::addColumn<QUrl>("url");
+		QTest::addColumn<Pillow::HttpHeaderCollection>("headers");
+		QTest::addColumn<QByteArray>("content");
+		QTest::addColumn<HttpRequestData>("expectedRequestData");
+
+		Pillow::HttpHeaderCollection baseExpectedHeaders;
+		baseExpectedHeaders << Pillow::HttpHeader("Accept", "*");
+
+		QTest::newRow("Simple GET") << QByteArray("GET")
+									<< QUrl("http://127.0.0.1:4571/")
+									<< Pillow::HttpHeaderCollection()
+									<< QByteArray()
+									<< HttpRequestData()
+									   .withMethod("GET")
+									   .withUri("/").withPath("/").withQueryString("").withFragment("")
+									   .withHttpVersion("HTTP/1.1")
+									   .withContent("")
+									   .withHeaders(baseExpectedHeaders);
+
+		QTest::newRow("GET with headers") << QByteArray("GET")
+									<< QUrl("http://127.0.0.1:4571/some/path?and=query")
+									<< (Pillow::HttpHeaderCollection()
+										<< Pillow::HttpHeader("X-Some", "Header")
+										<< Pillow::HttpHeader("X-And-Another", "even-better; header"))
+									<< QByteArray()
+									<< HttpRequestData()
+									   .withMethod("GET")
+									   .withUri("/some/path?and=query").withPath("/some/path").withQueryString("and=query").withFragment("")
+									   .withHttpVersion("HTTP/1.1")
+									   .withContent("")
+									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
+													<< Pillow::HttpHeader("X-Some", "Header")
+													<< Pillow::HttpHeader("X-And-Another", "even-better; header"));
+		QTest::newRow("GET with connection: close") << QByteArray("GET")
+									<< QUrl("http://127.0.0.1:4571/")
+									<< (Pillow::HttpHeaderCollection()
+										<< Pillow::HttpHeader("Connection", "close"))
+									<< QByteArray()
+									<< HttpRequestData()
+									   .withMethod("GET")
+									   .withUri("/").withPath("/").withQueryString("").withFragment("")
+									   .withHttpVersion("HTTP/1.1")
+									   .withContent("")
+									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
+													<< Pillow::HttpHeader("Connection", "close"));
+		QTest::newRow("Simple PUT") << QByteArray("PUT")
+									<< QUrl("http://127.0.0.1:4571/some/path")
+									<< (Pillow::HttpHeaderCollection())
+									<< QByteArray("Some sent data")
+									<< HttpRequestData()
+									   .withMethod("PUT")
+									   .withUri("/some/path").withPath("/some/path").withQueryString("").withFragment("")
+									   .withHttpVersion("HTTP/1.1")
+									   .withContent("Some sent data")
+									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
+													<< Pillow::HttpHeader("Content-Length", "14"));
+		QTest::newRow("Large POST") << QByteArray("POST")
+									<< QUrl("http://127.0.0.1:4571/some/large/path")
+									<< (Pillow::HttpHeaderCollection())
+									<< QByteArray(128 * 1024, '*')
+									<< HttpRequestData()
+									   .withMethod("POST")
+									   .withUri("/some/large/path").withPath("/some/large/path").withQueryString("").withFragment("")
+									   .withHttpVersion("HTTP/1.1")
+									   .withContent(QByteArray(128 * 1024, '*'))
+									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
+													<< Pillow::HttpHeader("Content-Length", "131072"));
+	}
+
 	void should_send_valid_requests()
 	{
-		QNetworkRequest request(testUrl());
-		nam = new Pillow::NetworkAccessManager();
-		//QNetworkAccessManager *nam = new QNetworkAccessManager();
-		QNetworkReply *r = nam->get(request);
-		QVERIFY(server.waitForRequest(5000));
-		server.receivedConnections.last()->writeResponse(201, Pillow::HttpHeaderCollection(), "Hello World!");
+		QFETCH(QByteArray, method);
+		QFETCH(QUrl, url);
+		QFETCH(Pillow::HttpHeaderCollection, headers);
+		QFETCH(QByteArray, content);
+		QFETCH(HttpRequestData, expectedRequestData);
 
-		QSignalSpy finishedSpy(r, SIGNAL(finished()));
-		QVERIFY(waitFor([&]{ return finishedSpy.size() > 0; }));
+		QNetworkRequest request;
+		request.setUrl(url);
+		foreach (const Pillow::HttpHeader &header, headers) request.setRawHeader(header.first, header.second);
+		QBuffer requestContent(&content); requestContent.open(QIODevice::ReadOnly);
+
+		QNetworkReply *r = nam->sendCustomRequest(request, method, &requestContent);
+
+		QVERIFY(server.waitForRequest());
+		QCOMPARE(server.receivedRequests.size(), 1);
+		QCOMPARE(server.receivedRequests.first(), expectedRequestData);
+	}
+
+	void test_one_roundtrip()
+	{
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(201, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("X-Some", "Header"), "Hello World!");
+
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
 
 		QCOMPARE(r->readAll(), QByteArray("Hello World!"));
+		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
+				 << Pillow::HttpHeader("X-Some", "Header")
+				 << Pillow::HttpHeader("Content-Length", "12")
+				 << Pillow::HttpHeader("Content-Type", "text/plain"));
+	}
 
+	void should_set_cooked_headers_from_received_headers()
+	{
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(
+					200,
+					Pillow::HttpHeaderCollection()
+					<< Pillow::HttpHeader("Content-Type", "some/type")
+					<< Pillow::HttpHeader("Last-Modified", Pillow::HttpProtocol::Dates::getHttpDate(QDateTime(QDate(2012, 4, 30), QTime(8, 9, 0))))
+					<< Pillow::HttpHeader("Set-Cookie", "ChocolateCookie=Very Delicious")
+					, "Hello!");
+
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
+		QCOMPARE(r->readAll(), QByteArray("Hello!"));
+		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
+				 << Pillow::HttpHeader("Last-Modified", "Mon, 30 Apr 2012 12:09:00 GMT")
+				 << Pillow::HttpHeader("Content-Length", "6")
+				 << Pillow::HttpHeader("Content-Type", "some/type")
+				 << Pillow::HttpHeader("Set-Cookie", "ChocolateCookie=Very Delicious")
+				 );
+
+		QCOMPARE(r->header(QNetworkRequest::ContentTypeHeader).toByteArray(), QByteArray("some/type"));
+		QCOMPARE(r->header(QNetworkRequest::ContentLengthHeader).toInt(), 6);
+		QCOMPARE(r->header(QNetworkRequest::LastModifiedHeader).toDateTime(), QDateTime(QDate(2012, 4, 30), QTime(8, 9, 0)));
+
+		QList<QNetworkCookie> cookies;
+		cookies << QNetworkCookie("ChocolateCookie", "Very Delicious");
+		QCOMPARE(r->header(QNetworkRequest::SetCookieHeader).value<QList<QNetworkCookie> >(), cookies);
+	}
+
+	void should_store_received_cookies_in_the_jar()
+	{
+		class JarOpener : public QNetworkCookieJar
+		{
+		public:
+			QList<QNetworkCookie> getAllCookies() const { return QNetworkCookieJar::allCookies(); }
+		};
+
+		QCOMPARE(static_cast<JarOpener*>(nam->cookieJar())->getAllCookies().size(), 0);
+
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200,
+					Pillow::HttpHeaderCollection()
+					<< Pillow::HttpHeader("Set-Cookie", "SomeCookie=Super Chocolate")
+					<< Pillow::HttpHeader("Set-Cookie", "AnotherCookie=Mega Caramel")
+					, "Hello!");
+
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
+		QCOMPARE(static_cast<JarOpener*>(nam->cookieJar())->getAllCookies().size(), 2);
+
+		QList<QNetworkCookie> cookies;
+		cookies << QNetworkCookie("SomeCookie", "Super Chocolate");
+		cookies << QNetworkCookie("AnotherCookie", "Mega Caramel");
+		QCOMPARE(r->header(QNetworkRequest::SetCookieHeader).value<QList<QNetworkCookie> >(), cookies);
+	}
+
+	void should_send_cookies_from_the_jar()
+	{
+		QNetworkCookieJar jar;
+		QNetworkCookie c1("First", "FirstValue");
+		QNetworkCookie c2("Second", "SecondValue");
+		QNetworkCookie c3("Third", "ThirdValue");
+		jar.setCookiesFromUrl(QList<QNetworkCookie>() << c1 << c3, QUrl("http://127.0.0.1:4571/"));
+		jar.setCookiesFromUrl(QList<QNetworkCookie>() << c2, QUrl("http://127.0.1.1:7777/"));
+
+		nam->setCookieJar(&jar); jar.setParent(0);
+		nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+
+		int cookieHeaderCount = 0;
+		Pillow::HttpHeaderCollection headers = server.receivedConnections.last()->requestHeaders();
+		foreach (const Pillow::HttpHeader &h, headers)
+		{
+			if (h.first.toLower() == "cookie")
+				cookieHeaderCount++;
+		}
+
+		QCOMPARE(cookieHeaderCount, 1);
+
+		QByteArray cookieValue = server.receivedConnections.last()->requestHeaderValue("Cookie");
+		QCOMPARE(cookieValue, QByteArray("First=FirstValue; Third=ThirdValue"));
+	}
+
+	void should_set_headers_as_soon_as_they_are_received()
+	{
 
 	}
+
+	void should_make_request_accessible()
+	{}
 
 };
 PILLOW_TEST_DECLARE(NetworkAccessManagerTest)
@@ -476,6 +660,15 @@ private slots:
 		QVERIFY(waitForResponse());
 		QCOMPARE(client->statusCode(), 201);
 		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedSockets.last()->write("HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nhello world"); // Missing one byte in the content!
+		server.receivedSockets.last()->flush();
+		QTest::qWait(50);
+		server.receivedConnections.last()->close();
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->error(), Pillow::HttpClient::RemoteHostClosedError);
 	}
 
 	void should_not_report_error_if_server_closes_connection_after_responding()

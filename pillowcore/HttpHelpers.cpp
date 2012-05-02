@@ -1,4 +1,5 @@
 #include "HttpHelpers.h"
+#include "ByteArrayHelpers.h"
 
 namespace Pillow
 {
@@ -92,8 +93,11 @@ namespace Pillow
 				const QDate& date = utcDateTime.date();
 				const QTime& time = utcDateTime.time();
 
-				QByteArray httpDate; httpDate.reserve(30); httpDate.resize(29);
-				qsnprintf(httpDate.data(), httpDate.size(), "%s, %s %s %d %s:%s:%s GMT", dayNames[date.dayOfWeek()], intNames[date.day()], monthNames[date.month()], date.year(), intNames[time.hour()], intNames[time.minute()], intNames[time.second()]);
+				QByteArray httpDate; httpDate.reserve(32);
+				httpDate.append(dayNames[date.dayOfWeek()]).append(", ").append(intNames[date.day()]).append(' ').append(monthNames[date.month()]).append(' ');
+				Pillow::ByteArrayHelpers::appendNumber<int, 10>(httpDate, date.year());
+				httpDate.append(' ').append(intNames[time.hour()]).append(':').append(intNames[time.minute()]).append(':').append(intNames[time.second()]).append(" GMT");
+
 				return httpDate;
 			}
 		}

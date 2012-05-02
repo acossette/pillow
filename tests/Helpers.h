@@ -5,6 +5,7 @@
 #include <QtCore/qelapsedtimer.h>
 #include <QtNetwork/qtcpsocket.h>
 #include <QtTest/qtest.h>
+#include <QtTest/QSignalSpy>
 #include <HttpConnection.h>
 #include <HttpServer.h>
 
@@ -156,6 +157,14 @@ namespace PillowTest
 		return true;
 	}
 
+	inline bool pCompare(QList<QPair<QByteArray, QByteArray> > const &t1, Pillow::HttpHeaderCollection const &t2, const char *actual, const char *expected, const char *file, int line)
+	{
+		Pillow::HttpHeaderCollection _t1;
+		for (int i = 0; i < t1.size(); ++i) _t1.append(t1.at(i));
+		return pCompare(const_cast<const Pillow::HttpHeaderCollection&>(_t1), t2, actual, expected, file, line);
+	}
+
+
 	template <>
 	inline bool pCompare(HttpRequestData const &t1, HttpRequestData const &t2, const char *actual, const char *expected, const char *file, int line)
 	{
@@ -199,6 +208,12 @@ template <typename Pred> bool waitFor(const Pred& predicate, int maxTime = 500)
 	while (!(result = predicate()) && !t.hasExpired(maxTime))
 		QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
 	return result;
+}
+
+inline bool waitForSignal(QObject *obj, const char* signal, int maxTime = 500)
+{
+	QSignalSpy spy(obj, signal);
+	return waitFor([&]{ return spy.size() > 0; }, maxTime);
 }
 
 #endif // HELPERS_H

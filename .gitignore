@@ -12,6 +12,8 @@ lib
 *.pdb
 *.obj
 callgrind.*
+examples/clientbench/clientbench
+examples/clientbench/clientbenchd
 examples/declarative/declarative
 examples/declarative/declaratived
 examples/fileserver/fileserver

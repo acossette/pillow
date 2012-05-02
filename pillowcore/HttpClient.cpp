@@ -4,6 +4,7 @@
 #include <QtCore/QUrl>
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QNetworkReply>
+#include <QtNetwork/QNetworkCookie>
 
 namespace Pillow
 {
@@ -483,11 +484,34 @@ namespace Pillow
 
 		void client_finished()
 		{
+			QList<QNetworkCookie> cookies;
+
 			setAttribute(QNetworkRequest::HttpStatusCodeAttribute, _client->statusCode());
 			//TODO: setAttribute(QNetworkRequest::HttpReasonPhraseAttribute, );
 			//TODO: setAttribute(QNetworkRequest::RedirectionTargetAttribute, );
 			foreach (const Pillow::HttpHeader &header, _client->headers())
+			{
 				setRawHeader(header.first, header.second);
+
+				if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(header.first, Pillow::LowerCaseToken("Set-Cookie")))
+					cookies += QNetworkCookie::parseCookies(header.second);
+			}
+
+			if (!cookies.isEmpty())
+				setHeader(QNetworkRequest::SetCookieHeader, QVariant::fromValue(cookies));
+
+			QNetworkAccessManager *nam = manager();
+			if (nam)
+			{
+				QNetworkCookieJar *jar = nam->cookieJar();
+				if (jar)
+				{
+					QUrl url = request().url();
+					url.setPath("/");
+					qWarning() << url;
+					jar->setCookiesFromUrl(cookies, url);
+				}
+			}
 
 			open(QIODevice::ReadOnly);
 			_content = _client->content();
@@ -552,6 +576,22 @@ QNetworkReply *Pillow::NetworkAccessManager::createRequest(QNetworkAccessManager
 	Pillow::NetworkReply *reply = new Pillow::NetworkReply(client);
 
 	Pillow::HttpHeaderCollection headers;
+	foreach (const QByteArray &headerName, request.rawHeaderList())
+		headers << Pillow::HttpHeader(headerName, request.rawHeader(headerName));
+
+	QNetworkCookieJar *jar = cookieJar();
+	if (jar)
+	{
+		const QList<QNetworkCookie> cookies = jar->cookiesForUrl(request.url());
+		QByteArray cookieHeaderValue;
+		for (int i = 0, iE = cookies.size(); i < iE; ++i)
+		{
+			if (i > 0) cookieHeaderValue.append("; ");
+			cookieHeaderValue.append(cookies.at(i).toRawForm(QNetworkCookie::NameAndValueOnly));
+		}
+		if (!cookieHeaderValue.isEmpty())
+			headers << Pillow::HttpHeader("Cookie", cookieHeaderValue);
+	}
 
 	switch (op)
 	{
