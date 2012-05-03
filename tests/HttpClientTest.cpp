@@ -138,7 +138,7 @@ private slots:
 		QCOMPARE(server.receivedRequests.first(), expectedRequestData);
 	}
 
-	void test_one_roundtrip()
+	void should_receive_response()
 	{
 		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
 		QVERIFY(server.waitForRequest());
@@ -146,6 +146,7 @@ private slots:
 
 		QVERIFY(waitForSignal(r, SIGNAL(finished())));
 
+		QCOMPARE(r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 201);
 		QCOMPARE(r->readAll(), QByteArray("Hello World!"));
 		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
 				 << Pillow::HttpHeader("X-Some", "Header")
@@ -239,7 +240,35 @@ private slots:
 
 	void should_set_headers_as_soon_as_they_are_received()
 	{
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeHeaders(200, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("X-Some", "Header") << Pillow::HttpHeader("Content-Length", "12") << Pillow::HttpHeader("Content-Type", "text/plain"));
 
+		QSignalSpy finishedSpy(r, SIGNAL(finished()));
+		QVERIFY(waitForSignal(r, SIGNAL(metaDataChanged())));
+		QVERIFY(finishedSpy.isEmpty()); // The request should not be finished yet even though headers have been received
+
+		QCOMPARE(r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
+				 << Pillow::HttpHeader("X-Some", "Header")
+				 << Pillow::HttpHeader("Content-Length", "12")
+				 << Pillow::HttpHeader("Content-Type", "text/plain"));
+		QCOMPARE(r->header(QNetworkRequest::ContentTypeHeader).toByteArray(), QByteArray("text/plain"));
+		QCOMPARE(r->header(QNetworkRequest::ContentLengthHeader).toInt(), 12);
+		QCOMPARE(r->readAll(), QByteArray());
+
+		server.receivedConnections.last()->writeContent("Hello World!");
+
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
+
+		QCOMPARE(r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
+				 << Pillow::HttpHeader("X-Some", "Header")
+				 << Pillow::HttpHeader("Content-Length", "12")
+				 << Pillow::HttpHeader("Content-Type", "text/plain"));
+		QCOMPARE(r->header(QNetworkRequest::ContentTypeHeader).toByteArray(), QByteArray("text/plain"));
+		QCOMPARE(r->header(QNetworkRequest::ContentLengthHeader).toInt(), 12);
+		QCOMPARE(r->readAll(), QByteArray("Hello World!"));
 	}
 
 	void should_make_request_accessible()
@@ -862,6 +891,31 @@ private slots:
 		QCOMPARE(client->content(), QByteArray("content"));
 	}
 
+	void should_emit_headersCompleted_when_headers_have_been_received()
+	{
+		client->post(testUrl(), Pillow::HttpHeaderCollection() << Pillow::HttpHeader("Expect", "100-continue"), "post data");
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeHeaders(200, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("First", "FirstValue") << Pillow::HttpHeader("Second", "SecondValue") << Pillow::HttpHeader("Content-Length", "12"));
+
+		QCOMPARE(client->statusCode(), 0);
+		QCOMPARE(client->headers(), Pillow::HttpHeaderCollection());
+
+		QSignalSpy finishedSpy(client, SIGNAL(finished()));
+		QVERIFY(waitForSignal(client, SIGNAL(headersCompleted())));
+		QVERIFY(finishedSpy.isEmpty()); // Should not have finished the request yet.
+
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->headers(), Pillow::HttpHeaderCollection() << Pillow::HttpHeader("First", "FirstValue") << Pillow::HttpHeader("Second", "SecondValue") << Pillow::HttpHeader("Content-Length", "12") << Pillow::HttpHeader("Content-Type", "text/plain"));
+		QCOMPARE(client->content(), QByteArray());
+
+		server.receivedConnections.last()->writeContent("Some content");
+		server.receivedConnections.last()->endContent();
+		QVERIFY(waitForSignal(client, SIGNAL(finished())));
+		QCOMPARE(finishedSpy.size(), 1);
+
+		QCOMPARE(client->content(), QByteArray("Some content"));
+	}
+
 	void should_report_error_given_an_unsupported_request()
 	{
 		QSKIP("Not implemented", SkipAll);
@@ -880,6 +934,11 @@ private slots:
 	void should_allow_specifying_connection_keep_alive_timeout()
 	{
 		QSKIP("Not implemented", SkipAll);
+	}
+
+	void should_be_abortable_from_within_a_signal_handler()
+	{
+
 	}
 };
 PILLOW_TEST_DECLARE(HttpClientTest)

@@ -163,6 +163,7 @@ namespace Pillow
 		QByteArray consumeContent(); // Get the value of "content()" and clear the internal buffer.
 
 	signals:
+		void headersCompleted(); // Headers have been fully received and are ready to be checked.
 		void contentReadyRead(); // Some new data is available in the response content.
 		void finished();
 

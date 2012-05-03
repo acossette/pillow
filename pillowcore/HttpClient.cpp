@@ -437,6 +437,7 @@ void Pillow::HttpClient::messageBegin()
 void Pillow::HttpClient::headersComplete()
 {
 	Pillow::HttpResponseParser::headersComplete();
+	emit headersCompleted();
 }
 
 void Pillow::HttpClient::messageContent(const char *data, int length)
@@ -469,6 +470,7 @@ namespace Pillow
 		NetworkReply(Pillow::HttpClient *client)
 			:_client(client), _contentPos(0)
 		{
+			connect(client, SIGNAL(headersCompleted()), this, SLOT(client_headersCompleted()));
 			connect(client, SIGNAL(contentReadyRead()), this, SLOT(client_contentReadyRead()));
 			connect(client, SIGNAL(finished()), this, SLOT(client_finished()));
 
@@ -477,12 +479,7 @@ namespace Pillow
 		}
 
 	private slots:
-		void client_contentReadyRead()
-		{
-			// TODO
-		}
-
-		void client_finished()
+		void client_headersCompleted()
 		{
 			QList<QNetworkCookie> cookies;
 
@@ -508,14 +505,24 @@ namespace Pillow
 				{
 					QUrl url = request().url();
 					url.setPath("/");
-					qWarning() << url;
 					jar->setCookiesFromUrl(cookies, url);
 				}
 			}
 
 			open(QIODevice::ReadOnly);
-			_content = _client->content();
 
+			emit metaDataChanged();
+		}
+
+		void client_contentReadyRead()
+		{
+			// TODO
+			_content.append(_client->consumeContent());
+			// emit readyRead();
+		}
+
+		void client_finished()
+		{
 			disconnect(_client, 0, this, 0);
 			_client = 0;
 
