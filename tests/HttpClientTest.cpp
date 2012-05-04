@@ -13,6 +13,7 @@
 typedef QList<QByteArray> Chunks;
 Q_DECLARE_METATYPE(Chunks)
 Q_DECLARE_METATYPE(QAbstractSocket::SocketState)
+Q_DECLARE_METATYPE(QNetworkReply::NetworkError)
 
 class NetworkAccessManagerTest : public QObject
 {
@@ -159,8 +160,9 @@ private slots:
 		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
 		QVERIFY(server.waitForRequest());
 		server.receivedConnections.last()->writeResponse(
-					200,
+					302,
 					Pillow::HttpHeaderCollection()
+					<< Pillow::HttpHeader("Location", "http://example.org")
 					<< Pillow::HttpHeader("Content-Type", "some/type")
 					<< Pillow::HttpHeader("Last-Modified", Pillow::HttpProtocol::Dates::getHttpDate(QDateTime(QDate(2012, 4, 30), QTime(8, 9, 0))))
 					<< Pillow::HttpHeader("Set-Cookie", "ChocolateCookie=Very Delicious")
@@ -169,12 +171,14 @@ private slots:
 		QVERIFY(waitForSignal(r, SIGNAL(finished())));
 		QCOMPARE(r->readAll(), QByteArray("Hello!"));
 		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
+				 << Pillow::HttpHeader("Location", "http://example.org")
 				 << Pillow::HttpHeader("Last-Modified", "Mon, 30 Apr 2012 12:09:00 GMT")
 				 << Pillow::HttpHeader("Content-Length", "6")
 				 << Pillow::HttpHeader("Content-Type", "some/type")
 				 << Pillow::HttpHeader("Set-Cookie", "ChocolateCookie=Very Delicious")
 				 );
 
+		QCOMPARE(r->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl(), QUrl("http://example.org"));
 		QCOMPARE(r->header(QNetworkRequest::ContentTypeHeader).toByteArray(), QByteArray("some/type"));
 		QCOMPARE(r->header(QNetworkRequest::ContentLengthHeader).toInt(), 6);
 		QCOMPARE(r->header(QNetworkRequest::LastModifiedHeader).toDateTime(), QDateTime(QDate(2012, 4, 30), QTime(8, 9, 0)));
@@ -199,7 +203,7 @@ private slots:
 		server.receivedConnections.last()->writeResponse(200,
 					Pillow::HttpHeaderCollection()
 					<< Pillow::HttpHeader("Set-Cookie", "SomeCookie=Super Chocolate")
-					<< Pillow::HttpHeader("Set-Cookie", "AnotherCookie=Mega Caramel")
+					<< Pillow::HttpHeader("seT-CoOKie", "AnotherCookie=Mega Caramel")
 					, "Hello!");
 
 		QVERIFY(waitForSignal(r, SIGNAL(finished())));
@@ -272,8 +276,51 @@ private slots:
 	}
 
 	void should_make_request_accessible()
-	{}
+	{
+		QNetworkRequest originalRequest;
+		originalRequest.setUrl(testUrl());
+		originalRequest.setRawHeader("One-Header", "OneValue");
+		originalRequest.setRawHeader("Another-Header", "AnotherValue");
+		originalRequest.setPriority(QNetworkRequest::HighPriority);
 
+		QNetworkReply *r = nam->get(originalRequest);
+		QCOMPARE(r->request(), originalRequest);
+	}
+
+	void should_allow_aborting_reply()
+	{
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		QVERIFY(server.receivedSockets.last()->state() == QAbstractSocket::ConnectedState);
+		QPointer<QTcpSocket> socket = server.receivedSockets.last();
+		QVERIFY(socket != 0);
+		QSignalSpy errorSpy(r, SIGNAL(error(QNetworkReply::NetworkError)));
+		QSignalSpy finishedSpy(r, SIGNAL(finished()));
+		r->abort();
+		QCOMPARE(finishedSpy.size(), 1);
+		QCOMPARE(errorSpy.size(), 1);
+		QCOMPARE(errorSpy.last().first().value<QNetworkReply::NetworkError>(), QNetworkReply::OperationCanceledError);
+		QVERIFY(waitFor([=]{ return socket == 0; })); // The socket should get closed and deleted.
+	}
+
+	void should_emit_readyRead_when_new_content_is_available()
+	{
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeHeaders(200);
+
+		server.receivedConnections.last()->writeContent("Hello");
+		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
+		QCOMPARE(r->readAll(), QByteArray("Hello"));
+
+		server.receivedConnections.last()->writeContent("the");
+		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
+		QCOMPARE(r->readAll(), QByteArray("the"));
+
+		server.receivedConnections.last()->writeContent("world!");
+		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
+		QCOMPARE(r->readAll(), QByteArray("world!"));
+	}
 };
 PILLOW_TEST_DECLARE(NetworkAccessManagerTest)
 
@@ -760,6 +807,19 @@ private slots:
 		client->get(testUrl());
 		QVERIFY(server.waitForRequest());
 		server.receivedConnections.first()->close();
+		QVERIFY(waitForResponse());
+
+		QCOMPARE(client->statusCode(), 0);
+		QCOMPARE(finishedSpy.size(), 1);
+	}
+
+	void should_emit_finished_when_aborted()
+	{
+		QSignalSpy finishedSpy(client, SIGNAL(finished()));
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		client->abort();
 		QVERIFY(waitForResponse());
 
 		QCOMPARE(client->statusCode(), 0);

@@ -336,6 +336,7 @@ void Pillow::HttpClient::abort()
 	if (_device) _device->close();
 	_responsePending = false;
 	_error = AbortedError;
+	emit finished();
 }
 
 void Pillow::HttpClient::device_error(QAbstractSocket::SocketError error)
@@ -467,15 +468,23 @@ namespace Pillow
 		Q_OBJECT
 
 	public:
-		NetworkReply(Pillow::HttpClient *client)
+		NetworkReply(Pillow::HttpClient *client, const QNetworkRequest& request)
 			:_client(client), _contentPos(0)
 		{
 			connect(client, SIGNAL(headersCompleted()), this, SLOT(client_headersCompleted()));
 			connect(client, SIGNAL(contentReadyRead()), this, SLOT(client_contentReadyRead()));
 			connect(client, SIGNAL(finished()), this, SLOT(client_finished()));
 
+			setRequest(request);
+
 			// TODO: Cookies
 			// TODO: Authentication
+		}
+
+	public:
+		void abort()
+		{
+			if (_client) _client->abort();
 		}
 
 	private slots:
@@ -490,8 +499,10 @@ namespace Pillow
 			{
 				setRawHeader(header.first, header.second);
 
-				if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(header.first, Pillow::LowerCaseToken("Set-Cookie")))
+				if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(header.first, Pillow::LowerCaseToken("set-cookie")))
 					cookies += QNetworkCookie::parseCookies(header.second);
+				else if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(header.first, Pillow::LowerCaseToken("location")))
+					setAttribute(QNetworkRequest::RedirectionTargetAttribute, QUrl(header.second));
 			}
 
 			if (!cookies.isEmpty())
@@ -516,24 +527,32 @@ namespace Pillow
 
 		void client_contentReadyRead()
 		{
-			// TODO
 			_content.append(_client->consumeContent());
-			// emit readyRead();
+			 emit readyRead();
 		}
 
 		void client_finished()
 		{
 			disconnect(_client, 0, this, 0);
-			_client = 0;
 
+			if (_client->error() != Pillow::HttpClient::NoError)
+			{
+				QNetworkReply::NetworkError error = QNetworkReply::UnknownNetworkError;
+
+				switch (_client->error())
+				{
+				case Pillow::HttpClient::NetworkError: error = QNetworkReply::UnknownNetworkError; break;
+				case Pillow::HttpClient::ResponseInvalidError: error = QNetworkReply::ProtocolUnknownError; break;
+				case Pillow::HttpClient::RemoteHostClosedError: error = QNetworkReply::RemoteHostClosedError; break;
+				case Pillow::HttpClient::AbortedError: error = QNetworkReply::OperationCanceledError; break;
+				}
+
+				emit this->error(error);
+			}
+
+			_client = 0;
 			setFinished(true);
 			emit finished();
-		}
-
-	public:
-		void abort()
-		{
-
 		}
 
 	protected:
@@ -580,7 +599,7 @@ QNetworkReply *Pillow::NetworkAccessManager::createRequest(QNetworkAccessManager
 		_clients << client;
 	}
 
-	Pillow::NetworkReply *reply = new Pillow::NetworkReply(client);
+	Pillow::NetworkReply *reply = new Pillow::NetworkReply(client, request);
 
 	Pillow::HttpHeaderCollection headers;
 	foreach (const QByteArray &headerName, request.rawHeaderList())
