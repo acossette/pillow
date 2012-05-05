@@ -334,8 +334,8 @@ void Pillow::HttpClient::abort()
 		return;
 	}
 	if (_device) _device->close();
-	_responsePending = false;
 	_error = AbortedError;
+	_responsePending = false;
 	emit finished();
 }
 
@@ -394,7 +394,7 @@ void Pillow::HttpClient::device_readyRead()
 		consumed += inject(_buffer.constData() + consumed, _buffer.size() - consumed);
 	}
 
-	if (consumed < _buffer.size())
+	if (consumed < _buffer.size() && !Pillow::HttpResponseParser::hasError())
 		qDebug() << "Pillow::HttpClient::device_readyRead(): not all request data was consumed.";
 
 	// Reuse the read buffer if it is not overly large.
@@ -405,9 +405,10 @@ void Pillow::HttpClient::device_readyRead()
 
 	if (Pillow::HttpResponseParser::hasError())
 	{
-		_responsePending = false;
 		_error = ResponseInvalidError;
 		_device->close();
+		_responsePending = false;
+		emit finished();
 	}
 }
 
@@ -477,8 +478,7 @@ namespace Pillow
 
 			setRequest(request);
 
-			// TODO: Cookies
-			// TODO: Authentication
+			// TODO: Authentication is not supported for now.
 		}
 
 	public:
@@ -493,8 +493,12 @@ namespace Pillow
 			QList<QNetworkCookie> cookies;
 
 			setAttribute(QNetworkRequest::HttpStatusCodeAttribute, _client->statusCode());
-			//TODO: setAttribute(QNetworkRequest::HttpReasonPhraseAttribute, );
-			//TODO: setAttribute(QNetworkRequest::RedirectionTargetAttribute, );
+
+			// Setting the reason phrase is not done as the http_parser does not give us access
+			// to the real reason phrase returned by the server.
+			//
+			// setAttribute(QNetworkRequest::HttpReasonPhraseAttribute, ...);
+
 			foreach (const Pillow::HttpHeader &header, _client->headers())
 			{
 				setRawHeader(header.first, header.second);

@@ -89,7 +89,6 @@ namespace Pillow
 
 	private:
 		static int parser_on_message_begin(http_parser* parser);
-		static int parser_on_url(http_parser* parser, const char *at, size_t length);
 		static int parser_on_header_field(http_parser* parser, const char *at, size_t length);
 		static int parser_on_header_value(http_parser* parser, const char *at, size_t length);
 		static int parser_on_headers_complete(http_parser* parser);
@@ -165,7 +164,7 @@ namespace Pillow
 	signals:
 		void headersCompleted(); // Headers have been fully received and are ready to be checked.
 		void contentReadyRead(); // Some new data is available in the response content.
-		void finished();
+		void finished();         // Request finished. Check error() to verify if there was an error.
 
 	private slots:
 		void device_error(QAbstractSocket::SocketError error);
@@ -206,6 +205,8 @@ namespace Pillow
 		typedef QMultiHash<QString, Pillow::HttpClient*> UrlClientsMap;
 		QList<Pillow::HttpClient*> _clients;
 		UrlClientsMap _urlToClientsMap;
+
+		// Note: The
 	};
 
 } // namespace Pillow

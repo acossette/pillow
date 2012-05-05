@@ -132,7 +132,7 @@ private slots:
 		foreach (const Pillow::HttpHeader &header, headers) request.setRawHeader(header.first, header.second);
 		QBuffer requestContent(&content); requestContent.open(QIODevice::ReadOnly);
 
-		QNetworkReply *r = nam->sendCustomRequest(request, method, &requestContent);
+		nam->sendCustomRequest(request, method, &requestContent);
 
 		QVERIFY(server.waitForRequest());
 		QCOMPARE(server.receivedRequests.size(), 1);
@@ -320,6 +320,25 @@ private slots:
 		server.receivedConnections.last()->writeContent("world!");
 		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
 		QCOMPARE(r->readAll(), QByteArray("world!"));
+	}
+
+	void should_report_errors()
+	{
+		{
+			QNetworkReply *r = nam->get(QNetworkRequest(QUrl("http://4230948234.423.423.423.423.32.423.4/bad")));
+			QSignalSpy errorSpy(r, SIGNAL(error(QNetworkReply::NetworkError)));
+			QVERIFY(waitFor([&]{ return errorSpy.size() > 0; }));
+			QCOMPARE(errorSpy.last().first().value<QNetworkReply::NetworkError>(), QNetworkReply::UnknownNetworkError);
+		}
+
+		{
+			QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+			QSignalSpy errorSpy(r, SIGNAL(error(QNetworkReply::NetworkError)));
+			QVERIFY(server.waitForRequest());
+			server.receivedConnections.last()->outputDevice()->write("=-=-=-=-=-FFFFFFFUUUUUUUUUUU=-=-=-=-=-=!\r\n");
+			QVERIFY(waitFor([&]{ return errorSpy.size() > 0; }));
+			QCOMPARE(errorSpy.last().first().value<QNetworkReply::NetworkError>(), QNetworkReply::ProtocolUnknownError);
+		}
 	}
 };
 PILLOW_TEST_DECLARE(NetworkAccessManagerTest)
