@@ -340,6 +340,16 @@ private slots:
 			QCOMPARE(errorSpy.last().first().value<QNetworkReply::NetworkError>(), QNetworkReply::ProtocolUnknownError);
 		}
 	}
+
+	void should_use_default_QNetworkAccessManager_implementation_for_non_http_schemes()
+	{
+		QByteArray url = "data:text/plain;base64," + QByteArray("Hello World!").toBase64();
+
+		QNetworkReply *r = nam->get(QNetworkRequest(QUrl(url)));
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
+
+		QCOMPARE(r->readAll(), QByteArray("Hello World!"));
+	}
 };
 PILLOW_TEST_DECLARE(NetworkAccessManagerTest)
 

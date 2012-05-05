@@ -545,6 +545,7 @@ namespace Pillow
 
 				switch (_client->error())
 				{
+				case Pillow::HttpClient::NoError: error = QNetworkReply::NoError; break;
 				case Pillow::HttpClient::NetworkError: error = QNetworkReply::UnknownNetworkError; break;
 				case Pillow::HttpClient::ResponseInvalidError: error = QNetworkReply::ProtocolUnknownError; break;
 				case Pillow::HttpClient::RemoteHostClosedError: error = QNetworkReply::RemoteHostClosedError; break;
@@ -588,7 +589,11 @@ Pillow::NetworkAccessManager::NetworkAccessManager(QObject *parent)
 
 QNetworkReply *Pillow::NetworkAccessManager::createRequest(QNetworkAccessManager::Operation op, const QNetworkRequest &request, QIODevice *outgoingData)
 {
-	// TODO: use base implementation for unsupported schemes.
+	if (request.url().scheme().compare(QLatin1String("http"), Qt::CaseInsensitive) != 0)
+	{
+		// Use base implementation for unsupported schemes.
+		return QNetworkAccessManager::createRequest(op, request, outgoingData);
+	}
 
 	UrlClientsMap::Iterator it = _urlToClientsMap.find(request.url().authority());
 	Pillow::HttpClient *client = 0;
