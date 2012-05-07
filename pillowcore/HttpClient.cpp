@@ -19,7 +19,6 @@ namespace Pillow
 		const QByteArray colonSpaceToken(": ");
 		const QByteArray httpOneOneCrlfToken(" HTTP/1.1\r\n");
 		const QByteArray contentLengthColonSpaceToken("Content-Length: ");
-		const Pillow::HttpHeader acceptHeader("Accept", "*");
 	}
 }
 
@@ -247,8 +246,6 @@ Pillow::HttpClient::HttpClient(QObject *parent)
 	connect(_device, SIGNAL(connected()), this, SLOT(device_connected()));
 	connect(_device, SIGNAL(readyRead()), this, SLOT(device_readyRead()));
 	_requestWriter.setDevice(_device);
-
-	_baseRequestHeaders << Pillow::HttpClientTokens::acceptHeader;
 }
 
 bool Pillow::HttpClient::responsePending() const
@@ -322,7 +319,7 @@ void Pillow::HttpClient::request(const QByteArray &method, const QUrl &url, cons
 	{
 		if (_device->state() != QAbstractSocket::UnconnectedState)
 			_device->disconnectFromHost();
-		_device->connectToHost(url.host(), url.port());
+		_device->connectToHost(url.host(), url.port(80));
 	}
 }
 
@@ -416,17 +413,21 @@ void Pillow::HttpClient::sendRequest()
 {
 	if (!responsePending()) return;
 
+	QByteArray hostHeaderValue = _request.url.encodedHost();
+	if (_request.url.port(80) != 80)
+	{
+		hostHeaderValue.append(':');
+		hostHeaderValue.append(QByteArray::number(_request.url.port()));
+	}
 	QByteArray uri = _request.url.encodedPath();
 	const QByteArray query = _request.url.encodedQuery();
 	if (!query.isEmpty()) uri.append('?').append(query);
 
-	Pillow::HttpHeaderCollection headers = _baseRequestHeaders;
-	if (!_request.headers.isEmpty())
-	{
-		headers.reserve(headers.size() + _request.headers.size());
-		for (int i = 0, iE = _request.headers.size(); i < iE; ++i)
-			headers.append(_request.headers.at(i));
-	}
+	Pillow::HttpHeaderCollection headers;
+	headers.reserve(_request.headers.size() + 1);
+	headers << Pillow::HttpHeader("Host", hostHeaderValue);
+	for (int i = 0, iE = _request.headers.size(); i < iE; ++i)
+		headers << _request.headers.at(i);
 
 	_requestWriter.write(_request.method, uri, headers, _request.data);
 }

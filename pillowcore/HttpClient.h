@@ -182,7 +182,6 @@ namespace Pillow
 
 	private:
 		QTcpSocket* _device;
-		Pillow::HttpHeaderCollection _baseRequestHeaders;
 		Pillow::HttpClientRequest _request;
 		Pillow::HttpRequestWriter _requestWriter;
 		Pillow::HttpResponseParser _responseParser;

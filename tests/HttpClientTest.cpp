@@ -56,7 +56,7 @@ private slots:
 		QTest::addColumn<HttpRequestData>("expectedRequestData");
 
 		Pillow::HttpHeaderCollection baseExpectedHeaders;
-		baseExpectedHeaders << Pillow::HttpHeader("Accept", "*");
+		baseExpectedHeaders << Pillow::HttpHeader("Host", "127.0.0.1:4571");
 
 		QTest::newRow("Simple GET") << QByteArray("GET")
 									<< QUrl("http://127.0.0.1:4571/")
@@ -430,7 +430,7 @@ private slots:
 		QTest::addColumn<HttpRequestData>("expectedRequestData");
 
 		Pillow::HttpHeaderCollection baseExpectedHeaders;
-		baseExpectedHeaders << Pillow::HttpHeader("Accept", "*");
+		baseExpectedHeaders << Pillow::HttpHeader("Host", "127.0.0.1:4569");
 
 		QTest::newRow("Simple GET") << QByteArray("GET")
 									<< QUrl("http://127.0.0.1:4569/")
@@ -506,6 +506,14 @@ private slots:
 		QVERIFY(server.waitForRequest());
 		QCOMPARE(server.receivedRequests.size(), 1);
 		QCOMPARE(server.receivedRequests.first(), expectedRequestData);
+	}
+
+	void should_add_host_header_to_requests()
+	{
+		client->get(QUrl("http://127.0.0.1:4569/"));
+		QVERIFY(server.waitForRequest());
+		QCOMPARE(server.receivedConnections.size(), 1);
+		QCOMPARE(server.receivedConnections.last()->requestHeaderValue("Host"), QByteArray("127.0.0.1:4569"));
 	}
 
 	void should_be_pending_response_after_sending_request()
@@ -1026,6 +1034,11 @@ private slots:
 	}
 
 	void should_be_abortable_from_within_a_signal_handler()
+	{
+
+	}
+
+	void should_use_port_80_by_default()
 	{
 
 	}
