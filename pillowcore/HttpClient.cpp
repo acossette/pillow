@@ -391,6 +391,8 @@ void Pillow::HttpClient::device_readyRead()
 		consumed += inject(_buffer.constData() + consumed, _buffer.size() - consumed);
 	}
 
+	// TODO: at this point the parser can have completed.
+
 	if (consumed < _buffer.size() && !Pillow::HttpResponseParser::hasError())
 		qDebug() << "Pillow::HttpClient::device_readyRead(): not all request data was consumed.";
 
@@ -482,10 +484,18 @@ namespace Pillow
 			// TODO: Authentication is not supported for now.
 		}
 
+		~NetworkReply()
+		{}
+
 	public:
 		void abort()
 		{
 			if (_client) _client->abort();
+		}
+
+		qint64 bytesAvailable() const
+		{
+			return _content.size() - _contentPos;
 		}
 
 	private slots:
