@@ -116,7 +116,7 @@ void Pillow::HttpRequestWriter::setDevice(QIODevice *device)
 //
 
 Pillow::HttpResponseParser::HttpResponseParser()
-	: _lastWasValue(false)
+	: _lastWasValue(false), _parsing(false)
 {
 	parser.data = this;
 	parser_settings.on_message_begin = parser_on_message_begin;
@@ -130,15 +130,32 @@ Pillow::HttpResponseParser::HttpResponseParser()
 
 int Pillow::HttpResponseParser::inject(const char *data, int length)
 {
+	if (_parsing)
+	{
+		qWarning() << "Pillow::HttpResponseParser::inject: called while parser is parsing. Not proceeding.";
+		return 0;
+	}
+
+	_parsing = true;
 	size_t consumed = http_parser_execute(&parser, &parser_settings, data, length);
 	if (parser.http_errno == HPE_PAUSED) parser.http_errno = HPE_OK; // Unpause the parser that got paused upon completing the message.
+	_parsing = false;
+
 	return consumed;
 }
 
 void Pillow::HttpResponseParser::injectEof()
 {
+	if (_parsing)
+	{
+		qWarning() << "Pillow::HttpResponseParser::injectEof: called while parser is parsing. Not proceeding.";
+		return;
+	}
+
+	_parsing = true;
 	http_parser_execute(&parser, &parser_settings, 0, 0);
 	if (parser.http_errno == HPE_PAUSED) parser.http_errno = HPE_OK; // Unpause the parser that got paused upon completing the message.
+	_parsing = false;
 }
 
 void Pillow::HttpResponseParser::clear()
@@ -146,6 +163,8 @@ void Pillow::HttpResponseParser::clear()
 	http_parser_init(&parser, HTTP_RESPONSE);
 	while (!_headers.isEmpty()) _headers.pop_back();
 	_content.clear();
+
+	if (_parsing) pause(); // clear() got called from a callback. gracefully recover by pausing the parser.
 }
 
 QByteArray Pillow::HttpResponseParser::errorString() const
@@ -172,6 +191,11 @@ void Pillow::HttpResponseParser::messageContent(const char *data, int length)
 
 void Pillow::HttpResponseParser::messageComplete()
 {
+}
+
+void Pillow::HttpResponseParser::pause()
+{
+	http_parser_pause(&parser, 1);
 }
 
 int Pillow::HttpResponseParser::parser_on_message_begin(http_parser *parser)
@@ -298,28 +322,49 @@ void Pillow::HttpClient::request(const QByteArray &method, const QUrl &url, cons
 		return;
 	}
 
-	// We can reuse an active connection if the request is for the same host and port, so make note of those parameters before they are overwritten.
-	const QString previousHost = _request.url.host();
-	const int previousPort = _request.url.port();
-
 	Pillow::HttpClientRequest newRequest;
 	newRequest.method = method;
 	newRequest.url = url;
 	newRequest.headers = headers;
 	newRequest.data = data;
+	request(newRequest);
+}
 
-	_request = newRequest;
+void Pillow::HttpClient::request(const Pillow::HttpClientRequest &request)
+{
+	if (_responsePending)
+	{
+		qWarning() << "Pillow::HttpClient::request: cannot send new request while another one is under way. Request pipelining is not supported.";
+		return;
+	}
+
+//	if (_parserActive)
+//	{
+//		// We probably got cancelled in a callback or got asked for a new request
+//		// in the messageComplete() callback.
+//		_pendingRequest = request;
+//		return;
+//	}
+
+	// We can reuse an active connection if the request is for the same host and port, so make note of those parameters before they are overwritten.
+	const QString previousHost = _request.url.host();
+	const int previousPort = _request.url.port();
+
+	_request = request;
 	_responsePending = true;
 	_error = NoError;
 	clear();
 
-	if (_device->state() == QAbstractSocket::ConnectedState && url.host() == previousHost && url.port() == previousPort)
+	if (_device->state() == QAbstractSocket::ConnectedState && _request.url.host() == previousHost && _request.url.port() == previousPort)
+	{
+		// Reuse current connection to same host and port.
 		sendRequest();
+	}
 	else
 	{
 		if (_device->state() != QAbstractSocket::UnconnectedState)
 			_device->disconnectFromHost();
-		_device->connectToHost(url.host(), url.port(80));
+		_device->connectToHost(_request.url.host(), _request.url.port(80));
 	}
 }
 

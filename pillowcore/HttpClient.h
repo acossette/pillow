@@ -22,6 +22,11 @@ class QTcpSocket;
 
 namespace Pillow
 {
+	//
+	// Pillow::HttpRequestWriter
+	//
+	// Reentrant. Not thread safe.
+	//
 	class HttpRequestWriter : public QObject
 	{
 		Q_OBJECT
@@ -48,6 +53,11 @@ namespace Pillow
 		QByteArray _builder;
 	};
 
+	//
+	// Pillow::HttpResponseParser
+	//
+	// Reentrant. Not thread safe.
+	//
 	class HttpResponseParser
 	{
 	public:
@@ -67,6 +77,7 @@ namespace Pillow
 
 	public:
 		// Parser status members.
+		inline bool isParsing() const { return _parsing; }
 		inline bool hasError() const { return !(parser.http_errno == HPE_OK || parser.http_errno == HPE_PAUSED); }
 		inline http_errno error() const { return static_cast<http_errno>(parser.http_errno); }
 		QByteArray errorString() const;
@@ -87,6 +98,9 @@ namespace Pillow
 		virtual void messageContent(const char *data, int length); // Defaults to append to "content()"
 		virtual void messageComplete(); // Defaults to doing nothing.
 
+		// Pause the parser at the current parsing position and make it return from inject(). Only valid if called from within one of the callbacks above.
+		void pause();
+
 	private:
 		static int parser_on_message_begin(http_parser* parser);
 		static int parser_on_header_field(http_parser* parser, const char *at, size_t length);
@@ -103,12 +117,16 @@ namespace Pillow
 		http_parser_settings parser_settings;
 		QByteArray _field, _value;
 		bool _lastWasValue;
+		bool _parsing; // Whether the parser is currently parsing data (will be true in callbacks).
 
 	protected:
 		Pillow::HttpHeaderCollection _headers;
 		QByteArray _content;
 	};
 
+	//
+	// Pillow::HttpClientRequest
+	//
 	struct HttpClientRequest
 	{
 		QByteArray method;
@@ -117,6 +135,11 @@ namespace Pillow
 		QByteArray data;
 	};
 
+	//
+	// Pillow::HttpClient
+	//
+	// Reentrant. Not thread safe.
+	//
 	class HttpClient : public QObject, protected HttpResponseParser
 	{
 		Q_OBJECT
@@ -145,7 +168,9 @@ namespace Pillow
 		void post(const QUrl& url, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QByteArray& data = QByteArray());
 		void put(const QUrl& url, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QByteArray& data = QByteArray());
 		void deleteResource(const QUrl& url, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection());
+
 		void request(const QByteArray& method, const QUrl& url, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QByteArray& data = QByteArray());
+		void request(const Pillow::HttpClientRequest& request);
 
 		void abort();
 
@@ -183,6 +208,7 @@ namespace Pillow
 	private:
 		QTcpSocket* _device;
 		Pillow::HttpClientRequest _request;
+		Pillow::HttpClientRequest _pendingRequest;
 		Pillow::HttpRequestWriter _requestWriter;
 		Pillow::HttpResponseParser _responseParser;
 		bool _responsePending;
@@ -190,6 +216,11 @@ namespace Pillow
 		QByteArray _buffer;
 	};
 
+	//
+	// Pillow::NetworkAcccessManager
+	//
+	// Reentrant. Not thread safe.
+	//
 	class NetworkAccessManager : public QNetworkAccessManager
 	{
 		Q_OBJECT
