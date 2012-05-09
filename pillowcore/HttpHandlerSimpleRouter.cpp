@@ -17,6 +17,7 @@ namespace Pillow
 		QRegExp regExp;
 		QStringList paramNames;
 
+		virtual ~Route() {}
 		virtual bool invoke(Pillow::HttpConnection* request) = 0;
 	};
 
