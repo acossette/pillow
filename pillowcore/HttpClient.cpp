@@ -338,13 +338,14 @@ void Pillow::HttpClient::request(const Pillow::HttpClientRequest &request)
 		return;
 	}
 
-//	if (_parserActive)
-//	{
-//		// We probably got cancelled in a callback or got asked for a new request
-//		// in the messageComplete() callback.
-//		_pendingRequest = request;
-//		return;
-//	}
+	if (Pillow::HttpResponseParser::isParsing())
+	{
+		// We most likely got cancelled in a callback or got asked for a new request
+		// in the messageComplete() callback. So we are not responsePending but still parsing.
+		// Keep the request for after we come out of parsing.
+		_pendingRequest = request;
+		return;
+	}
 
 	// We can reuse an active connection if the request is for the same host and port, so make note of those parameters before they are overwritten.
 	const QString previousHost = _request.url.host();
@@ -375,6 +376,7 @@ void Pillow::HttpClient::abort()
 		qWarning("Pillow::HttpClient::abort(): called while not running.");
 		return;
 	}
+	Pillow::HttpResponseParser::pause();
 	if (_device) _device->close();
 	_error = AbortedError;
 	_responsePending = false;
@@ -429,31 +431,53 @@ void Pillow::HttpClient::device_readyRead()
 
 	int consumed = inject(_buffer);
 
-	if (!hasError() && consumed < _buffer.size() && responsePending())
+	if (responsePending())
 	{
-		// We had multiple responses in the buffer?
-		// It was a 100 Continue since we are still response pending.
-		consumed += inject(_buffer.constData() + consumed, _buffer.size() - consumed);
+		// Response is still pending. One of the following:
+		// 1. Got a parser error. (where hasError)
+		// 2. Waiting for more data to complete the current request. (where _pendingRequest is null and consumed == buffer.size)
+		// 3. Waiting for the real response after a 100-continue response. (where _pendingRequest is null and consumed < buffer.size, because parser will stop consuming after the 100-continue).
+
+		if (!hasError())
+		{
+			if (consumed < _buffer.size())
+			{
+				// We had multiple responses in the buffer?
+				// It was a 100 Continue since we are still response pending.
+				consumed += inject(_buffer.constData() + consumed, _buffer.size() - consumed);
+			}
+			else
+			{
+				// Just waiting for more data to consume.
+			}
+		}
+
+		if (hasError()) // Re-check for error in case we injected again in the 100 Continue case above.
+		{
+			_error = ResponseInvalidError;
+			_device->close();
+			_responsePending = false;
+			emit finished();
+		}
 	}
+	else
+	{
+		// Response completed or got aborted in a callback.
 
-	// TODO: at this point the parser can have completed.
-
-	if (consumed < _buffer.size() && !Pillow::HttpResponseParser::hasError())
-		qDebug() << "Pillow::HttpClient::device_readyRead(): not all request data was consumed.";
+		if (!_pendingRequest.method.isNull())
+		{
+			// Plus we got a new request while in callback.
+			Pillow::HttpClientRequest r = _pendingRequest;
+			_pendingRequest = Pillow::HttpClientRequest(); // Clear it.
+			request(r);
+		}
+	}
 
 	// Reuse the read buffer if it is not overly large.
 	if (_buffer.capacity() > 128 * 1024)
 		_buffer.clear();
 	else
 		_buffer.data_ptr()->size = 0;
-
-	if (Pillow::HttpResponseParser::hasError())
-	{
-		_error = ResponseInvalidError;
-		_device->close();
-		_responsePending = false;
-		emit finished();
-	}
 }
 
 void Pillow::HttpClient::sendRequest()

@@ -1039,12 +1039,14 @@ private slots:
 
 	void should_be_abortable_from_within_headersCompleted()
 	{
+		QSignalSpy contentReadyReadSpy(client, SIGNAL(contentReadyRead()));
 		connect(client, SIGNAL(headersCompleted()), this, SLOT(abortSender()));
 
 		client->get(testUrl()); QVERIFY(server.waitForRequest());
 		server.receivedConnections.last()->writeHeaders(201);
 		server.receivedConnections.last()->writeContent("Hello");
 		QVERIFY(waitForResponse());
+		QCOMPARE(contentReadyReadSpy.size(), 0); // It should be aborted before emitting contentReadyRead.
 		QCOMPARE(client->error(), Pillow::HttpClient::AbortedError);
 		QCOMPARE(client->statusCode(), 201);
 
@@ -1055,25 +1057,26 @@ private slots:
 		QVERIFY(waitForResponse());
 		QCOMPARE(client->statusCode(), 404);
 		QCOMPARE(client->content(), QByteArray("Test"));
+		QCOMPARE(contentReadyReadSpy.size(), 1);
 
 		// Wild case: abort previous and send new request from within slot.
 		connect(client, SIGNAL(headersCompleted()), this, SLOT(abortSender()));
 		connect(client, SIGNAL(headersCompleted()), this, SLOT(sendRequest()));
+		contentReadyReadSpy.clear();
 
 		client->get(testUrl());
 		QVERIFY(server.waitForRequest());
-		server.receivedConnections.last()->writeHeaders(200);
-		server.receivedConnections.last()->writeContent("Bla bla");
-		QVERIFY(waitForResponse());
-
-		qDebug() << client->error();
+		QCOMPARE(server.receivedConnections.size(), 3);
+		server.receivedConnections.last()->writeResponse(200, Pillow::HttpHeaderCollection(), "Bla bla");
+		QVERIFY(waitForSignal(client, SIGNAL(finished())));
+		QCOMPARE(contentReadyReadSpy.size(), 0); // It should be aborted before emitting contentReadyRead.
 		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 		QVERIFY(client->responsePending());
 
+		// Recover
 		disconnect(client, SIGNAL(headersCompleted()), this, SLOT(abortSender()));
 		disconnect(client, SIGNAL(headersCompleted()), this, SLOT(sendRequest()));
-
-		QVERIFY(server.waitForRequest());
+		QVERIFY(waitFor([&]{ return server.receivedConnections.size() == 4; })); // At this point, we will or have already received the new request.
 		server.receivedConnections.last()->writeResponse(201, Pillow::HttpHeaderCollection(), "Testing 123");
 		QVERIFY(waitForResponse());
 		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
@@ -1100,6 +1103,30 @@ private slots:
 		QVERIFY(waitForResponse());
 		QCOMPARE(client->statusCode(), 404);
 		QCOMPARE(client->content(), QByteArray("Test"));
+
+		// Wild case: abort previous and send new request from within slot.
+		connect(client, SIGNAL(contentReadyRead()), this, SLOT(abortSender()));
+		connect(client, SIGNAL(contentReadyRead()), this, SLOT(sendRequest()));
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		QCOMPARE(server.receivedConnections.size(), 3);
+		server.receivedConnections.last()->writeHeaders(200);
+		server.receivedConnections.last()->writeContent("Bla bla");
+		QVERIFY(waitForSignal(client, SIGNAL(finished())));
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QVERIFY(client->responsePending());
+
+		// Recover
+		disconnect(client, SIGNAL(contentReadyRead()), this, SLOT(abortSender()));
+		disconnect(client, SIGNAL(contentReadyRead()), this, SLOT(sendRequest()));
+		QVERIFY(waitFor([&]{ return server.receivedConnections.size() == 4; })); // At this point, we will or have already received the new request.
+		server.receivedConnections.last()->writeResponse(201, Pillow::HttpHeaderCollection(), "Testing 123");
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QCOMPARE(client->statusCode(), 201);
+		QCOMPARE(client->content(), QByteArray("Testing 123"));
+		QVERIFY(!client->responsePending());
 	}
 
 
