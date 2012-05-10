@@ -672,6 +672,9 @@ Pillow::NetworkAccessManager::NetworkAccessManager(QObject *parent)
 {
 }
 
+Pillow::NetworkAccessManager::~NetworkAccessManager()
+{
+}
 
 QNetworkReply *Pillow::NetworkAccessManager::createRequest(QNetworkAccessManager::Operation op, const QNetworkRequest &request, QIODevice *outgoingData)
 {
@@ -681,17 +684,20 @@ QNetworkReply *Pillow::NetworkAccessManager::createRequest(QNetworkAccessManager
 		return QNetworkAccessManager::createRequest(op, request, outgoingData);
 	}
 
-	UrlClientsMap::Iterator it = _urlToClientsMap.find(request.url().authority());
+	const QString urlAuthority = request.url().authority();
+
+	UrlClientsMap::Iterator it = _urlToClientsMap.find(urlAuthority);
 	Pillow::HttpClient *client = 0;
 	if (it != _urlToClientsMap.end())
 	{
-		_urlToClientsMap.erase(it);
 		client = it.value();
+		_urlToClientsMap.erase(it);
 	}
 	if (client == 0)
 	{
 		client = new Pillow::HttpClient(this);
-		_clients << client;
+		_clientToUrlMap.insert(client, urlAuthority);
+		connect(client, SIGNAL(finished()), this, SLOT(client_finished()), Qt::DirectConnection);
 	}
 
 	Pillow::NetworkReply *reply = new Pillow::NetworkReply(client, request);
@@ -740,6 +746,17 @@ QNetworkReply *Pillow::NetworkAccessManager::createRequest(QNetworkAccessManager
 	}
 
 	return reply;
+}
+
+void Pillow::NetworkAccessManager::client_finished()
+{
+	Pillow::HttpClient *client = static_cast<Pillow::HttpClient*>(sender());
+	const QString urlAuthority = _clientToUrlMap.value(client);
+
+	if (urlAuthority.isEmpty())
+		client->deleteLater();
+	else
+		_urlToClientsMap.insert(urlAuthority, client);
 }
 
 #include "HttpClient.moc"

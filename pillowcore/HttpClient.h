@@ -227,14 +227,19 @@ namespace Pillow
 
 	public:
 		NetworkAccessManager(QObject *parent = 0);
+		~NetworkAccessManager();
 
 	protected:
 		QNetworkReply *createRequest(Operation op, const QNetworkRequest &request, QIODevice *outgoingData = 0);
 
+	private slots:
+		void client_finished();
+
 	private:
 		typedef QMultiHash<QString, Pillow::HttpClient*> UrlClientsMap;
-		QList<Pillow::HttpClient*> _clients;
 		UrlClientsMap _urlToClientsMap;
+		typedef QHash<Pillow::HttpClient*, QString> ClientUrlMap;
+		ClientUrlMap _clientToUrlMap;
 
 		// Note: The
 	};

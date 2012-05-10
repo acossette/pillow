@@ -351,6 +351,40 @@ private slots:
 
 		QCOMPARE(r->readAll(), QByteArray("Hello World!"));
 	}
+
+	void should_reuse_existing_connection_to_same_server_when_available()
+	{
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200);
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
+
+		r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(201);
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
+
+		QCOMPARE(server.receivedSockets.size(), 2);
+		QVERIFY(server.receivedSockets.at(0) == server.receivedSockets.at(1));
+		QVERIFY(server.receivedSockets.at(0) != 0);
+
+		r = nam->get(QNetworkRequest(testUrl()));
+		QNetworkReply *r4 = nam->get(QNetworkRequest(testUrl()));
+		QNetworkReply *r5 = nam->get(QNetworkRequest(testUrl()));
+
+		QVERIFY(server.waitForRequest());
+		QVERIFY(waitFor([&]{ return server.receivedConnections.size() == 5; }));
+		QVERIFY(server.receivedSockets.at(2) == server.receivedSockets.at(1));
+		QVERIFY(server.receivedSockets.at(3) != server.receivedSockets.at(2));
+		QVERIFY(server.receivedSockets.at(4) != server.receivedSockets.at(2));
+		QVERIFY(server.receivedSockets.at(4) != server.receivedSockets.at(3));
+
+		server.receivedConnections.at(2)->writeResponse(400);
+		server.receivedConnections.at(3)->writeResponse(404);
+		server.receivedConnections.at(4)->writeResponse(500);
+
+		QVERIFY(waitFor([&]{ return !r->isRunning() && !r4->isRunning() && !r5->isRunning(); }));
+	}
 };
 PILLOW_TEST_DECLARE(NetworkAccessManagerTest)
 
@@ -1145,10 +1179,9 @@ private slots:
 	}
 
 
-
 	void should_use_port_80_by_default()
 	{
-
+		// How to test this?
 	}
 };
 PILLOW_TEST_DECLARE(HttpClientTest)
