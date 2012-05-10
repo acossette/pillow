@@ -512,6 +512,12 @@ void Pillow::HttpClient::headersComplete()
 {
 	Pillow::HttpResponseParser::headersComplete();
 	emit headersCompleted();
+
+	if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(_request.method, Pillow::LowerCaseToken("head")))
+	{
+		pause();
+		messageComplete();
+	}
 }
 
 void Pillow::HttpClient::messageContent(const char *data, int length)

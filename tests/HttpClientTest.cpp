@@ -724,6 +724,7 @@ private slots:
 		QVERIFY(waitForResponse());
 		QCOMPARE(client->error(), Pillow::HttpClient::ResponseInvalidError);
 
+		QVERIFY(waitFor([&]{ return serverSideSocket == 0; }));
 		QVERIFY(serverSideSocket == 0);
 		QVERIFY(!serverSocketStateSpy.isEmpty());
 		QCOMPARE(serverSocketStateSpy.last().first().value<QAbstractSocket::SocketState>(), QAbstractSocket::UnconnectedState);
@@ -1024,7 +1025,21 @@ private slots:
 
 	void should_support_head_requests()
 	{
-		QSKIP("Not implemented", SkipAll);
+		client->head(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200, Pillow::HttpHeaderCollection(), "12345");
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->content(), QByteArray());
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(201, Pillow::HttpHeaderCollection(), "abcde");
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QCOMPARE(client->statusCode(), 201);
+		QCOMPARE(client->content(), QByteArray("abcde"));
 	}
 
 	void should_have_a_configurable_receive_buffer()
