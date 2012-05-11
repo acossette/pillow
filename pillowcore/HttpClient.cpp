@@ -19,6 +19,7 @@ namespace Pillow
 		const QByteArray colonSpaceToken(": ");
 		const QByteArray httpOneOneCrlfToken(" HTTP/1.1\r\n");
 		const QByteArray contentLengthColonSpaceToken("Content-Length: ");
+		const QByteArray hostToken("Host");
 	}
 }
 
@@ -377,6 +378,8 @@ void Pillow::HttpClient::request(const Pillow::HttpClientRequest &request)
 	}
 	else
 	{
+		_hostHeaderValue.data_ptr()->size = 0; // Clear the previosu host header value (if any), without deallocating memory.
+
 		if (_device->state() != QAbstractSocket::UnconnectedState)
 			_device->disconnectFromHost();
 		_device->connectToHost(_request.url.host(), _request.url.port(80));
@@ -498,19 +501,23 @@ void Pillow::HttpClient::sendRequest()
 {
 	if (!responsePending()) return;
 
-	QByteArray hostHeaderValue = _request.url.encodedHost();
-	if (_request.url.port(80) != 80)
+	if (_hostHeaderValue.isEmpty())
 	{
-		hostHeaderValue.append(':');
-		hostHeaderValue.append(QByteArray::number(_request.url.port()));
+		_hostHeaderValue = _request.url.encodedHost();
+		if (_request.url.port(80) != 80)
+		{
+			_hostHeaderValue.append(':');
+			Pillow::ByteArrayHelpers::appendNumber<int, 10>(_hostHeaderValue, _request.url.port(80));
+		}
 	}
+
 	QByteArray uri = _request.url.encodedPath();
 	const QByteArray query = _request.url.encodedQuery();
 	if (!query.isEmpty()) uri.append('?').append(query);
 
 	Pillow::HttpHeaderCollection headers;
 	headers.reserve(_request.headers.size() + 1);
-	headers << Pillow::HttpHeader("Host", hostHeaderValue);
+	headers << Pillow::HttpHeader(Pillow::HttpClientTokens::hostToken, _hostHeaderValue);
 	for (int i = 0, iE = _request.headers.size(); i < iE; ++i)
 		headers << _request.headers.at(i);
 

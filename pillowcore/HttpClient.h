@@ -222,6 +222,7 @@ namespace Pillow
 		QByteArray _buffer;
 		int _keepAliveTimeout;
 		QElapsedTimer _keepAliveTimeoutTimer;
+		QByteArray _hostHeaderValue;
 	};
 
 	//

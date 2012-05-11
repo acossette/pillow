@@ -553,6 +553,17 @@ private slots:
 		QVERIFY(server.waitForRequest());
 		QCOMPARE(server.receivedConnections.size(), 1);
 		QCOMPARE(server.receivedConnections.last()->requestHeaderValue("Host"), QByteArray("127.0.0.1:4569"));
+		server.receivedConnections.last()->writeResponse(200);
+		QVERIFY(waitForResponse());
+
+		// Verify that connecting to another server sends an updated host header.
+		TestServer otherServer;
+		QVERIFY(otherServer.listen(QHostAddress::LocalHost, 4578));
+
+		client->get(QUrl("http://127.0.0.1:4578/"));
+		QVERIFY(otherServer.waitForRequest());
+		QCOMPARE(otherServer.receivedConnections.size(), 1);
+		QCOMPARE(otherServer.receivedConnections.last()->requestHeaderValue("Host"), QByteArray("127.0.0.1:4578"));
 	}
 
 	void should_be_pending_response_after_sending_request()

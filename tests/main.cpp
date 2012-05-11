@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
 
 //	PILLOW_TEST_RUN(HttpRequestWriterTest, result);
 //	PILLOW_TEST_RUN(HttpResponseParserTest, result);
-//	PILLOW_TEST_RUN(HttpClientTest, result);
+	PILLOW_TEST_RUN(HttpClientTest, result);
 	PILLOW_TEST_RUN(NetworkAccessManagerTest, result);
 
 	return result;
