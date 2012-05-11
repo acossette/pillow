@@ -385,16 +385,15 @@ void Pillow::HttpClient::request(const Pillow::HttpClientRequest &request)
 
 void Pillow::HttpClient::abort()
 {
-	if (!_responsePending)
-	{
-		qWarning("Pillow::HttpClient::abort(): called while not running.");
-		return;
-	}
-	Pillow::HttpResponseParser::pause();
 	if (_device) _device->close();
-	_error = AbortedError;
-	_responsePending = false;
-	emit finished();
+
+	if (_responsePending)
+	{
+		Pillow::HttpResponseParser::pause();
+		_error = AbortedError;
+		_responsePending = false;
+		emit finished();
+	}
 }
 
 void Pillow::HttpClient::device_error(QAbstractSocket::SocketError error)

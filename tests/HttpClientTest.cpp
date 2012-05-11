@@ -905,7 +905,6 @@ private slots:
 
 	void should_be_abortable()
 	{
-		QTest::ignoreMessage(QtWarningMsg, "Pillow::HttpClient::abort(): called while not running.");
 		client->abort(); // Should not do anything besides a warning.
 		QVERIFY(client->error() == Pillow::HttpClient::NoError);
 
@@ -936,20 +935,31 @@ private slots:
 		client->abort();
 		QVERIFY(waitForResponse());
 		QVERIFY(waitFor([=]{ return socket == 0; })); // The socket should get closed and deleted.
+	}
 
-		// Different case: say we have an existing connection but no pending response. Aborting should not close it.
+	void should_close_connection_and_not_discard_previous_response_if_aborted_while_not_waiting_for_response()
+	{
+		QSignalSpy finishedSpy(client, SIGNAL(finished()));
+
 		client->get(testUrl());
 		QVERIFY(server.waitForRequest());
+		QPointer<QTcpSocket> socket = server.receivedSockets.last();
 		server.receivedConnections.last()->writeResponse(200);
 		QVERIFY(waitForResponse());
-		QCOMPARE(client->statusCode(), 200);
 
-		socket = server.receivedSockets.last();
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QCOMPARE(finishedSpy.size(), 1);
 		QVERIFY(socket != 0);
-		QTest::ignoreMessage(QtWarningMsg, "Pillow::HttpClient::abort(): called while not running.");
+		QVERIFY(!client->responsePending());
+
 		client->abort();
-		QTest::qWait(10);
-		QVERIFY(socket != 0);
+		QVERIFY(waitFor([=]{ return socket == 0; })); // The socket should get closed and deleted.
+
+		// Should not have modified the results from the previous response, nor emitted finished() again.
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QCOMPARE(finishedSpy.size(), 1);
 	}
 
 	void should_reuse_existing_connection_to_same_host_and_port()
