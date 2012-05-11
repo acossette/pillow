@@ -16,6 +16,9 @@
 #ifndef http_parser_h
 #include "parser/http_parser.h"
 #endif // http_parser_h
+#ifndef QTIMESTAMP_H
+#include <QtCore/QElapsedTimer>
+#endif // QTIMESTAMP_H
 
 class QIODevice;
 class QTcpSocket;
@@ -161,6 +164,9 @@ namespace Pillow
 	public:
 		HttpClient(QObject* parent = 0);
 
+		int keepAliveTimeout() const;
+		void setKeepAliveTimeout(int timeout);
+
 	public:
 		// Request members.
 		void get(const QUrl& url, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection());
@@ -172,7 +178,7 @@ namespace Pillow
 		void request(const QByteArray& method, const QUrl& url, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QByteArray& data = QByteArray());
 		void request(const Pillow::HttpClientRequest& request);
 
-		void abort();
+		void abort(); // Stop active request (if any) and break current server connection. If there was an active request, finished() will be emitted and the error will be set to AbortedError.
 
 	public:
 		// Response Members.
@@ -214,6 +220,8 @@ namespace Pillow
 		bool _responsePending;
 		Error _error;
 		QByteArray _buffer;
+		int _keepAliveTimeout;
+		QElapsedTimer _keepAliveTimeoutTimer;
 	};
 
 	//
@@ -240,8 +248,6 @@ namespace Pillow
 		UrlClientsMap _urlToClientsMap;
 		typedef QHash<Pillow::HttpClient*, QString> ClientUrlMap;
 		ClientUrlMap _clientToUrlMap;
-
-		// Note: The
 	};
 
 } // namespace Pillow

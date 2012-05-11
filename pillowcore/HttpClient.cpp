@@ -263,13 +263,23 @@ inline void Pillow::HttpResponseParser::pushHeader()
 //
 
 Pillow::HttpClient::HttpClient(QObject *parent)
-	: QObject(parent), _responsePending(false), _error(NoError)
+	: QObject(parent), _responsePending(false), _error(NoError), _keepAliveTimeout(-1)
 {
 	_device = new QTcpSocket(this);
 	connect(_device, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(device_error(QAbstractSocket::SocketError)));
 	connect(_device, SIGNAL(connected()), this, SLOT(device_connected()));
 	connect(_device, SIGNAL(readyRead()), this, SLOT(device_readyRead()));
 	_requestWriter.setDevice(_device);
+}
+
+int Pillow::HttpClient::keepAliveTimeout() const
+{
+	return _keepAliveTimeout;
+}
+
+void Pillow::HttpClient::setKeepAliveTimeout(int timeout)
+{
+	_keepAliveTimeout = timeout;
 }
 
 bool Pillow::HttpClient::responsePending() const
@@ -356,7 +366,11 @@ void Pillow::HttpClient::request(const Pillow::HttpClientRequest &request)
 	_error = NoError;
 	clear();
 
-	if (_device->state() == QAbstractSocket::ConnectedState && _request.url.host() == previousHost && _request.url.port() == previousPort)
+	bool isConnected = _device->state() == QAbstractSocket::ConnectedState;
+	bool sameServer = _request.url.host() == previousHost && _request.url.port() == previousPort;
+	bool keepAliveTimeoutExpired = sameServer && (_keepAliveTimeout >= 0 && _keepAliveTimeoutTimer.isValid() && _keepAliveTimeoutTimer.hasExpired(_keepAliveTimeout));
+
+	if (isConnected && sameServer && !keepAliveTimeoutExpired)
 	{
 		// Reuse current connection to same host and port.
 		sendRequest();
@@ -401,6 +415,7 @@ void Pillow::HttpClient::device_error(QAbstractSocket::SocketError error)
 		_error = NetworkError;
 	}
 
+	_device->close();
 	_responsePending = false;
 	emit finished();
 }
@@ -532,6 +547,12 @@ void Pillow::HttpClient::messageComplete()
 	{
 		Pillow::HttpResponseParser::messageComplete();
 		_responsePending = false;
+
+		if (_keepAliveTimeout == 0)
+			_device->close();
+		else
+			_keepAliveTimeoutTimer.start();
+
 		emit finished();
 	}
 }
