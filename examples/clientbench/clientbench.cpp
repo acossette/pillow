@@ -147,6 +147,58 @@ private:
 	QNetworkAccessManager * m_nam;
 };
 
+class PillowNamBench : public Bench
+{
+	Q_OBJECT
+
+public:
+	PillowNamBench(QObject *parent = 0)
+		: Bench(parent)
+	{
+		m_nam = new Pillow::NetworkAccessManager(this);
+	}
+
+	void start()
+	{
+		Bench::start();
+
+		int clientCount = qMin(m_concurrency, m_requestCount);
+
+		qDebug() << "Pillow clientbench for Pillow::NetworkAccessManager to" << qPrintable(url().toString());
+		qDebug() << requestCount() << "request with concurency of" << clientCount;
+
+		for (int i = 0; i < clientCount; ++i)
+		{
+			QNetworkReply *reply = m_nam->get(QNetworkRequest(url()));
+			connect(reply, SIGNAL(finished()), this, SLOT(client_finished()));
+		}
+	}
+
+private slots:
+	void client_finished()
+	{
+		QNetworkReply *reply = static_cast<QNetworkReply*>(sender());
+
+		if (reply->error() != QNetworkReply::NoError)
+			fail();
+		else
+		{
+			if (--m_remainingRequests == 0)
+				finish();
+			else
+			{
+				reply->deleteLater();
+				reply = m_nam->get(QNetworkRequest(url()));
+				connect(reply, SIGNAL(finished()), this, SLOT(client_finished()));
+			}
+		}
+	}
+
+private:
+	QNetworkAccessManager * m_nam;
+};
+
+
 int main(int argc, char *argv[])
 {
 	QCoreApplication a(argc, argv);
@@ -156,6 +208,7 @@ int main(int argc, char *argv[])
 
 	ClientBench bench;
 	//NamBench bench;
+	//PillowNamBench bench;
 
 	for (int i = 0, iE = a.arguments().size(); i < iE; ++i)
 	{
