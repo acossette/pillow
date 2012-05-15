@@ -575,12 +575,15 @@ void Pillow::HttpClient::messageBegin()
 void Pillow::HttpClient::headersComplete()
 {
 	Pillow::HttpResponseParser::headersComplete();
-	emit headersCompleted();
-
-	if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(_request.method, Pillow::LowerCaseToken("head")))
+	if (statusCode() != 100)
 	{
-		pause();
-		messageComplete();
+		emit headersCompleted();
+
+		if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(_request.method, Pillow::LowerCaseToken("head")))
+		{
+			pause();
+			messageComplete();
+		}
 	}
 }
 
@@ -603,6 +606,11 @@ void Pillow::HttpClient::messageComplete()
 			_keepAliveTimeoutTimer.start();
 
 		emit finished();
+	}
+	else
+	{
+		// Completely hide the 100 response we just received.
+		clear();
 	}
 }
 

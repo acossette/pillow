@@ -1056,12 +1056,17 @@ private slots:
 
 	void should_ignore_100_continue_responses()
 	{
+		QSignalSpy headersCompleteSpy(client, SIGNAL(headersCompleted()));
+		QSignalSpy finishedSpy(client, SIGNAL(finished()));
+
 		client->post(testUrl(), Pillow::HttpHeaderCollection() << Pillow::HttpHeader("Expect", "100-continue"), "post data");
 		QVERIFY(server.waitForRequest());
 		server.receivedConnections.last()->writeResponse(201, Pillow::HttpHeaderCollection(), "content");
 		QVERIFY(waitForResponse(500));
 		QCOMPARE(client->statusCode(), 201);
 		QCOMPARE(client->content(), QByteArray("content"));
+		QCOMPARE(headersCompleteSpy.size(), 1);
+		QCOMPARE(finishedSpy.size(), 1);
 	}
 
 	void should_emit_headersCompleted_when_headers_have_been_received()
