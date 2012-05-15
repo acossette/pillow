@@ -312,15 +312,17 @@ private slots:
 
 		server.receivedConnections.last()->writeContent("Hello");
 		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
-		QCOMPARE(r->readAll(), QByteArray("Hello"));
+		QCOMPARE(r->read(3), QByteArray("Hel"));
 
 		server.receivedConnections.last()->writeContent("the");
 		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
-		QCOMPARE(r->readAll(), QByteArray("the"));
+		QCOMPARE(r->read(4), QByteArray("loth"));
 
 		server.receivedConnections.last()->writeContent("world!");
 		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
-		QCOMPARE(r->readAll(), QByteArray("world!"));
+		QCOMPARE(r->read(5), QByteArray("eworl"));
+
+		QCOMPARE(r->read(2), QByteArray("d!"));
 	}
 
 	void should_report_errors()
@@ -1264,10 +1266,71 @@ private slots:
 		QVERIFY(!client->responsePending());
 	}
 
-
 	void should_use_port_80_by_default()
 	{
 		// How to test this?
+	}
+
+	void should_detect_redirects()
+	{
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200);
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 200);
+		QVERIFY(!client->redirected());
+		QCOMPARE(client->redirectionLocation(), QByteArray());
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(301, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("Location", "http://new-location.example.org/"));
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 301);
+		QVERIFY(client->redirected());
+		QCOMPARE(client->redirectionLocation(), QByteArray("http://new-location.example.org/"));
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(201);
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 201);
+		QVERIFY(!client->redirected());
+		QCOMPARE(client->redirectionLocation(), QByteArray());
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(302, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("Location", "http://another-location.example.org/and/path"));
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 302);
+		QVERIFY(client->redirected());
+		QCOMPARE(client->redirectionLocation(), QByteArray("http://another-location.example.org/and/path"));
+	}
+
+	void should_allow_following_redirections()
+	{
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(301, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("Location", "http://127.0.0.1:4569/other/path"));
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 301);
+		QVERIFY(client->redirected());
+		QCOMPARE(client->redirectionLocation(), QByteArray("http://127.0.0.1:4569/other/path"));
+
+		client->followRedirection();
+
+		QVERIFY(server.waitForRequest());
+		QCOMPARE(server.receivedConnections.last()->requestPath(), QByteArray("/other/path"));
+		server.receivedConnections.last()->writeResponse(200);
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 200);
+		QVERIFY(!client->redirected());
+		QCOMPARE(client->redirectionLocation(), QByteArray());
+
+		// Trying to follow redirection when none happened should do nothing.
+		QTest::ignoreMessage(QtWarningMsg, "Pillow::HttpClient::followRedirection(): no redirection to follow.");
+		client->followRedirection();
+
+		QVERIFY(!server.waitForRequest(50));
 	}
 };
 PILLOW_TEST_DECLARE(HttpClientTest)

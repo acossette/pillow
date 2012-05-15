@@ -2,6 +2,8 @@
 #include "ByteArrayHelpers.h"
 #include <QtCore/QIODevice>
 #include <QtCore/QUrl>
+#include <QtCore/QFile>
+#include <QtCore/QFileInfo>
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkCookie>
@@ -263,6 +265,8 @@ inline void Pillow::HttpResponseParser::pushHeader()
 // Pillow::HttpClient
 //
 
+static int requestCount = 1;
+
 Pillow::HttpClient::HttpClient(QObject *parent)
 	: QObject(parent), _responsePending(false), _error(NoError), _keepAliveTimeout(-1)
 {
@@ -291,6 +295,32 @@ bool Pillow::HttpClient::responsePending() const
 Pillow::HttpClient::Error Pillow::HttpClient::error() const
 {
 	return _error;
+}
+
+bool Pillow::HttpClient::redirected() const
+{
+	switch (statusCode())
+	{
+	case 300: // Multiple Choices
+	case 301: // Moved Permanently
+	case 302: // Found
+	case 303: // See Other
+	case 307: // Temporary Redirect
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+QByteArray Pillow::HttpClient::redirectionLocation() const
+{
+	foreach (const Pillow::HttpHeader &header, headers())
+	{
+		if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(header.first, Pillow::LowerCaseToken("location")))
+			return header.second;
+	}
+	return QByteArray();
 }
 
 QByteArray Pillow::HttpClient::consumeContent()
@@ -399,6 +429,19 @@ void Pillow::HttpClient::abort()
 	}
 }
 
+void Pillow::HttpClient::followRedirection()
+{
+	if (!redirected())
+	{
+		qWarning("Pillow::HttpClient::followRedirection(): no redirection to follow.");
+		return;
+	}
+
+	Pillow::HttpClientRequest newRequest = _request;
+	newRequest.url = QUrl::fromEncoded(redirectionLocation());
+	request(newRequest);
+}
+
 void Pillow::HttpClient::device_error(QAbstractSocket::SocketError error)
 {
 	if (!_responsePending)
@@ -501,6 +544,11 @@ void Pillow::HttpClient::sendRequest()
 {
 	if (!responsePending()) return;
 
+	QString filename = QString("/home/acossette/temp/%1.%2").arg(requestCount++).arg(QFileInfo(_request.url.path()).fileName());
+	QFile * f = new QFile(filename, this);
+	f->open(QFile::WriteOnly);
+	setProperty("_file", QVariant::fromValue<QObject*>(f));
+
 	if (_hostHeaderValue.isEmpty())
 	{
 		_hostHeaderValue = _request.url.encodedHost();
@@ -544,6 +592,7 @@ void Pillow::HttpClient::headersComplete()
 void Pillow::HttpClient::messageContent(const char *data, int length)
 {
 	Pillow::HttpResponseParser::messageContent(data, length);
+	static_cast<QFile*>(property("_file").value<QObject*>())->write(data, length);
 	emit contentReadyRead();
 }
 
@@ -553,6 +602,10 @@ void Pillow::HttpClient::messageComplete()
 	{
 		Pillow::HttpResponseParser::messageComplete();
 		_responsePending = false;
+
+		static_cast<QFile*>(property("_file").value<QObject*>())->close();
+		static_cast<QFile*>(property("_file").value<QObject*>())->deleteLater();
+		setProperty("_file", QVariant());
 
 		if (_keepAliveTimeout == 0)
 			_device->close();
@@ -566,6 +619,8 @@ void Pillow::HttpClient::messageComplete()
 //
 // Pillow::NetworkReply
 //
+
+static int replyCount = 1;
 
 namespace Pillow
 {
@@ -584,6 +639,11 @@ namespace Pillow
 			setRequest(request);
 
 			// TODO: Authentication is not supported for now.
+
+			QString filename = QString("/home/acossette/temp/%1_reply.%2").arg(replyCount++).arg(QFileInfo(request.url().path()).fileName());
+			QFile * f = new QFile(filename, this);
+			f->open(QFile::WriteOnly);
+			setProperty("_file", QVariant::fromValue<QObject*>(f));
 		}
 
 		~NetworkReply()
@@ -619,7 +679,7 @@ namespace Pillow
 				if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(header.first, Pillow::LowerCaseToken("set-cookie")))
 					cookies += QNetworkCookie::parseCookies(header.second);
 				else if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(header.first, Pillow::LowerCaseToken("location")))
-					setAttribute(QNetworkRequest::RedirectionTargetAttribute, QUrl(header.second));
+					setAttribute(QNetworkRequest::RedirectionTargetAttribute, QUrl::fromEncoded(header.second));
 			}
 
 			if (!cookies.isEmpty())
@@ -644,7 +704,9 @@ namespace Pillow
 
 		void client_contentReadyRead()
 		{
-			_content.append(_client->consumeContent());
+			QByteArray ary = _client->consumeContent();
+			qobject_cast<QFile*>(property("_file").value<QObject*>())->write(ary);
+			_content.append(ary);
 			 emit readyRead();
 		}
 

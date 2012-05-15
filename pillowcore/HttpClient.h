@@ -180,6 +180,8 @@ namespace Pillow
 
 		void abort(); // Stop active request (if any) and break current server connection. If there was an active request, finished() will be emitted and the error will be set to AbortedError.
 
+		void followRedirection(); // Follow previous request's redirection. Only effective if redirected() is true.
+
 	public:
 		// Response Members.
 		bool responsePending() const;
@@ -189,6 +191,9 @@ namespace Pillow
 		inline int statusCode() const { return static_cast<int>(HttpResponseParser::statusCode()); }
 		inline Pillow::HttpHeaderCollection headers() const { return HttpResponseParser::headers(); }
 		inline const QByteArray& content() const { return HttpResponseParser::content(); }
+
+		bool redirected() const;
+		QByteArray redirectionLocation() const;
 
 		QByteArray consumeContent(); // Get the value of "content()" and clear the internal buffer.
 
