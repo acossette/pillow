@@ -640,7 +640,7 @@ namespace Pillow
 
 		qint64 bytesAvailable() const
 		{
-			return _content.size() - _contentPos;
+			return QNetworkReply::bytesAvailable() + _content.size() - _contentPos;
 		}
 
 	private slots:
