@@ -755,7 +755,7 @@ private slots:
 
 	void should_report_network_errors()
 	{
-		client->get(QUrl("http://127.0.0.1:64999/should/not/work"));
+		client->get(QUrl("http://popopopopopopopopopopopopo.popo:64999/should/not/work"));
 		QVERIFY(client->responsePending());
 		QVERIFY(waitForResponse());
 		QCOMPARE(client->error(), Pillow::HttpClient::NetworkError);
@@ -1126,16 +1126,19 @@ private slots:
 		client->setKeepAliveTimeout(50);
 
 		client->get(testUrl()); QVERIFY(server.waitForRequest());
+		QPointer<QObject> socket = server.receivedSockets.last();
 		server.receivedConnections.last()->writeResponse(200);
 		QVERIFY(waitForResponse()); QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 
 		QTest::qWait(60); // Wait more than the keep alive timeout.
 
 		client->get(testUrl()); QVERIFY(server.waitForRequest());
+		QPointer<QObject> socket2 = server.receivedSockets.last();
 		server.receivedConnections.last()->writeResponse(200);
 		QVERIFY(waitForResponse()); QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 
-		QVERIFY(server.receivedSockets.at(0) != server.receivedSockets.at(1)); // And it will have been 2 different connections on the server.
+		QVERIFY(socket == 0); // It will have closed the initial socket and used a new one.
+		QVERIFY(socket2 != 0);
 
 		QTest::qWait(1); // Wait less than the keep alive timeout.
 
@@ -1143,7 +1146,7 @@ private slots:
 		server.receivedConnections.last()->writeResponse(200);
 		QVERIFY(waitForResponse()); QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 
-		QVERIFY(server.receivedSockets.at(1) == server.receivedSockets.at(2)); // And it will reuse the existing, kept-alive connection.
+		QVERIFY(socket2 != 0); // It will have reused the still-good connection.
 	}
 
 	void should_disable_keep_alive_when_keepAliveTimeout_is_zero()
@@ -1151,7 +1154,10 @@ private slots:
 		client->setKeepAliveTimeout(0);
 
 		client->get(testUrl()); QVERIFY(server.waitForRequest());
+
 		QSignalSpy connectionClosedSpy(server.receivedConnections.last(), SIGNAL(closed(Pillow::HttpConnection*)));
+		QPointer<QObject> socket = server.receivedSockets.last();
+
 		server.receivedConnections.last()->writeResponse(200);
 		QVERIFY(waitForResponse()); QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 		QVERIFY(waitFor([&]{ return connectionClosedSpy.size() == 1; }));
@@ -1160,7 +1166,7 @@ private slots:
 		server.receivedConnections.last()->writeResponse(200);
 		QVERIFY(waitForResponse()); QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 
-		QVERIFY(server.receivedSockets.at(0) != server.receivedSockets.at(1)); // And it will have been 2 different connections on the server.
+		QVERIFY(socket == 0);
 	}
 
 	void should_break_existing_connection_when_keepAliveTimeout_exceeded()
@@ -1168,6 +1174,7 @@ private slots:
 		// Warning: timing-sensitive test.
 
 		client->get(testUrl()); QVERIFY(server.waitForRequest());
+		QPointer<QObject> socket = server.receivedSockets.last();
 		server.receivedConnections.last()->writeResponse(200);
 		QVERIFY(waitForResponse()); QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 
@@ -1175,6 +1182,7 @@ private slots:
 		server.receivedConnections.last()->writeResponse(200);
 		QVERIFY(waitForResponse()); QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 
+		QVERIFY(socket != 0);
 		QVERIFY(server.receivedSockets.at(0) == server.receivedSockets.at(1)); // Still good.
 
 		QTest::qWait(15); // But wait, there's more!
@@ -1184,7 +1192,7 @@ private slots:
 		server.receivedConnections.last()->writeResponse(200);
 		QVERIFY(waitForResponse()); QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 
-		QVERIFY(server.receivedSockets.at(2) != server.receivedSockets.at(1)); // Then it should have used a different connection.
+		QVERIFY(socket == 0); // It will have broken the initial connection.
 	}
 
 	void should_be_abortable_from_within_headersCompleted()
