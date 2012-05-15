@@ -284,8 +284,10 @@ private slots:
 		originalRequest.setRawHeader("Another-Header", "AnotherValue");
 		originalRequest.setPriority(QNetworkRequest::HighPriority);
 
-		QNetworkReply *r = nam->get(originalRequest);
+		QNetworkReply *r = nam->post(originalRequest, QByteArray("hello"));
 		QCOMPARE(r->request(), originalRequest);
+		QCOMPARE(r->url(), testUrl());
+		QCOMPARE(r->operation(), QNetworkAccessManager::PostOperation);
 	}
 
 	void should_allow_aborting_reply()

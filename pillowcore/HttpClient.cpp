@@ -2,9 +2,12 @@
 #include "ByteArrayHelpers.h"
 #include <QtCore/QIODevice>
 #include <QtCore/QUrl>
+#include <QtCore/QFile>
+#include <QtCore/QFileInfo>
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkCookie>
+#include <QtCore/QTimer>
 
 namespace Pillow
 {
@@ -263,8 +266,6 @@ inline void Pillow::HttpResponseParser::pushHeader()
 // Pillow::HttpClient
 //
 
-static int requestCount = 1;
-
 Pillow::HttpClient::HttpClient(QObject *parent)
 	: QObject(parent), _responsePending(false), _error(NoError), _keepAliveTimeout(-1)
 {
@@ -395,11 +396,12 @@ void Pillow::HttpClient::request(const Pillow::HttpClientRequest &request)
 	_error = NoError;
 	clear();
 
-	bool isConnected = _device->state() == QAbstractSocket::ConnectedState;
-	bool sameServer = _request.url.host() == previousHost && _request.url.port() == previousPort;
-	bool keepAliveTimeoutExpired = sameServer && (_keepAliveTimeout >= 0 && _keepAliveTimeoutTimer.isValid() && _keepAliveTimeoutTimer.hasExpired(_keepAliveTimeout));
+	const bool isConnected = _device->state() == QAbstractSocket::ConnectedState;
+	const bool sameServer = _request.url.host() == previousHost && _request.url.port() == previousPort;
+	const bool keepAliveTimeoutExpired = sameServer && (_keepAliveTimeout >= 0 && _keepAliveTimeoutTimer.isValid() && _keepAliveTimeoutTimer.hasExpired(_keepAliveTimeout));
+	const bool reuseExistingConnection = isConnected && sameServer && !keepAliveTimeoutExpired;
 
-	if (isConnected && sameServer && !keepAliveTimeoutExpired)
+	if (reuseExistingConnection)
 	{
 		// Reuse current connection to same host and port.
 		sendRequest();
@@ -608,8 +610,6 @@ void Pillow::HttpClient::messageComplete()
 // Pillow::NetworkReply
 //
 
-static int replyCount = 1;
-
 namespace Pillow
 {
 	class NetworkReply : public QNetworkReply
@@ -617,16 +617,16 @@ namespace Pillow
 		Q_OBJECT
 
 	public:
-		NetworkReply(Pillow::HttpClient *client, const QNetworkRequest& request)
+		NetworkReply(Pillow::HttpClient *client, QNetworkAccessManager::Operation op, const QNetworkRequest& request)
 			:_client(client), _contentPos(0)
 		{
 			connect(client, SIGNAL(headersCompleted()), this, SLOT(client_headersCompleted()));
 			connect(client, SIGNAL(contentReadyRead()), this, SLOT(client_contentReadyRead()));
 			connect(client, SIGNAL(finished()), this, SLOT(client_finished()));
 
+			setOperation(op);
 			setRequest(request);
-
-			// TODO: Authentication is not supported for now.
+			setUrl(request.url());
 		}
 
 		~NetworkReply()
@@ -770,7 +770,7 @@ QNetworkReply *Pillow::NetworkAccessManager::createRequest(QNetworkAccessManager
 		connect(client, SIGNAL(finished()), this, SLOT(client_finished()), Qt::DirectConnection);
 	}
 
-	Pillow::NetworkReply *reply = new Pillow::NetworkReply(client, request);
+	Pillow::NetworkReply *reply = new Pillow::NetworkReply(client, op, request);
 
 	Pillow::HttpHeaderCollection headers;
 	foreach (const QByteArray &headerName, request.rawHeaderList())
