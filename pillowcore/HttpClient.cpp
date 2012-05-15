@@ -697,7 +697,7 @@ namespace Pillow
 				}
 			}
 
-			open(QIODevice::ReadOnly);
+			open(QIODevice::ReadOnly | QIODevice::Unbuffered);
 
 			emit metaDataChanged();
 		}

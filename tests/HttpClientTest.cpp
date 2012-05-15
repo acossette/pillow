@@ -312,17 +312,23 @@ private slots:
 
 		server.receivedConnections.last()->writeContent("Hello");
 		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
+		QCOMPARE(r->bytesAvailable(), qint64(5));
 		QCOMPARE(r->read(3), QByteArray("Hel"));
+		QCOMPARE(r->bytesAvailable(), qint64(2));
 
 		server.receivedConnections.last()->writeContent("the");
 		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
+		QCOMPARE(r->bytesAvailable(), qint64(5));
 		QCOMPARE(r->read(4), QByteArray("loth"));
+		QCOMPARE(r->bytesAvailable(), qint64(1));
 
 		server.receivedConnections.last()->writeContent("world!");
 		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
+		QCOMPARE(r->bytesAvailable(), qint64(7));
 		QCOMPARE(r->read(5), QByteArray("eworl"));
-
+		QCOMPARE(r->bytesAvailable(), qint64(2));
 		QCOMPARE(r->read(2), QByteArray("d!"));
+		QCOMPARE(r->bytesAvailable(), qint64(0));
 	}
 
 	void should_report_errors()
