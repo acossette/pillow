@@ -310,6 +310,8 @@ private slots:
 		QVERIFY(server.waitForRequest());
 		server.receivedConnections.last()->writeHeaders(200);
 
+		QCOMPARE(r->bytesAvailable(), qint64(0));
+
 		server.receivedConnections.last()->writeContent("Hello");
 		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
 		QCOMPARE(r->bytesAvailable(), qint64(5));

@@ -2,8 +2,6 @@
 #include "ByteArrayHelpers.h"
 #include <QtCore/QIODevice>
 #include <QtCore/QUrl>
-#include <QtCore/QFile>
-#include <QtCore/QFileInfo>
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkCookie>
@@ -544,11 +542,6 @@ void Pillow::HttpClient::sendRequest()
 {
 	if (!responsePending()) return;
 
-	QString filename = QString("/home/acossette/temp/%1.%2").arg(requestCount++).arg(QFileInfo(_request.url.path()).fileName());
-	QFile * f = new QFile(filename, this);
-	f->open(QFile::WriteOnly);
-	setProperty("_file", QVariant::fromValue<QObject*>(f));
-
 	if (_hostHeaderValue.isEmpty())
 	{
 		_hostHeaderValue = _request.url.encodedHost();
@@ -592,7 +585,6 @@ void Pillow::HttpClient::headersComplete()
 void Pillow::HttpClient::messageContent(const char *data, int length)
 {
 	Pillow::HttpResponseParser::messageContent(data, length);
-	static_cast<QFile*>(property("_file").value<QObject*>())->write(data, length);
 	emit contentReadyRead();
 }
 
@@ -602,10 +594,6 @@ void Pillow::HttpClient::messageComplete()
 	{
 		Pillow::HttpResponseParser::messageComplete();
 		_responsePending = false;
-
-		static_cast<QFile*>(property("_file").value<QObject*>())->close();
-		static_cast<QFile*>(property("_file").value<QObject*>())->deleteLater();
-		setProperty("_file", QVariant());
 
 		if (_keepAliveTimeout == 0)
 			_device->close();
@@ -639,11 +627,6 @@ namespace Pillow
 			setRequest(request);
 
 			// TODO: Authentication is not supported for now.
-
-			QString filename = QString("/home/acossette/temp/%1_reply.%2").arg(replyCount++).arg(QFileInfo(request.url().path()).fileName());
-			QFile * f = new QFile(filename, this);
-			f->open(QFile::WriteOnly);
-			setProperty("_file", QVariant::fromValue<QObject*>(f));
 		}
 
 		~NetworkReply()
@@ -704,9 +687,7 @@ namespace Pillow
 
 		void client_contentReadyRead()
 		{
-			QByteArray ary = _client->consumeContent();
-			qobject_cast<QFile*>(property("_file").value<QObject*>())->write(ary);
-			_content.append(ary);
+			_content.append(_client->consumeContent());
 			 emit readyRead();
 		}
 
