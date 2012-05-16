@@ -713,6 +713,7 @@ private slots:
 		QCOMPARE(server.receivedRequests.size(), 1);
 		QVERIFY(client->responsePending());
 
+		QTest::ignoreMessage(QtWarningMsg, "Pillow::HttpClient::request: cannot send new request while another one is under way. Request pipelining is not supported.");
 		client->get(testUrl());
 		QCOMPARE(server.receivedRequests.size(), 1);
 
@@ -1087,7 +1088,6 @@ private slots:
 		QCOMPARE(client->content(), QByteArray());
 
 		server.receivedConnections.last()->writeContent("Some content");
-		server.receivedConnections.last()->endContent();
 		QVERIFY(waitForSignal(client, SIGNAL(finished())));
 		QCOMPARE(finishedSpy.size(), 1);
 
@@ -1355,8 +1355,6 @@ private slots:
 		// Trying to follow redirection when none happened should do nothing.
 		QTest::ignoreMessage(QtWarningMsg, "Pillow::HttpClient::followRedirection(): no redirection to follow.");
 		client->followRedirection();
-
-		QVERIFY(!server.waitForRequest(50));
 	}
 };
 PILLOW_TEST_DECLARE(HttpClientTest)

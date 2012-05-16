@@ -356,12 +356,6 @@ void Pillow::HttpClient::deleteResource(const QUrl &url, const Pillow::HttpHeade
 
 void Pillow::HttpClient::request(const QByteArray &method, const QUrl &url, const Pillow::HttpHeaderCollection &headers, const QByteArray &data)
 {
-	if (_responsePending)
-	{
-		qWarning() << "Pillow::HttpClient::request: cannot send new request while another one is under way. Request pipelining is not supported.";
-		return;
-	}
-
 	Pillow::HttpClientRequest newRequest;
 	newRequest.method = method;
 	newRequest.url = url;
@@ -374,7 +368,7 @@ void Pillow::HttpClient::request(const Pillow::HttpClientRequest &request)
 {
 	if (_responsePending)
 	{
-		qWarning() << "Pillow::HttpClient::request: cannot send new request while another one is under way. Request pipelining is not supported.";
+		qWarning("Pillow::HttpClient::request: cannot send new request while another one is under way. Request pipelining is not supported.");
 		return;
 	}
 
