@@ -22,6 +22,7 @@
 
 class QIODevice;
 class QTcpSocket;
+namespace Pillow { class ContentTransformer; }
 
 namespace Pillow
 {
@@ -228,6 +229,7 @@ namespace Pillow
 		int _keepAliveTimeout;
 		QElapsedTimer _keepAliveTimeoutTimer;
 		QByteArray _hostHeaderValue;
+		Pillow::ContentTransformer* _contentDecoder;
 	};
 
 	//

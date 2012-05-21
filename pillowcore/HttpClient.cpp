@@ -8,6 +8,7 @@
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkCookie>
 #include <QtCore/QTimer>
+#include "private/zlib.h"
 
 namespace Pillow
 {
@@ -24,6 +25,66 @@ namespace Pillow
 		const QByteArray contentLengthColonSpaceToken("Content-Length: ");
 		const QByteArray hostToken("Host");
 	}
+
+	class ContentTransformer
+	{
+	public:
+		virtual ~ContentTransformer() {}
+		virtual QByteArray transform(const char *data, int length) = 0;
+	};
+
+	class GunzipContentTransformer : public ContentTransformer
+	{
+	public:
+		GunzipContentTransformer(): _streamBad(false)
+		{
+			memset(&_inflateStream, 0, sizeof(z_stream));
+			inflateInit2(&_inflateStream, 31);
+		}
+
+		~GunzipContentTransformer()
+		{
+			inflateEnd(&_inflateStream);
+		}
+
+		QByteArray transform(const char *data, int length)
+		{
+			unsigned char buffer[32 * 1024];
+			_inflatedBuffer.data_ptr()->size = 0;
+
+			_inflateStream.next_in = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(data));
+			_inflateStream.avail_in = length;
+
+			do
+			{
+				_inflateStream.next_out = buffer;
+				_inflateStream.avail_out = sizeof(buffer);
+
+				if (_streamBad || inflate(&_inflateStream, Z_NO_FLUSH) < 0) // Less than 0 is error.
+				{
+					qWarning("Pillow::GunzipContentTransformer::transform: error inflating input stream passing original content through.");
+					_streamBad = true;
+					break;
+				}
+
+				_inflatedBuffer.append(reinterpret_cast<const char*>(buffer), sizeof(buffer) - _inflateStream.avail_out);
+			}
+			while (_inflateStream.avail_in > 0 && _inflateStream.avail_out == 0);
+
+			if (_streamBad)
+			{
+				_inflatedBuffer.data_ptr()->size = 0;
+				_inflatedBuffer.append(data, length);
+			}
+
+			return _inflatedBuffer;
+		}
+
+	private:
+		z_stream _inflateStream;
+		QByteArray _inflatedBuffer;
+		bool _streamBad;
+	};
 }
 
 //
@@ -267,7 +328,7 @@ inline void Pillow::HttpResponseParser::pushHeader()
 //
 
 Pillow::HttpClient::HttpClient(QObject *parent)
-	: QObject(parent), _responsePending(false), _error(NoError), _keepAliveTimeout(-1)
+	: QObject(parent), _responsePending(false), _error(NoError), _keepAliveTimeout(-1), _contentDecoder(0)
 {
 	_device = new QTcpSocket(this);
 	connect(_device, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(device_error(QAbstractSocket::SocketError)));
@@ -569,27 +630,52 @@ void Pillow::HttpClient::messageBegin()
 void Pillow::HttpClient::headersComplete()
 {
 	Pillow::HttpResponseParser::headersComplete();
-	if (statusCode() != 100)
-	{
-		emit headersCompleted();
+	if (statusCode() == 100)
+		return;
 
-		if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(_request.method, Pillow::LowerCaseToken("head")))
+	emit headersCompleted();
+
+	if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(_request.method, Pillow::LowerCaseToken("head")))
+	{
+		pause();
+		messageComplete();
+	}
+	else
+	{
+		for (int i = 0, iE = _headers.size(); i < iE; ++i)
 		{
-			pause();
-			messageComplete();
+			const Pillow::HttpHeader& header = _headers.at(i);
+			if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(header.first, Pillow::LowerCaseToken("content-encoding")))
+			{
+				if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(header.second, Pillow::LowerCaseToken("gzip")))
+					_contentDecoder = new Pillow::GunzipContentTransformer();
+			}
 		}
 	}
 }
 
 void Pillow::HttpClient::messageContent(const char *data, int length)
 {
-	Pillow::HttpResponseParser::messageContent(data, length);
+	if (_contentDecoder)
+	{
+		const QByteArray decoded = _contentDecoder->transform(data, length);
+		Pillow::HttpResponseParser::messageContent(decoded.data(), decoded.length());
+	}
+	else
+		Pillow::HttpResponseParser::messageContent(data, length);
 	emit contentReadyRead();
 }
 
 void Pillow::HttpClient::messageComplete()
 {
-	if (statusCode() != 100) // Ignore 100 Continue responses.
+	delete _contentDecoder;
+
+	if (statusCode() == 100)
+	{
+		// Completely hide and ignore the 100 response we just received.
+		clear();
+	}
+	else
 	{
 		Pillow::HttpResponseParser::messageComplete();
 		_responsePending = false;
@@ -600,11 +686,6 @@ void Pillow::HttpClient::messageComplete()
 			_keepAliveTimeoutTimer.start();
 
 		emit finished();
-	}
-	else
-	{
-		// Completely hide the 100 response we just received.
-		clear();
 	}
 }
 
