@@ -1292,6 +1292,59 @@ private slots:
 		QVERIFY(!client->responsePending());
 	}
 
+	void should_allow_sending_new_request_from_within_finished()
+	{
+		connect(client, SIGNAL(finished()), this, SLOT(sendRequest()));
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200, Pillow::HttpHeaderCollection(), "123");
+		waitForSignal(client, SIGNAL(finished()));
+
+		// The previous request will already be cleared here.
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QCOMPARE(client->statusCode(), 0);
+		QCOMPARE(client->content(), QByteArray());
+		QVERIFY(client->responsePending());
+
+		QVERIFY(waitFor([&]{ return server.receivedConnections.size() == 2; })); // At this point, we will or have already received the new request.
+
+		disconnect(client, SIGNAL(finished()), this, SLOT(sendRequest()));
+
+		server.receivedConnections.last()->writeResponse(400, Pillow::HttpHeaderCollection(), "abcd");
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QCOMPARE(client->statusCode(), 400);
+		QCOMPARE(client->content(), QByteArray("abcd"));
+		QVERIFY(!client->responsePending());
+
+		// Good. Now let's try a chain of those.
+		connect(client, SIGNAL(finished()), this, SLOT(sendRequest()));
+
+		client->get(testUrl());
+		QVERIFY(waitFor([&]{ return server.receivedConnections.size() == 3; }));
+		server.receivedConnections.last()->writeResponse(200, Pillow::HttpHeaderCollection(), "123");
+		waitForSignal(client, SIGNAL(finished()));
+		QVERIFY(waitFor([&]{ return server.receivedConnections.size() == 4; }));
+		server.receivedConnections.last()->writeResponse(201, Pillow::HttpHeaderCollection(), QByteArray(256 * 1024 - 13, '*'));
+		waitForSignal(client, SIGNAL(finished()));
+		QVERIFY(waitFor([&]{ return server.receivedConnections.size() == 5; }));
+		server.receivedConnections.last()->writeResponse(400, Pillow::HttpHeaderCollection(), QByteArray(4 * 1024 + 17, '*'));
+		waitForSignal(client, SIGNAL(finished()));
+		QVERIFY(waitFor([&]{ return server.receivedConnections.size() == 6; }));
+		server.receivedConnections.last()->writeResponse(404, Pillow::HttpHeaderCollection(), "7");
+		waitForSignal(client, SIGNAL(finished()));
+		disconnect(client, SIGNAL(finished()), this, SLOT(sendRequest()));
+
+		QVERIFY(waitFor([&]{ return server.receivedConnections.size() == 7; }));
+		server.receivedConnections.last()->writeResponse(500, Pillow::HttpHeaderCollection(), "hello");
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QCOMPARE(client->statusCode(), 500);
+		QCOMPARE(client->content(), QByteArray("hello"));
+		QVERIFY(!client->responsePending());
+	}
+
 	void should_use_port_80_by_default()
 	{
 		// How to test this?

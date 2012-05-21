@@ -145,7 +145,7 @@ int Pillow::HttpResponseParser::inject(const char *data, int length)
 	if (parser.http_errno == HPE_PAUSED) parser.http_errno = HPE_OK; // Unpause the parser that got paused upon completing the message.
 	_parsing = false;
 
-	return consumed;
+	return static_cast<int>(consumed);
 }
 
 void Pillow::HttpResponseParser::injectEof()
@@ -213,14 +213,14 @@ int Pillow::HttpResponseParser::parser_on_header_field(http_parser *parser, cons
 {
 	Pillow::HttpResponseParser* self = reinterpret_cast<Pillow::HttpResponseParser*>(parser->data);
 	self->pushHeader();
-	self->_field.append(at, length);
+	self->_field.append(at, static_cast<int>(length));
 	return 0;
 }
 
 int Pillow::HttpResponseParser::parser_on_header_value(http_parser *parser, const char *at, size_t length)
 {
 	Pillow::HttpResponseParser* self = reinterpret_cast<Pillow::HttpResponseParser*>(parser->data);
-	self->_value.append(at, length);
+	self->_value.append(at, static_cast<int>(length));
 	self->_lastWasValue = true;
 	return 0;
 }
@@ -499,6 +499,11 @@ void Pillow::HttpClient::device_readyRead()
 				// We had multiple responses in the buffer?
 				// It was a 100 Continue since we are still response pending.
 				consumed += inject(_buffer.constData() + consumed, _buffer.size() - consumed);
+
+				if (consumed < _buffer.size())
+				{
+					qWarning() << "Left some unconsumed data in the buffer:" << (_buffer.size() - consumed);
+				}
 			}
 			else
 			{
@@ -514,24 +519,22 @@ void Pillow::HttpClient::device_readyRead()
 			emit finished();
 		}
 	}
-	else
-	{
-		// Response completed or got aborted in a callback.
-
-		if (!_pendingRequest.method.isNull())
-		{
-			// Plus we got a new request while in callback.
-			Pillow::HttpClientRequest r = _pendingRequest;
-			_pendingRequest = Pillow::HttpClientRequest(); // Clear it.
-			request(r);
-		}
-	}
 
 	// Reuse the read buffer if it is not overly large.
 	if (_buffer.capacity() > 128 * 1024)
 		_buffer.clear();
 	else
 		_buffer.data_ptr()->size = 0;
+
+	// Response completed or got aborted in a callback.
+	if (!responsePending() && !_pendingRequest.method.isNull())
+	{
+		// Plus we got a new request while in callback.
+		Pillow::HttpClientRequest r = _pendingRequest;
+		_pendingRequest = Pillow::HttpClientRequest(); // Clear it.
+		request(r);
+	}
+
 }
 
 void Pillow::HttpClient::sendRequest()
@@ -597,7 +600,19 @@ void Pillow::HttpClient::messageComplete()
 		if (_keepAliveTimeout == 0)
 			_device->close();
 		else
+		{
+			// See if we received a Connection: close header, close the connection if we did.
+			foreach (const Pillow::HttpHeader& h, _headers)
+			{
+				if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(h.first, Pillow::LowerCaseToken("connection"))
+				    && Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(h.second, Pillow::LowerCaseToken("close")))
+				{
+					_device->close();
+				}
+			}
+
 			_keepAliveTimeoutTimer.start();
+		}
 
 		emit finished();
 	}
@@ -691,6 +706,7 @@ namespace Pillow
 		{
 			_content.append(_client->consumeContent());
 			 emit readyRead();
+			 //emit downloadProgress();
 		}
 
 		void client_finished()
