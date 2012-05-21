@@ -1409,6 +1409,57 @@ private slots:
 		QTest::ignoreMessage(QtWarningMsg, "Pillow::HttpClient::followRedirection(): no redirection to follow.");
 		client->followRedirection();
 	}
+
+	void should_support_gzip_content_encoding()
+	{
+		QByteArray gzippedData;
+		{
+			QFile gzipFile(":/test.gz");
+			QVERIFY(gzipFile.open(QFile::ReadOnly));
+			gzippedData = gzipFile.readAll();
+			QCOMPARE(gzippedData.size(), 49);
+		}
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("Content-Encoding", "gzip"), gzippedData);
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->content(), QByteArray("1234567890123456789012345678901234567890"));
+
+		// GZip content-encoding with empty content.
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("Content-Encoding", "gzip"), "");
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->content(), QByteArray());
+
+		// Gzip content sent in multiple chunks
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeHeaders(200, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("Content-Encoding", "gzip") << Pillow::HttpHeader("Transfer-Encoding", "Chunked"));
+		server.receivedConnections.last()->writeContent(gzippedData.left(15));
+		QTest::qWait(1);
+		server.receivedConnections.last()->writeContent(gzippedData.mid(15, 15));
+		QTest::qWait(1);
+		server.receivedConnections.last()->writeContent(gzippedData.mid(30));
+		server.receivedConnections.last()->endContent();
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->content(), QByteArray("1234567890123456789012345678901234567890"));
+	}
+
+	void should_pass_bad_gzipped_content_through()
+	{
+		QTest::ignoreMessage(QtWarningMsg, "Pillow::GunzipContentTransformer::transform: error inflating input stream passing original content through.");
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("Content-Encoding", "gzip"), "Definitely not gzipped data");
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->content(), QByteArray("Definitely not gzipped data"));
+	}
 };
 PILLOW_TEST_DECLARE(HttpClientTest)
 
