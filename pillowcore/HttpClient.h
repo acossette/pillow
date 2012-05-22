@@ -7,6 +7,9 @@
 #ifndef QURL_H
 #include <QtCore/QUrl>
 #endif // QURL_H
+#ifndef QTIMESTAMP_H
+#include <QtCore/QElapsedTimer>
+#endif // QTIMESTAMP_H
 #ifndef QNETWORKACCESSMANAGER_H
 #include <QtNetwork/QNetworkAccessManager>
 #endif // QNETWORKACCESSMANAGER_H
@@ -16,9 +19,6 @@
 #ifndef http_parser_h
 #include "parser/http_parser.h"
 #endif // http_parser_h
-#ifndef QTIMESTAMP_H
-#include <QtCore/QElapsedTimer>
-#endif // QTIMESTAMP_H
 
 class QIODevice;
 class QTcpSocket;
@@ -154,12 +154,11 @@ namespace Pillow
 		{
 			NoError,				// There was no error in sending and receiving the previous request (if any),
 									// including the 4xx and 5xx responses with represent client and server errors.
-			// RequestError,
+
 			NetworkError,			// There was a network error (unable to connect, could not resolve host, etc.).
 			ResponseInvalidError,	// The response from the server could not be parsed as a valid Http response.
 			RemoteHostClosedError,  // The remote server has closed the connection before sending a full reply.
 			AbortedError            // The request was aborted before a pending response was completed.
-			//, HttpError?
 		};
 
 	public:

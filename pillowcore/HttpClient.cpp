@@ -473,7 +473,7 @@ void Pillow::HttpClient::request(const Pillow::HttpClientRequest &request)
 
 void Pillow::HttpClient::abort()
 {
-	if (_device) _device->close();
+	if (_device) _device->abort();
 
 	if (_responsePending)
 	{

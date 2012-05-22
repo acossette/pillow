@@ -1200,6 +1200,38 @@ private slots:
 		QVERIFY(socket == 0); // It will have broken the initial connection.
 	}
 
+	void should_be_abortable_even_when_has_not_sent_request()
+	{
+		client->get(testUrl());
+		client->abort();
+		client->post(testUrl(), Pillow::HttpHeaderCollection(), "hello");
+		client->abort();
+		client->put(testUrl(), Pillow::HttpHeaderCollection(), "world!");
+
+		QVERIFY(server.waitForRequest());
+		QCOMPARE(server.receivedConnections.last()->requestMethod(), QByteArray("PUT"));
+		QCOMPARE(server.receivedConnections.last()->requestContent(), QByteArray("world!"));
+		server.receivedConnections.last()->writeResponse(201, Pillow::HttpHeaderCollection(), "Hello back!");
+
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 201);
+		QCOMPARE(client->content(), QByteArray("Hello back!"));
+
+		// Should still work following a keep-alive request.
+		client->get(testUrl());
+		client->abort();
+		client->post(testUrl(), Pillow::HttpHeaderCollection(), "hello");
+
+		QVERIFY(server.waitForRequest());
+		QCOMPARE(server.receivedConnections.last()->requestMethod(), QByteArray("POST"));
+		QCOMPARE(server.receivedConnections.last()->requestContent(), QByteArray("hello"));
+		server.receivedConnections.last()->writeResponse(200, Pillow::HttpHeaderCollection(), "Hello again");
+
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->content(), QByteArray("Hello again"));
+	}
+
 	void should_be_abortable_from_within_headersCompleted()
 	{
 		QSignalSpy contentReadyReadSpy(client, SIGNAL(contentReadyRead()));
