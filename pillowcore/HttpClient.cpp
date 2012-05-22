@@ -672,6 +672,7 @@ void Pillow::HttpClient::messageContent(const char *data, int length)
 void Pillow::HttpClient::messageComplete()
 {
 	delete _contentDecoder;
+	_contentDecoder = 0;
 
 	if (statusCode() == 100)
 	{
@@ -874,6 +875,8 @@ QNetworkReply *Pillow::NetworkAccessManager::createRequest(QNetworkAccessManager
 	Pillow::HttpHeaderCollection headers;
 	foreach (const QByteArray &headerName, request.rawHeaderList())
 		headers << Pillow::HttpHeader(headerName, request.rawHeader(headerName));
+
+//	headers << Pillow::HttpHeader("Accept-Encoding", "gzip");
 
 	QNetworkCookieJar *jar = cookieJar();
 	if (jar)

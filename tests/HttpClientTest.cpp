@@ -1435,6 +1435,14 @@ private slots:
 		QCOMPARE(client->statusCode(), 200);
 		QCOMPARE(client->content(), QByteArray());
 
+		// Another request, without gzip, on the same client
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200, Pillow::HttpHeaderCollection(), "abc");
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->content(), QByteArray("abc"));
+
 		// Gzip content sent in multiple chunks
 		client->get(testUrl());
 		QVERIFY(server.waitForRequest());
