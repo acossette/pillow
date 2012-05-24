@@ -167,6 +167,9 @@ namespace Pillow
 		int keepAliveTimeout() const;
 		void setKeepAliveTimeout(int timeout);
 
+		qint64 readBufferSize() const; // Defaults to 0 (unlimited).
+		void setReadBufferSize(qint64 size);
+
 	public:
 		// Request members.
 		void get(const QUrl& url, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection());

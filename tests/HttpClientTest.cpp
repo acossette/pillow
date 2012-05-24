@@ -1118,9 +1118,35 @@ private slots:
 		QCOMPARE(client->content(), QByteArray("abcde"));
 	}
 
-	void should_have_a_configurable_receive_buffer()
+	void should_have_a_configurable_read_buffer_so_it_can_report_tcp_congestion()
 	{
-		QSKIP("Not implemented", SkipAll);
+		const QByteArray oneMiB(1024 * 1024, '~');
+
+		client->setReadBufferSize(32 * 1024);
+
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200, Pillow::HttpHeaderCollection(), oneMiB);
+		QVERIFY(waitForSignal(client, SIGNAL(contentReadyRead())));
+
+		QVERIFY(client->content().size() < 1024 * 1024);
+		QVERIFY(server.receivedSockets.last()->bytesToWrite() > 0);
+
+		QByteArray read;
+		int readCount = 0;
+		QVERIFY(waitFor([&]() -> bool
+		{
+			readCount++;
+			read.append(client->consumeContent());
+			return read.size() == 1024 * 1024;
+		}));
+
+		QVERIFY(!client->responsePending());
+		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->content(), QByteArray());
+		QCOMPARE(readCount, 32);
+		QCOMPARE(read, oneMiB);
 	}
 
 	void should_allow_specifying_connection_keepAliveTimeout()

@@ -347,6 +347,16 @@ void Pillow::HttpClient::setKeepAliveTimeout(int timeout)
 	_keepAliveTimeout = timeout;
 }
 
+qint64 Pillow::HttpClient::readBufferSize() const
+{
+	return _device->readBufferSize();
+}
+
+void Pillow::HttpClient::setReadBufferSize(qint64 size)
+{
+	_device->setReadBufferSize(size);
+}
+
 bool Pillow::HttpClient::responsePending() const
 {
 	return _responsePending;
@@ -387,6 +397,10 @@ QByteArray Pillow::HttpClient::consumeContent()
 {
 	QByteArray c = _content;
 	_content = QByteArray();
+
+	if (responsePending() && _device->bytesAvailable())
+		QTimer::singleShot(0, this, SLOT(device_readyRead()));
+
 	return c;
 }
 
@@ -541,6 +555,16 @@ void Pillow::HttpClient::device_readyRead()
 	if (_buffer.capacity() < _buffer.size() + bytesAvailable)
 		_buffer.reserve(_buffer.size() + bytesAvailable);
 
+	qint64 bufferSize = readBufferSize();
+	if (bufferSize > 0)
+		bytesAvailable = bufferSize - _content.size();
+
+	if (bytesAvailable <= 0)
+	{
+		// Nothing to read or no space in buffers. Wait for more data or more space in buffers.
+		return;
+	}
+
 	qint64 bytesRead = _device->read(_buffer.data() + _buffer.size(), bytesAvailable);
 	_buffer.data_ptr()->size += bytesRead;
 
@@ -692,7 +716,7 @@ void Pillow::HttpClient::messageComplete()
 			foreach (const Pillow::HttpHeader& h, _headers)
 			{
 				if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(h.first, Pillow::LowerCaseToken("connection"))
-				    && Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(h.second, Pillow::LowerCaseToken("close")))
+					&& Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(h.second, Pillow::LowerCaseToken("close")))
 				{
 					_device->close();
 				}
