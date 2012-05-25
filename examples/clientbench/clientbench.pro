@@ -12,3 +12,5 @@ INCLUDEPATH += .
 DEPENDPATH += .
 
 SOURCES += clientbench.cpp
+
+unix: LIBS += -lz
