@@ -1526,6 +1526,18 @@ private slots:
 		QCOMPARE(client->statusCode(), 200);
 		QCOMPARE(client->content(), QByteArray("Definitely not gzipped data"));
 	}
+
+	void should_close_connection_after_request_if_asked_by_server()
+	{
+		client->get(testUrl());
+		QVERIFY(server.waitForRequest());
+		QPointer<QObject> s = server.receivedSockets.last();
+		server.receivedSockets.last()->write("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 4\r\n\r\n1234");
+		QVERIFY(waitForResponse());
+		QCOMPARE(client->statusCode(), 200);
+		QCOMPARE(client->content(), QByteArray("1234"));
+		QVERIFY(waitFor([&]{ return s == 0; }));
+	}
 };
 PILLOW_TEST_DECLARE(HttpClientTest)
 
