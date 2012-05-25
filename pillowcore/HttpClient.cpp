@@ -689,7 +689,9 @@ void Pillow::HttpClient::messageContent(const char *data, int length)
 		Pillow::HttpResponseParser::messageContent(decoded.data(), decoded.length());
 	}
 	else
+	{
 		Pillow::HttpResponseParser::messageContent(data, length);
+	}
 	emit contentReadyRead();
 }
 
@@ -712,15 +714,8 @@ void Pillow::HttpClient::messageComplete()
 			_device->close();
 		else
 		{
-			// See if we received a Connection: close header, close the connection if we did.
-			foreach (const Pillow::HttpHeader& h, _headers)
-			{
-				if (Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(h.first, Pillow::LowerCaseToken("connection"))
-					&& Pillow::ByteArrayHelpers::asciiEqualsCaseInsensitive(h.second, Pillow::LowerCaseToken("close")))
-				{
-					_device->close();
-				}
-			}
+			if (!shouldKeepAlive())
+				_device->close();
 
 			_keepAliveTimeoutTimer.start();
 		}
