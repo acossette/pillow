@@ -91,8 +91,8 @@ namespace Pillow
 // Pillow::HttpRequestWriter
 //
 
-Pillow::HttpRequestWriter::HttpRequestWriter(QObject *parent)
-	: QObject(parent), _device(0)
+Pillow::HttpRequestWriter::HttpRequestWriter()
+	: _device(0)
 {
 }
 
@@ -191,6 +191,10 @@ Pillow::HttpResponseParser::HttpResponseParser()
 	parser_settings.on_body = parser_on_body;
 	parser_settings.on_message_complete = parser_on_message_complete;
 	clear();
+}
+
+Pillow::HttpResponseParser::~HttpResponseParser()
+{
 }
 
 int Pillow::HttpResponseParser::inject(const char *data, int length)

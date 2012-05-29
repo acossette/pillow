@@ -29,16 +29,17 @@ namespace Pillow
 	//
 	// Pillow::HttpRequestWriter
 	//
+	// A small utility class to build HTTP requests and write them to a device.
+	//
 	// Reentrant. Not thread safe.
 	//
-	class HttpRequestWriter : public QObject
+	class HttpRequestWriter
 	{
-		Q_OBJECT
-
 	public:
-		explicit HttpRequestWriter(QObject* parent = 0);
+		explicit HttpRequestWriter();
 
 		inline QIODevice* device() const { return _device; }
+		void setDevice(QIODevice* device);
 
 	public:
 		void get(const QByteArray& path, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection());
@@ -49,9 +50,6 @@ namespace Pillow
 
 		void write(const QByteArray& method, const QByteArray& path, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QByteArray& data = QByteArray());
 
-	public slots:
-		void setDevice(QIODevice* device);
-
 	private:
 		QIODevice* _device;
 		QByteArray _builder;
@@ -60,21 +58,23 @@ namespace Pillow
 	//
 	// Pillow::HttpResponseParser
 	//
+	// A low-level parser for HTTP/1.1 responses. Built on joyent's http_parser.
+	//
 	// Reentrant. Not thread safe.
 	//
 	class HttpResponseParser
 	{
 	public:
 		HttpResponseParser();
+		virtual ~HttpResponseParser();
 
 	public:
-		// The "int inject(x)" methods return the number of bytes that were consumed.
+		// The "int inject" methods return the number of bytes that were consumed.
 		int inject(const char* data, int length);
 		inline int inject(const QByteArray& data) { return inject(data.constBegin(), data.size()); }
 
 		// Let the parser know that the connection/device/source has closed and will not be providing more data.
 		void injectEof();
-		//void inject(const QIODevice* fromDevice);
 
 		// Clear the parser back to the initial state, ready to parse a new message.
 		void clear();
@@ -90,16 +90,20 @@ namespace Pillow
 		inline quint16 statusCode() const { return parser.status_code; }
 		inline quint16 httpMajor() const { return parser.http_major; }
 		inline quint16 httpMinor() const { return parser.http_minor; }
-		inline Pillow::HttpHeaderCollection headers() const { return _headers; }
+		inline const Pillow::HttpHeaderCollection& headers() const { return _headers; }
 		inline const QByteArray& content() const { return _content; }
 
+		// Returns whether the http client should reuse the same communication channel at the end of the current request or close it.
 		inline bool shouldKeepAlive() const { return http_should_keep_alive(const_cast<http_parser*>(&parser)); }
+
+		// Returns whether the parser needs EOF to know where the message completes. The http client should use the injectEof() method to let the parser know that EOF was encountered.
 		inline bool completesOnEof() const { return http_message_needs_eof(const_cast<http_parser*>(&parser)); }
 
 	protected:
+		// Parser callbacks.
 		virtual void messageBegin();    // Defaults to clearing previous response members.
 		virtual void headersComplete(); // Defaults to doing nothing.
-		virtual void messageContent(const char *data, int length); // Defaults to append to "content()"
+		virtual void messageContent(const char *data, int length); // Defaults to appending to _content
 		virtual void messageComplete(); // Defaults to doing nothing.
 
 		// Pause the parser at the current parsing position and make it return from inject(). Only valid if called from within one of the callbacks above.
@@ -131,6 +135,8 @@ namespace Pillow
 	//
 	// Pillow::HttpClientRequest
 	//
+	// A small utility class to represent an http request.
+	//
 	struct HttpClientRequest
 	{
 		QByteArray method;
@@ -141,6 +147,8 @@ namespace Pillow
 
 	//
 	// Pillow::HttpClient
+	//
+	// Small, fast and simple low-level HTTP/1.1 client.
 	//
 	// Reentrant. Not thread safe.
 	//
@@ -164,9 +172,15 @@ namespace Pillow
 	public:
 		HttpClient(QObject* parent = 0);
 
+		// keepAliveTimeout: Maximum time, in milliseconds, for which the client will keep an established connection channel
+		//                   between requests to the same host. Use 0 to disable keep-alive. Defaults to -1 (no timeout).
 		int keepAliveTimeout() const;
 		void setKeepAliveTimeout(int timeout);
 
+		// readBufferSize: Maximum size, in bytes, of network read buffers. When the buffers are full, TCP congestion
+		//                 control will occur. Use consumeContent() to consume data in the buffers and make room for more
+		//                 data. Due to an implementation detail, the effective amount of buffered data can be higher
+		//                 than readBufferSize.
 		qint64 readBufferSize() const; // Defaults to 0 (unlimited).
 		void setReadBufferSize(qint64 size);
 
@@ -181,7 +195,7 @@ namespace Pillow
 		void request(const QByteArray& method, const QUrl& url, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QByteArray& data = QByteArray());
 		void request(const Pillow::HttpClientRequest& request);
 
-		void abort(); // Stop active request (if any) and break current server connection. If there was an active request, finished() will be emitted and the error will be set to AbortedError.
+		void abort(); // Stop any active request and break current server connection. If there was an active request, finished() will be emitted and the error will be set to AbortedError.
 
 		void followRedirection(); // Follow previous request's redirection. Only effective if redirected() is true.
 
@@ -189,16 +203,15 @@ namespace Pillow
 		// Response Members.
 		bool responsePending() const;
 		Error error() const;
-		// QString errorString() const;
 
 		inline int statusCode() const { return static_cast<int>(HttpResponseParser::statusCode()); }
-		inline Pillow::HttpHeaderCollection headers() const { return HttpResponseParser::headers(); }
+		inline const Pillow::HttpHeaderCollection& headers() const { return HttpResponseParser::headers(); }
 		inline const QByteArray& content() const { return HttpResponseParser::content(); }
+
+		QByteArray consumeContent(); // Get the value of "content()" and clear the internal buffer.
 
 		bool redirected() const;
 		QByteArray redirectionLocation() const;
-
-		QByteArray consumeContent(); // Get the value of "content()" and clear the internal buffer.
 
 	signals:
 		void headersCompleted(); // Headers have been fully received and are ready to be checked.
@@ -236,6 +249,10 @@ namespace Pillow
 
 	//
 	// Pillow::NetworkAcccessManager
+	//
+	// A QNetworkAccessManager that uses Pillow::HttpClient for http. Provides unlimited connections
+	// per host for http instead of the 6 connections-per-host limit that QNetworkAccessManager normally
+	// applies.
 	//
 	// Reentrant. Not thread safe.
 	//
