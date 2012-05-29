@@ -3,8 +3,10 @@ TEMPLATE = app
 
 QT       += core network testlib script gui
 
-CONFIG   += console
+CONFIG   += console precompile_header
 CONFIG   -= app_bundle
+
+PRECOMPILED_HEADER = pch.h
 
 INCLUDEPATH = . ../pillowcore
 DEPENDPATH = . ../pillowcore
@@ -27,6 +29,7 @@ HEADERS += \
 	HttpHandlerTest.h \
 	HttpsServerTest.h \
 	HttpHandlerProxyTest.h \
-	Helpers.h
+	Helpers.h \
+	pch.h
 
 RESOURCES += tests.qrc

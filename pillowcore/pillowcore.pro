@@ -6,7 +6,9 @@ DESTDIR = ../lib
 QT       += core network script
 QT       -= gui
 
-CONFIG   += static
+CONFIG   += static precompile_header
+
+PRECOMPILED_HEADER = pch.h
 
 DEPENDPATH = .
 INCLUDEPATH = .
@@ -22,7 +24,7 @@ SOURCES += \
 	HttpHandlerSimpleRouter.cpp \
 	HttpConnection.cpp \
 	HttpHandlerProxy.cpp \
-    HttpClient.cpp
+	HttpClient.cpp
 
 HEADERS += \
 	parser/parser.h \
@@ -37,6 +39,8 @@ HEADERS += \
 	HttpHandlerProxy.h \
 	ByteArrayHelpers.h \
 	private/ByteArray.h \
-    HttpClient.h
+	HttpClient.h \
+	pch.h \
+	pch.h
 
 OTHER_FILES +=
