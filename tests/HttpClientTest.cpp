@@ -16,392 +16,1220 @@ Q_DECLARE_METATYPE(Chunks)
 Q_DECLARE_METATYPE(QAbstractSocket::SocketState)
 Q_DECLARE_METATYPE(QNetworkReply::NetworkError)
 
-class NetworkAccessManagerTest : public QObject
+//
+// HttpRequestWriter test class
+//
+
+class HttpRequestWriterTest : public QObject
 {
 	Q_OBJECT
-	Pillow::NetworkAccessManager *nam;
-	TestServer server;
+	QBuffer *buffer;
 
 private slots:
-	void initTestCase()
-	{
-		QVERIFY(server.listen(QHostAddress::LocalHost, 4571));
-	}
-
 	void init()
 	{
-		nam = new Pillow::NetworkAccessManager();
-		QVERIFY(server.receivedRequests.isEmpty());
-		QVERIFY(server.receivedConnections.isEmpty());
-		QVERIFY(server.receivedSockets.isEmpty());
+		buffer = new QBuffer(this);
+		buffer->open(QBuffer::ReadWrite);
 	}
 
 	void cleanup()
 	{
-		delete nam; nam = 0;
-		server.receivedRequests.clear();
-		server.receivedConnections.clear();
-		server.receivedSockets.clear();
+		delete buffer; buffer = 0;
 	}
 
-private:
-	QUrl testUrl() const { return QUrl("http://127.0.0.1:4571/test/path"); }
+	QByteArray readAll()
+	{
+		QByteArray data = buffer->data();
+		buffer->seek(0);
+		return data;
+	}
 
 private slots:
-	void should_send_valid_requests_data()
+	void test_initial_state()
 	{
-		QTest::addColumn<QByteArray>("method");
-		QTest::addColumn<QUrl>("url");
-		QTest::addColumn<Pillow::HttpHeaderCollection>("headers");
-		QTest::addColumn<QByteArray>("content");
-		QTest::addColumn<HttpRequestData>("expectedRequestData");
-
-		Pillow::HttpHeaderCollection baseExpectedHeaders;
-		baseExpectedHeaders << Pillow::HttpHeader("Host", "127.0.0.1:4571");
-
-		QTest::newRow("Simple GET") << QByteArray("GET")
-									<< QUrl("http://127.0.0.1:4571/")
-									<< Pillow::HttpHeaderCollection()
-									<< QByteArray()
-									<< HttpRequestData()
-									   .withMethod("GET")
-									   .withUri("/").withPath("/").withQueryString("").withFragment("")
-									   .withHttpVersion("HTTP/1.1")
-									   .withContent("")
-									   .withHeaders(baseExpectedHeaders);
-
-		QTest::newRow("GET with headers") << QByteArray("GET")
-									<< QUrl("http://127.0.0.1:4571/some/path?and=query")
-									<< (Pillow::HttpHeaderCollection()
-										<< Pillow::HttpHeader("X-Some", "Header")
-										<< Pillow::HttpHeader("X-And-Another", "even-better; header"))
-									<< QByteArray()
-									<< HttpRequestData()
-									   .withMethod("GET")
-									   .withUri("/some/path?and=query").withPath("/some/path").withQueryString("and=query").withFragment("")
-									   .withHttpVersion("HTTP/1.1")
-									   .withContent("")
-									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
-													<< Pillow::HttpHeader("X-Some", "Header")
-													<< Pillow::HttpHeader("X-And-Another", "even-better; header"));
-		QTest::newRow("GET with connection: close") << QByteArray("GET")
-									<< QUrl("http://127.0.0.1:4571/")
-									<< (Pillow::HttpHeaderCollection()
-										<< Pillow::HttpHeader("Connection", "close"))
-									<< QByteArray()
-									<< HttpRequestData()
-									   .withMethod("GET")
-									   .withUri("/").withPath("/").withQueryString("").withFragment("")
-									   .withHttpVersion("HTTP/1.1")
-									   .withContent("")
-									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
-													<< Pillow::HttpHeader("Connection", "close"));
-		QTest::newRow("Simple PUT") << QByteArray("PUT")
-									<< QUrl("http://127.0.0.1:4571/some/path")
-									<< (Pillow::HttpHeaderCollection())
-									<< QByteArray("Some sent data")
-									<< HttpRequestData()
-									   .withMethod("PUT")
-									   .withUri("/some/path").withPath("/some/path").withQueryString("").withFragment("")
-									   .withHttpVersion("HTTP/1.1")
-									   .withContent("Some sent data")
-									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
-													<< Pillow::HttpHeader("Content-Length", "14"));
-		QTest::newRow("Large POST") << QByteArray("POST")
-									<< QUrl("http://127.0.0.1:4571/some/large/path")
-									<< (Pillow::HttpHeaderCollection())
-									<< QByteArray(128 * 1024, '*')
-									<< HttpRequestData()
-									   .withMethod("POST")
-									   .withUri("/some/large/path").withPath("/some/large/path").withQueryString("").withFragment("")
-									   .withHttpVersion("HTTP/1.1")
-									   .withContent(QByteArray(128 * 1024, '*'))
-									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
-													<< Pillow::HttpHeader("Content-Length", "131072"));
+		Pillow::HttpRequestWriter w;
+		QVERIFY(w.device() == 0);
+		w.setDevice(buffer);
+		QVERIFY(w.device() == buffer);
 	}
 
-	void should_send_valid_requests()
+	void test_write_get()
 	{
-		QFETCH(QByteArray, method);
-		QFETCH(QUrl, url);
-		QFETCH(Pillow::HttpHeaderCollection, headers);
-		QFETCH(QByteArray, content);
-		QFETCH(HttpRequestData, expectedRequestData);
+		Pillow::HttpRequestWriter w; w.setDevice(buffer);
 
-		QNetworkRequest request;
-		request.setUrl(url);
-		foreach (const Pillow::HttpHeader &header, headers) request.setRawHeader(header.first, header.second);
-		QBuffer requestContent(&content); requestContent.open(QIODevice::ReadOnly);
+		w.get("/some/path", Pillow::HttpHeaderCollection());
+		QCOMPARE(readAll(), QByteArray("GET /some/path HTTP/1.1\r\n\r\n"));
 
-		nam->sendCustomRequest(request, method, &requestContent);
-
-		QVERIFY(server.waitForRequest());
-		QCOMPARE(server.receivedRequests.size(), 1);
-		QCOMPARE(server.receivedRequests.first(), expectedRequestData);
+		w.get("/other/cool%20path", Pillow::HttpHeaderCollection() <<
+			  Pillow::HttpHeader("My-Header", "Is-Cool") <<
+			  Pillow::HttpHeader("X-And-Another", "Is-Better"));
+		QCOMPARE(readAll(), QByteArray("GET /other/cool%20path HTTP/1.1\r\nMy-Header: Is-Cool\r\nX-And-Another: Is-Better\r\n\r\n"));
 	}
 
-	void should_receive_response()
+	void test_write_head()
 	{
-		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
-		QVERIFY(server.waitForRequest());
-		server.receivedConnections.last()->writeResponse(201, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("X-Some", "Header"), "Hello World!");
+		Pillow::HttpRequestWriter w; w.setDevice(buffer);
 
-		QVERIFY(waitForSignal(r, SIGNAL(finished())));
+		w.head("/some/path", Pillow::HttpHeaderCollection());
+		QCOMPARE(readAll(), QByteArray("HEAD /some/path HTTP/1.1\r\n\r\n"));
 
-		QCOMPARE(r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 201);
-		QCOMPARE(r->readAll(), QByteArray("Hello World!"));
-		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
-				 << Pillow::HttpHeader("X-Some", "Header")
-				 << Pillow::HttpHeader("Content-Length", "12")
-				 << Pillow::HttpHeader("Content-Type", "text/plain"));
+		w.head("/other/cool%20path", Pillow::HttpHeaderCollection() <<
+			  Pillow::HttpHeader("My-Header", "Is-Cool") <<
+			  Pillow::HttpHeader("X-And-Another", "Is-Better"));
+		QCOMPARE(readAll(), QByteArray("HEAD /other/cool%20path HTTP/1.1\r\nMy-Header: Is-Cool\r\nX-And-Another: Is-Better\r\n\r\n"));
 	}
 
-	void should_set_cooked_headers_from_received_headers()
+	void test_write_post()
 	{
-		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
-		QVERIFY(server.waitForRequest());
-		server.receivedConnections.last()->writeResponse(
-					302,
-					Pillow::HttpHeaderCollection()
-					<< Pillow::HttpHeader("Location", "http://example.org")
-					<< Pillow::HttpHeader("Content-Type", "some/type")
-					<< Pillow::HttpHeader("Last-Modified", Pillow::HttpProtocol::Dates::getHttpDate(QDateTime(QDate(2012, 4, 30), QTime(8, 9, 0))))
-					<< Pillow::HttpHeader("Set-Cookie", "ChocolateCookie=Very Delicious")
-					, "Hello!");
+		Pillow::HttpRequestWriter w; w.setDevice(buffer);
 
-		QVERIFY(waitForSignal(r, SIGNAL(finished())));
-		QCOMPARE(r->readAll(), QByteArray("Hello!"));
-		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
-				 << Pillow::HttpHeader("Location", "http://example.org")
-				 << Pillow::HttpHeader("Last-Modified", "Mon, 30 Apr 2012 12:09:00 GMT")
-				 << Pillow::HttpHeader("Content-Length", "6")
-				 << Pillow::HttpHeader("Content-Type", "some/type")
-				 << Pillow::HttpHeader("Set-Cookie", "ChocolateCookie=Very Delicious")
-				 );
+		w.post("/some/path.txt", Pillow::HttpHeaderCollection(), QByteArray());
+		QCOMPARE(readAll(), QByteArray("POST /some/path.txt HTTP/1.1\r\n\r\n"));
 
-		QCOMPARE(r->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl(), QUrl("http://example.org"));
-		QCOMPARE(r->header(QNetworkRequest::ContentTypeHeader).toByteArray(), QByteArray("some/type"));
-		QCOMPARE(r->header(QNetworkRequest::ContentLengthHeader).toInt(), 6);
-		QCOMPARE(r->header(QNetworkRequest::LastModifiedHeader).toDateTime(), QDateTime(QDate(2012, 4, 30), QTime(8, 9, 0)));
+		w.post("/other/path.txt", Pillow::HttpHeaderCollection() << Pillow::HttpHeader("One", "Header"), QByteArray("Some Data"));
+		QCOMPARE(readAll(), QByteArray("POST /other/path.txt HTTP/1.1\r\nOne: Header\r\nContent-Length: 9\r\n\r\nSome Data"));
+	}
+	void test_write_put()
+	{
+		Pillow::HttpRequestWriter w; w.setDevice(buffer);
 
-		QList<QNetworkCookie> cookies;
-		cookies << QNetworkCookie("ChocolateCookie", "Very Delicious");
-		QCOMPARE(r->header(QNetworkRequest::SetCookieHeader).value<QList<QNetworkCookie> >(), cookies);
+		w.put("/some/path.txt", Pillow::HttpHeaderCollection(), QByteArray());
+		QCOMPARE(readAll(), QByteArray("PUT /some/path.txt HTTP/1.1\r\n\r\n"));
+
+		w.put("/other/path.txt", Pillow::HttpHeaderCollection() << Pillow::HttpHeader("One", "Header"), QByteArray("Some Data"));
+		QCOMPARE(readAll(), QByteArray("PUT /other/path.txt HTTP/1.1\r\nOne: Header\r\nContent-Length: 9\r\n\r\nSome Data"));
 	}
 
-	void should_store_received_cookies_in_the_jar()
+	void test_write_deleteResource()
 	{
-		class JarOpener : public QNetworkCookieJar
-		{
-		public:
-			QList<QNetworkCookie> getAllCookies() const { return QNetworkCookieJar::allCookies(); }
-		};
+		Pillow::HttpRequestWriter w; w.setDevice(buffer);
 
-		QCOMPARE(static_cast<JarOpener*>(nam->cookieJar())->getAllCookies().size(), 0);
+		w.deleteResource("/some/path", Pillow::HttpHeaderCollection());
+		QCOMPARE(readAll(), QByteArray("DELETE /some/path HTTP/1.1\r\n\r\n"));
 
-		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
-		QVERIFY(server.waitForRequest());
-		server.receivedConnections.last()->writeResponse(200,
-					Pillow::HttpHeaderCollection()
-					<< Pillow::HttpHeader("Set-Cookie", "SomeCookie=Super Chocolate")
-					<< Pillow::HttpHeader("seT-CoOKie", "AnotherCookie=Mega Caramel")
-					, "Hello!");
-
-		QVERIFY(waitForSignal(r, SIGNAL(finished())));
-		QCOMPARE(static_cast<JarOpener*>(nam->cookieJar())->getAllCookies().size(), 2);
-
-		QList<QNetworkCookie> cookies;
-		cookies << QNetworkCookie("SomeCookie", "Super Chocolate");
-		cookies << QNetworkCookie("AnotherCookie", "Mega Caramel");
-		QCOMPARE(r->header(QNetworkRequest::SetCookieHeader).value<QList<QNetworkCookie> >(), cookies);
-	}
-
-	void should_send_cookies_from_the_jar()
-	{
-		QNetworkCookieJar jar;
-		QNetworkCookie c1("First", "FirstValue");
-		QNetworkCookie c2("Second", "SecondValue");
-		QNetworkCookie c3("Third", "ThirdValue");
-		jar.setCookiesFromUrl(QList<QNetworkCookie>() << c1 << c3, QUrl("http://127.0.0.1:4571/"));
-		jar.setCookiesFromUrl(QList<QNetworkCookie>() << c2, QUrl("http://127.0.1.1:7777/"));
-
-		nam->setCookieJar(&jar); jar.setParent(0);
-		nam->get(QNetworkRequest(testUrl()));
-		QVERIFY(server.waitForRequest());
-
-		int cookieHeaderCount = 0;
-		Pillow::HttpHeaderCollection headers = server.receivedConnections.last()->requestHeaders();
-		foreach (const Pillow::HttpHeader &h, headers)
-		{
-			if (h.first.toLower() == "cookie")
-				cookieHeaderCount++;
-		}
-
-		QCOMPARE(cookieHeaderCount, 1);
-
-		QByteArray cookieValue = server.receivedConnections.last()->requestHeaderValue("Cookie");
-		QCOMPARE(cookieValue, QByteArray("First=FirstValue; Third=ThirdValue"));
-	}
-
-	void should_set_headers_as_soon_as_they_are_received()
-	{
-		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
-		QVERIFY(server.waitForRequest());
-		server.receivedConnections.last()->writeHeaders(200, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("X-Some", "Header") << Pillow::HttpHeader("Content-Length", "12") << Pillow::HttpHeader("Content-Type", "text/plain"));
-
-		QSignalSpy finishedSpy(r, SIGNAL(finished()));
-		QVERIFY(waitForSignal(r, SIGNAL(metaDataChanged())));
-		QVERIFY(finishedSpy.isEmpty()); // The request should not be finished yet even though headers have been received
-
-		QCOMPARE(r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
-		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
-				 << Pillow::HttpHeader("X-Some", "Header")
-				 << Pillow::HttpHeader("Content-Length", "12")
-				 << Pillow::HttpHeader("Content-Type", "text/plain"));
-		QCOMPARE(r->header(QNetworkRequest::ContentTypeHeader).toByteArray(), QByteArray("text/plain"));
-		QCOMPARE(r->header(QNetworkRequest::ContentLengthHeader).toInt(), 12);
-		QCOMPARE(r->readAll(), QByteArray());
-
-		server.receivedConnections.last()->writeContent("Hello World!");
-
-		QVERIFY(waitForSignal(r, SIGNAL(finished())));
-
-		QCOMPARE(r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
-		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
-				 << Pillow::HttpHeader("X-Some", "Header")
-				 << Pillow::HttpHeader("Content-Length", "12")
-				 << Pillow::HttpHeader("Content-Type", "text/plain"));
-		QCOMPARE(r->header(QNetworkRequest::ContentTypeHeader).toByteArray(), QByteArray("text/plain"));
-		QCOMPARE(r->header(QNetworkRequest::ContentLengthHeader).toInt(), 12);
-		QCOMPARE(r->readAll(), QByteArray("Hello World!"));
-	}
-
-	void should_make_request_accessible()
-	{
-		QNetworkRequest originalRequest;
-		originalRequest.setUrl(testUrl());
-		originalRequest.setRawHeader("One-Header", "OneValue");
-		originalRequest.setRawHeader("Another-Header", "AnotherValue");
-		originalRequest.setPriority(QNetworkRequest::HighPriority);
-
-		QNetworkReply *r = nam->post(originalRequest, QByteArray("hello"));
-		QCOMPARE(r->request(), originalRequest);
-		QCOMPARE(r->url(), testUrl());
-		QCOMPARE(r->operation(), QNetworkAccessManager::PostOperation);
-	}
-
-	void should_allow_aborting_reply()
-	{
-		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
-		QVERIFY(server.waitForRequest());
-		QVERIFY(server.receivedSockets.last()->state() == QAbstractSocket::ConnectedState);
-		QPointer<QTcpSocket> socket = server.receivedSockets.last();
-		QVERIFY(socket != 0);
-		QSignalSpy errorSpy(r, SIGNAL(error(QNetworkReply::NetworkError)));
-		QSignalSpy finishedSpy(r, SIGNAL(finished()));
-		r->abort();
-		QCOMPARE(finishedSpy.size(), 1);
-		QCOMPARE(errorSpy.size(), 1);
-		QCOMPARE(errorSpy.last().first().value<QNetworkReply::NetworkError>(), QNetworkReply::OperationCanceledError);
-		QVERIFY(waitFor([=]{ return socket == 0; })); // The socket should get closed and deleted.
-	}
-
-	void should_emit_readyRead_when_new_content_is_available()
-	{
-		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
-		QVERIFY(server.waitForRequest());
-		server.receivedConnections.last()->writeHeaders(200);
-
-		QCOMPARE(r->bytesAvailable(), qint64(0));
-
-		server.receivedConnections.last()->writeContent("Hello");
-		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
-		QCOMPARE(r->bytesAvailable(), qint64(5));
-		QCOMPARE(r->pos(), qint64(0));
-		QCOMPARE(r->read(3), QByteArray("Hel"));
-		QCOMPARE(r->bytesAvailable(), qint64(2));
-		QCOMPARE(r->pos(), qint64(0));
-
-		server.receivedConnections.last()->writeContent("the");
-		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
-		QCOMPARE(r->bytesAvailable(), qint64(5));
-		QCOMPARE(r->read(4), QByteArray("loth"));
-		QCOMPARE(r->bytesAvailable(), qint64(1));
-		QCOMPARE(r->pos(), qint64(0));
-
-		server.receivedConnections.last()->writeContent("world!");
-		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
-		QCOMPARE(r->bytesAvailable(), qint64(7));
-		QCOMPARE(r->read(5), QByteArray("eworl"));
-		QCOMPARE(r->bytesAvailable(), qint64(2));
-		QCOMPARE(r->read(2), QByteArray("d!"));
-		QCOMPARE(r->bytesAvailable(), qint64(0));
-	}
-
-	void should_report_errors()
-	{
-		{
-			QNetworkReply *r = nam->get(QNetworkRequest(QUrl("http://4230948234.423.423.423.423.32.423.4/bad")));
-			QSignalSpy errorSpy(r, SIGNAL(error(QNetworkReply::NetworkError)));
-			QVERIFY(waitFor([&]{ return errorSpy.size() > 0; }));
-			QCOMPARE(errorSpy.last().first().value<QNetworkReply::NetworkError>(), QNetworkReply::UnknownNetworkError);
-		}
-
-		{
-			QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
-			QSignalSpy errorSpy(r, SIGNAL(error(QNetworkReply::NetworkError)));
-			QVERIFY(server.waitForRequest());
-			server.receivedConnections.last()->outputDevice()->write("=-=-=-=-=-FFFFFFFUUUUUUUUUUU=-=-=-=-=-=!\r\n");
-			QVERIFY(waitFor([&]{ return errorSpy.size() > 0; }));
-			QCOMPARE(errorSpy.last().first().value<QNetworkReply::NetworkError>(), QNetworkReply::ProtocolUnknownError);
-		}
-	}
-
-	void should_use_default_QNetworkAccessManager_implementation_for_non_http_schemes()
-	{
-		QByteArray url = "data:text/plain;base64," + QByteArray("Hello World!").toBase64();
-
-		QNetworkReply *r = nam->get(QNetworkRequest(QUrl(url)));
-		QVERIFY(waitForSignal(r, SIGNAL(finished())));
-
-		QCOMPARE(r->readAll(), QByteArray("Hello World!"));
-	}
-
-	void should_reuse_existing_connection_to_same_server_when_available()
-	{
-		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
-		QVERIFY(server.waitForRequest());
-		server.receivedConnections.last()->writeResponse(200);
-		QVERIFY(waitForSignal(r, SIGNAL(finished())));
-
-		r = nam->get(QNetworkRequest(testUrl()));
-		QVERIFY(server.waitForRequest());
-		server.receivedConnections.last()->writeResponse(201);
-		QVERIFY(waitForSignal(r, SIGNAL(finished())));
-
-		QCOMPARE(server.receivedSockets.size(), 2);
-		QVERIFY(server.receivedSockets.at(0) == server.receivedSockets.at(1));
-		QVERIFY(server.receivedSockets.at(0) != 0);
-
-		r = nam->get(QNetworkRequest(testUrl()));
-		QNetworkReply *r4 = nam->get(QNetworkRequest(testUrl()));
-		QNetworkReply *r5 = nam->get(QNetworkRequest(testUrl()));
-
-		QVERIFY(server.waitForRequest());
-		QVERIFY(waitFor([&]{ return server.receivedConnections.size() == 5; }));
-		QVERIFY(server.receivedSockets.at(2) == server.receivedSockets.at(1));
-		QVERIFY(server.receivedSockets.at(3) != server.receivedSockets.at(2));
-		QVERIFY(server.receivedSockets.at(4) != server.receivedSockets.at(2));
-		QVERIFY(server.receivedSockets.at(4) != server.receivedSockets.at(3));
-
-		server.receivedConnections.at(2)->writeResponse(400);
-		server.receivedConnections.at(3)->writeResponse(404);
-		server.receivedConnections.at(4)->writeResponse(500);
-
-		QVERIFY(waitFor([&]{ return !r->isRunning() && !r4->isRunning() && !r5->isRunning(); }));
+		w.deleteResource("/other/cool%20path", Pillow::HttpHeaderCollection() <<
+			  Pillow::HttpHeader("My-Header", "Is-Cool") <<
+			  Pillow::HttpHeader("X-And-Another", "Is-Better"));
+		QCOMPARE(readAll(), QByteArray("DELETE /other/cool%20path HTTP/1.1\r\nMy-Header: Is-Cool\r\nX-And-Another: Is-Better\r\n\r\n"));
 	}
 };
-PILLOW_TEST_DECLARE(NetworkAccessManagerTest)
+PILLOW_TEST_DECLARE(HttpRequestWriterTest)
+
+//
+// HttpResponse Parser test class and utilities
+//
+
+//
+// Test data taken from joyent/http_parser's test.c
+//
+#undef TRUE
+#define TRUE 1
+#undef FALSE
+#define FALSE 0
+
+#define MAX_HEADERS 13
+#define MAX_ELEMENT_SIZE 500
+
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+
+struct message {
+  const char *name; // for debugging purposes
+  enum http_parser_type type;
+  const char *raw;
+  int should_keep_alive;
+  int message_complete_on_eof;
+  unsigned short http_major;
+  unsigned short http_minor;
+  unsigned short status_code;
+  int num_headers;
+  char headers [MAX_HEADERS][2][MAX_ELEMENT_SIZE];
+  size_t body_size;
+  char body[MAX_ELEMENT_SIZE];
+
+
+//  enum http_method method;
+//  char request_path[MAX_ELEMENT_SIZE];
+//  char request_url[MAX_ELEMENT_SIZE];
+//  char fragment[MAX_ELEMENT_SIZE];
+//  char query_string[MAX_ELEMENT_SIZE];
+//  uint16_t port;
+//  enum { NONE=0, FIELD, VALUE } last_header_element;
+
+//  const char *upgrade; // upgraded body
+
+
+//  int message_begin_cb_called;
+//  int headers_complete_cb_called;
+//  int message_complete_cb_called;
+};
+Q_DECLARE_METATYPE(message)
+
+const struct message responses[] =
+#define GOOGLE_301 0
+{ {"google 301"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 301 Moved Permanently\r\n"
+		 "Location: http://www.google.com/\r\n"
+		 "Content-Type: text/html; charset=UTF-8\r\n"
+		 "Date: Sun, 26 Apr 2009 11:11:49 GMT\r\n"
+		 "Expires: Tue, 26 May 2009 11:11:49 GMT\r\n"
+		 "X-$PrototypeBI-Version: 1.6.0.3\r\n" /* $ char in header field */
+		 "Cache-Control: public, max-age=2592000\r\n"
+		 "Server: gws\r\n"
+		 "Content-Length:  219  \r\n"
+		 "\r\n"
+		 "<HTML><HEAD><meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n"
+		 "<TITLE>301 Moved</TITLE></HEAD><BODY>\n"
+		 "<H1>301 Moved</H1>\n"
+		 "The document has moved\n"
+		 "<A HREF=\"http://www.google.com/\">here</A>.\r\n"
+		 "</BODY></HTML>\r\n"
+  ,TRUE
+  ,FALSE
+  ,1
+  ,1
+  ,301
+  ,8
+  ,
+	{ { "Location", "http://www.google.com/" }
+	, { "Content-Type", "text/html; charset=UTF-8" }
+	, { "Date", "Sun, 26 Apr 2009 11:11:49 GMT" }
+	, { "Expires", "Tue, 26 May 2009 11:11:49 GMT" }
+	, { "X-$PrototypeBI-Version", "1.6.0.3" }
+	, { "Cache-Control", "public, max-age=2592000" }
+	, { "Server", "gws" }
+	, { "Content-Length", "219  " }
+	}
+  ,0
+  ,"<HTML><HEAD><meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n"
+		  "<TITLE>301 Moved</TITLE></HEAD><BODY>\n"
+		  "<H1>301 Moved</H1>\n"
+		  "The document has moved\n"
+		  "<A HREF=\"http://www.google.com/\">here</A>.\r\n"
+		  "</BODY></HTML>\r\n"
+  }
+
+#define NO_CONTENT_LENGTH_RESPONSE 1
+/* The client should wait for the server's EOF. That is, when content-length
+ * is not specified, and "Connection: close", the end of body is specified
+ * by the EOF.
+ * Compare with APACHEBENCH_GET
+ */
+, {"no content-length response"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 200 OK\r\n"
+		 "Date: Tue, 04 Aug 2009 07:59:32 GMT\r\n"
+		 "Server: Apache\r\n"
+		 "X-Powered-By: Servlet/2.5 JSP/2.1\r\n"
+		 "Content-Type: text/xml; charset=utf-8\r\n"
+		 "Connection: close\r\n"
+		 "\r\n"
+		 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+		 "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"
+		 "  <SOAP-ENV:Body>\n"
+		 "    <SOAP-ENV:Fault>\n"
+		 "       <faultcode>SOAP-ENV:Client</faultcode>\n"
+		 "       <faultstring>Client Error</faultstring>\n"
+		 "    </SOAP-ENV:Fault>\n"
+		 "  </SOAP-ENV:Body>\n"
+		 "</SOAP-ENV:Envelope>"
+  ,FALSE
+  ,TRUE
+  ,1
+  ,1
+  ,200
+  ,5
+  ,
+	{ { "Date", "Tue, 04 Aug 2009 07:59:32 GMT" }
+	, { "Server", "Apache" }
+	, { "X-Powered-By", "Servlet/2.5 JSP/2.1" }
+	, { "Content-Type", "text/xml; charset=utf-8" }
+	, { "Connection", "close" }
+	}
+   ,0
+  ,"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+		  "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"
+		  "  <SOAP-ENV:Body>\n"
+		  "    <SOAP-ENV:Fault>\n"
+		  "       <faultcode>SOAP-ENV:Client</faultcode>\n"
+		  "       <faultstring>Client Error</faultstring>\n"
+		  "    </SOAP-ENV:Fault>\n"
+		  "  </SOAP-ENV:Body>\n"
+		  "</SOAP-ENV:Envelope>"
+  }
+
+#define NO_HEADERS_NO_BODY_404 2
+, {"404 no headers no body"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 404 Not Found\r\n\r\n"
+  ,FALSE
+  ,TRUE
+  ,1
+  ,1
+  ,404
+  ,0
+  , {}
+  ,0
+  ,""
+  }
+
+#define NO_REASON_PHRASE 3
+, {"301 no response phrase"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 301\r\n\r\n"
+  ,FALSE
+  ,TRUE
+  ,1
+  ,1
+  ,301
+  ,0
+  , {}
+  ,0
+  ,""
+  }
+
+#define TRAILING_SPACE_ON_CHUNKED_BODY 4
+, {"200 trailing space on chunked body"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 200 OK\r\n"
+		 "Content-Type: text/plain\r\n"
+		 "Transfer-Encoding: chunked\r\n"
+		 "\r\n"
+		 "25  \r\n"
+		 "This is the data in the first chunk\r\n"
+		 "\r\n"
+		 "1C\r\n"
+		 "and this is the second one\r\n"
+		 "\r\n"
+		 "0  \r\n"
+		 "\r\n"
+  ,TRUE
+  ,FALSE
+  ,1
+  ,1
+  ,200
+  ,2
+  ,
+	{ {"Content-Type", "text/plain" }
+	, {"Transfer-Encoding", "chunked" }
+	}
+  ,37+28
+  ,
+		 "This is the data in the first chunk\r\n"
+		 "and this is the second one\r\n"
+
+  }
+
+#define NO_CARRIAGE_RET 5
+, {"no carriage ret"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 200 OK\n"
+		 "Content-Type: text/html; charset=utf-8\n"
+		 "Connection: close\n"
+		 "\n"
+		 "these headers are from http://news.ycombinator.com/"
+  ,FALSE
+  ,TRUE
+  ,1
+  ,1
+  ,200
+  ,2
+  ,
+	{ {"Content-Type", "text/html; charset=utf-8" }
+	, {"Connection", "close" }
+	}
+  ,0
+  ,"these headers are from http://news.ycombinator.com/"
+  }
+
+#define PROXY_CONNECTION 6
+, {"proxy connection"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 200 OK\r\n"
+		 "Content-Type: text/html; charset=UTF-8\r\n"
+		 "Content-Length: 11\r\n"
+		 "Proxy-Connection: close\r\n"
+		 "Date: Thu, 31 Dec 2009 20:55:48 +0000\r\n"
+		 "\r\n"
+		 "hello world"
+  ,FALSE
+  ,FALSE
+  ,1
+  ,1
+  ,200
+  ,4
+  ,
+	{ {"Content-Type", "text/html; charset=UTF-8" }
+	, {"Content-Length", "11" }
+	, {"Proxy-Connection", "close" }
+	, {"Date", "Thu, 31 Dec 2009 20:55:48 +0000"}
+	}
+  ,11
+  ,"hello world"
+  }
+
+#define UNDERSTORE_HEADER_KEY 7
+  // shown by
+  // curl -o /dev/null -v "http://ad.doubleclick.net/pfadx/DARTSHELLCONFIGXML;dcmt=text/xml;"
+, {"underscore header key"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 200 OK\r\n"
+		 "Server: DCLK-AdSvr\r\n"
+		 "Content-Type: text/xml\r\n"
+		 "Content-Length: 0\r\n"
+		 "DCLK_imp: v7;x;114750856;0-0;0;17820020;0/0;21603567/21621457/1;;~okv=;dcmt=text/xml;;~cs=o\r\n\r\n"
+  ,TRUE
+  ,FALSE
+  ,1
+  ,1
+  ,200
+  ,4
+  ,
+	{ {"Server", "DCLK-AdSvr" }
+	, {"Content-Type", "text/xml" }
+	, {"Content-Length", "0" }
+	, {"DCLK_imp", "v7;x;114750856;0-0;0;17820020;0/0;21603567/21621457/1;;~okv=;dcmt=text/xml;;~cs=o" }
+	}
+  ,0
+  ,""
+  }
+
+#define BONJOUR_MADAME_FR 8
+/* The client should not merge two headers fields when the first one doesn't
+ * have a value.
+ */
+, {"bonjourmadame.fr"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.0 301 Moved Permanently\r\n"
+		 "Date: Thu, 03 Jun 2010 09:56:32 GMT\r\n"
+		 "Server: Apache/2.2.3 (Red Hat)\r\n"
+		 "Cache-Control: public\r\n"
+		 "Pragma: \r\n"
+		 "Location: http://www.bonjourmadame.fr/\r\n"
+		 "Vary: Accept-Encoding\r\n"
+		 "Content-Length: 0\r\n"
+		 "Content-Type: text/html; charset=UTF-8\r\n"
+		 "Connection: keep-alive\r\n"
+		 "\r\n"
+  ,TRUE
+  ,FALSE
+  ,1
+  ,0
+  ,301
+  ,9
+  ,
+	{ { "Date", "Thu, 03 Jun 2010 09:56:32 GMT" }
+	, { "Server", "Apache/2.2.3 (Red Hat)" }
+	, { "Cache-Control", "public" }
+	, { "Pragma", "" }
+	, { "Location", "http://www.bonjourmadame.fr/" }
+	, { "Vary",  "Accept-Encoding" }
+	, { "Content-Length", "0" }
+	, { "Content-Type", "text/html; charset=UTF-8" }
+	, { "Connection", "keep-alive" }
+	}
+  ,0
+  ,""
+  }
+
+#define RES_FIELD_UNDERSCORE 9
+/* Should handle spaces in header fields */
+, {"field underscore"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 200 OK\r\n"
+		 "Date: Tue, 28 Sep 2010 01:14:13 GMT\r\n"
+		 "Server: Apache\r\n"
+		 "Cache-Control: no-cache, must-revalidate\r\n"
+		 "Expires: Mon, 26 Jul 1997 05:00:00 GMT\r\n"
+		 ".et-Cookie: PlaxoCS=1274804622353690521; path=/; domain=.plaxo.com\r\n"
+		 "Vary: Accept-Encoding\r\n"
+		 "_eep-Alive: timeout=45\r\n" /* semantic value ignored */
+		 "_onnection: Keep-Alive\r\n" /* semantic value ignored */
+		 "Transfer-Encoding: chunked\r\n"
+		 "Content-Type: text/html\r\n"
+		 "Connection: close\r\n"
+		 "\r\n"
+		 "0\r\n\r\n"
+  ,FALSE
+  ,FALSE
+  ,1
+  ,1
+  ,200
+  ,11
+  ,
+	{ { "Date", "Tue, 28 Sep 2010 01:14:13 GMT" }
+	, { "Server", "Apache" }
+	, { "Cache-Control", "no-cache, must-revalidate" }
+	, { "Expires", "Mon, 26 Jul 1997 05:00:00 GMT" }
+	, { ".et-Cookie", "PlaxoCS=1274804622353690521; path=/; domain=.plaxo.com" }
+	, { "Vary", "Accept-Encoding" }
+	, { "_eep-Alive", "timeout=45" }
+	, { "_onnection", "Keep-Alive" }
+	, { "Transfer-Encoding", "chunked" }
+	, { "Content-Type", "text/html" }
+	, { "Connection", "close" }
+	}
+   ,0
+  ,""
+  }
+
+#define NON_ASCII_IN_STATUS_LINE 10
+/* Should handle non-ASCII in status line */
+, {"non-ASCII in status line"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 500 Oriëntatieprobleem\r\n"
+		 "Date: Fri, 5 Nov 2010 23:07:12 GMT+2\r\n"
+		 "Content-Length: 0\r\n"
+		 "Connection: close\r\n"
+		 "\r\n"
+  ,FALSE
+  ,FALSE
+  ,1
+  ,1
+  ,500
+  ,3
+  ,
+	{ { "Date", "Fri, 5 Nov 2010 23:07:12 GMT+2" }
+	, { "Content-Length", "0" }
+	, { "Connection", "close" }
+	}
+   ,0
+  ,""
+  }
+
+#define HTTP_VERSION_0_9 11
+/* Should handle HTTP/0.9 */
+, {"http version 0.9"
+  ,HTTP_RESPONSE
+  ,"HTTP/0.9 200 OK\r\n"
+		 "\r\n"
+  ,FALSE
+  ,TRUE
+  ,0
+  ,9
+  ,200
+  ,0
+  ,
+	{}
+   ,0
+  ,""
+  }
+
+#define NO_CONTENT_LENGTH_NO_TRANSFER_ENCODING_RESPONSE 12
+/* The client should wait for the server's EOF. That is, when neither
+ * content-length nor transfer-encoding is specified, the end of body
+ * is specified by the EOF.
+ */
+, {"neither content-length nor transfer-encoding response"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 200 OK\r\n"
+		 "Content-Type: text/plain\r\n"
+		 "\r\n"
+		 "hello world"
+  ,FALSE
+  ,TRUE
+  ,1
+  ,1
+  ,200
+  ,1
+  ,
+	{ { "Content-Type", "text/plain" }
+	}
+   ,11
+  ,"hello world"
+  }
+
+#define NO_BODY_HTTP10_KA_200 13
+, {"HTTP/1.0 with keep-alive and EOF-terminated 200 status"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.0 200 OK\r\n"
+		 "Connection: keep-alive\r\n"
+		 "\r\n"
+  ,FALSE
+  ,TRUE
+  ,1
+  ,0
+  ,200
+  ,1
+  ,
+	{ { "Connection", "keep-alive" }
+	}
+  ,0
+  ,""
+  }
+
+#define NO_BODY_HTTP10_KA_204 14
+, {"HTTP/1.0 with keep-alive and a 204 status"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.0 204 No content\r\n"
+		 "Connection: keep-alive\r\n"
+		 "\r\n"
+  ,TRUE
+  ,FALSE
+  ,1
+  ,0
+  ,204
+  ,1
+  ,
+	{ { "Connection", "keep-alive" }
+	}
+  ,0
+  ,""
+  }
+
+#define NO_BODY_HTTP11_KA_200 15
+, {"HTTP/1.1 with an EOF-terminated 200 status"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 200 OK\r\n"
+		 "\r\n"
+  ,FALSE
+  ,TRUE
+  ,1
+  ,1
+  ,200
+  ,0
+  ,{}
+  ,0
+  ,""
+  }
+
+#define NO_BODY_HTTP11_KA_204 16
+, {"HTTP/1.1 with a 204 status"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 204 No content\r\n"
+		 "\r\n"
+  ,TRUE
+  ,FALSE
+  ,1
+  ,1
+  ,204
+  ,0
+  ,{}
+  ,0
+  ,""
+  }
+
+#define NO_BODY_HTTP11_NOKA_204 17
+, {"HTTP/1.1 with a 204 status and keep-alive disabled"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 204 No content\r\n"
+		 "Connection: close\r\n"
+		 "\r\n"
+  ,FALSE
+  ,FALSE
+  ,1
+  ,1
+  ,204
+  ,1
+  ,
+	{ { "Connection", "close" }
+	}
+  ,0
+  ,""
+  }
+
+#define NO_BODY_HTTP11_KA_CHUNKED_200 18
+, {"HTTP/1.1 with chunked encoding and a 200 response"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 200 OK\r\n"
+		 "Transfer-Encoding: chunked\r\n"
+		 "\r\n"
+		 "0\r\n"
+		 "\r\n"
+  ,TRUE
+  ,FALSE
+  ,1
+  ,1
+  ,200
+  ,1
+  ,
+	{ { "Transfer-Encoding", "chunked" }
+	}
+  ,0
+  ,""
+  }
+
+#if !HTTP_PARSER_STRICT
+#define SPACE_IN_FIELD_RES 19
+/* Should handle spaces in header fields */
+, {"field space"
+  ,HTTP_RESPONSE
+  ,"HTTP/1.1 200 OK\r\n"
+		 "Server: Microsoft-IIS/6.0\r\n"
+		 "X-Powered-By: ASP.NET\r\n"
+		 "en-US Content-Type: text/xml\r\n" /* this is the problem */
+		 "Content-Type: text/xml\r\n"
+		 "Content-Length: 16\r\n"
+		 "Date: Fri, 23 Jul 2010 18:45:38 GMT\r\n"
+		 "Connection: keep-alive\r\n"
+		 "\r\n"
+		 "<xml>hello</xml>" /* fake body */
+  ,TRUE
+  ,FALSE
+  ,1
+  ,1
+  ,200
+  ,7
+  ,
+	{ { "Server",  "Microsoft-IIS/6.0" }
+	, { "X-Powered-By", "ASP.NET" }
+	, { "en-US Content-Type", "text/xml" }
+	, { "Content-Type", "text/xml" }
+	, { "Content-Length", "16" }
+	, { "Date", "Fri, 23 Jul 2010 18:45:38 GMT" }
+	, { "Connection", "keep-alive" }
+	}
+  ,"<xml>hello</xml>"
+  }
+#endif /* !HTTP_PARSER_STRICT */
+
+, {NULL, HTTP_RESPONSE, 0, FALSE, FALSE, 0, 0, 0, 0, {}, 0, { 0 }} /* sentinel */
+};
+
+class ResponseParserWithCounter : public Pillow::HttpResponseParser
+{
+public:
+	int messageBeginCount;
+	int headersCompleteCount;
+	int messageContentCount;
+	int messageCompleteCount;
+	bool pauseInMessageBegin;
+	bool pauseInHeadersComplete;
+	bool pauseInMessageContent;
+	bool pauseInMessageComplete;
+
+	ResponseParserWithCounter()
+		: messageBeginCount(0), headersCompleteCount(0), messageContentCount(0), messageCompleteCount(0)
+		, pauseInMessageBegin(false), pauseInHeadersComplete(false), pauseInMessageContent(false), pauseInMessageComplete(false)
+	{}
+
+protected:
+	void messageBegin() { ++messageBeginCount; Pillow::HttpResponseParser::messageBegin(); if (pauseInMessageBegin) pause(); }
+	void headersComplete() { ++headersCompleteCount;  Pillow::HttpResponseParser::headersComplete(); if (pauseInHeadersComplete) pause(); }
+	void messageContent(const char *data, int length) { ++messageContentCount;  Pillow::HttpResponseParser::messageContent(data, length); if (pauseInMessageContent) pause(); }
+	void messageComplete() { ++messageCompleteCount;  Pillow::HttpResponseParser::messageComplete(); if (pauseInMessageComplete) pause(); }
+};
+
+class ResponseParserWithIsParsingChecker : public Pillow::HttpResponseParser
+{
+public:
+	bool wasParsingInMessageBegin;
+	bool wasParsingInHeadersComplete;
+	bool wasParsingInMessageContent;
+	bool wasParsingInMessageComplete;
+
+	ResponseParserWithIsParsingChecker()
+		: wasParsingInMessageBegin(false), wasParsingInHeadersComplete(false)
+		, wasParsingInMessageContent(false), wasParsingInMessageComplete(false)
+	{}
+
+protected:
+	void messageBegin() { Pillow::HttpResponseParser::messageBegin(); wasParsingInMessageBegin = isParsing(); }
+	void headersComplete() { Pillow::HttpResponseParser::headersComplete(); wasParsingInHeadersComplete = isParsing(); }
+	void messageContent(const char *data, int length) { Pillow::HttpResponseParser::messageContent(data, length); wasParsingInMessageContent = isParsing(); }
+	void messageComplete() { Pillow::HttpResponseParser::messageComplete(); wasParsingInMessageComplete = isParsing(); }
+};
+
+class ResponseParser : public Pillow::HttpResponseParser
+{
+public:
+	std::function<void()> messageBeginCallback;
+	std::function<void()> headersCompleteCallback;
+	std::function<void()> messageContentCallback;
+	std::function<void()> messageCompleteCallback;
+
+protected:
+	void messageBegin() { Pillow::HttpResponseParser::messageBegin(); if (messageBeginCallback) messageBeginCallback(); }
+	void headersComplete() { Pillow::HttpResponseParser::headersComplete(); if (headersCompleteCallback) headersCompleteCallback(); }
+	void messageContent(const char *data, int length) { Pillow::HttpResponseParser::messageContent(data, length); if (messageContentCallback) messageContentCallback(); }
+	void messageComplete() { Pillow::HttpResponseParser::messageComplete(); if (messageCompleteCallback) messageCompleteCallback(); }
+};
+
+class HttpResponseParserTest : public QObject
+{
+	Q_OBJECT
+
+private:
+	bool compareParsedResponse(const Pillow::HttpResponseParser& p, const message& m)
+	{
+		bool ok; compareParsedResponse(p, m, &ok); return ok;
+	}
+
+	void compareParsedResponse(const Pillow::HttpResponseParser& p, const message& m, bool* ok)
+	{
+		*ok = false;
+		QCOMPARE(p.statusCode(), m.status_code);
+		QCOMPARE(p.httpMajor(), m.http_major);
+		QCOMPARE(p.httpMinor(), m.http_minor);
+		QCOMPARE(p.headers().size(), m.num_headers);
+		QCOMPARE(p.content(), QByteArray(m.body));
+		QCOMPARE(p.shouldKeepAlive(), m.should_keep_alive == TRUE);
+		QCOMPARE(p.completesOnEof(), m.message_complete_on_eof);
+		*ok = true; // All passed
+		throw "Parsed response does not match message";
+	}
+
+private slots:
+	void test_initial_state()
+	{
+		Pillow::HttpResponseParser p;
+
+		QVERIFY(!p.hasError());
+		QCOMPARE(p.error(), HPE_OK);
+		QCOMPARE(p.statusCode(), 0);
+		QCOMPARE(p.httpMinor(), 0);
+		QCOMPARE(p.httpMajor(), 0);
+		QCOMPARE(p.headers().size(), 0);
+		QCOMPARE(p.shouldKeepAlive(), 0);
+		QCOMPARE(p.completesOnEof(), false);
+		QVERIFY(!p.isParsing());
+	}
+
+	void test_single_valid_responses_data()
+	{
+		QTest::addColumn<message>("testMessage");
+
+		for (const message* m = responses; m->name != NULL; ++m)
+			QTest::newRow(m->name) << *m;
+	}
+
+	void test_single_valid_responses()
+	{
+		QFETCH(message, testMessage);
+		QVERIFY(testMessage.type = HTTP_RESPONSE);
+
+		Pillow::HttpResponseParser p;
+		size_t consumed = p.inject(testMessage.raw);
+		p.injectEof();
+
+		QCOMPARE(consumed, strlen(testMessage.raw));
+		QVERIFY(!p.hasError());
+		QCOMPARE(p.statusCode(), testMessage.status_code);
+		QCOMPARE(p.httpMajor(), testMessage.http_major);
+		QCOMPARE(p.httpMinor(), testMessage.http_minor);
+		QCOMPARE(p.headers().size(), testMessage.num_headers);
+		QCOMPARE(p.content(), QByteArray(testMessage.body));
+		QCOMPARE(p.shouldKeepAlive(), testMessage.should_keep_alive == TRUE);
+		QCOMPARE(p.completesOnEof(), testMessage.message_complete_on_eof);
+		QVERIFY(!p.isParsing());
+	}
+
+	void test_keep_alive_responses()
+	{
+		Pillow::HttpResponseParser p;
+		int count = 0;
+		for (const message* m1 = responses; m1->name != NULL; ++m1)
+		{
+			if (m1->should_keep_alive == 0) continue;
+			++count;
+			p.inject(m1->raw);
+			QVERIFY(!p.hasError());
+			QCOMPARE(p.statusCode(), m1->status_code);
+			QCOMPARE(p.httpMajor(), m1->http_major);
+			QCOMPARE(p.httpMinor(), m1->http_minor);
+			QCOMPARE(p.headers().size(), m1->num_headers);
+			QCOMPARE(p.content(), QByteArray(m1->body));
+			QCOMPARE(p.shouldKeepAlive(), m1->should_keep_alive == TRUE);
+			QCOMPARE(p.completesOnEof(), m1->message_complete_on_eof);
+
+			for (const message* m2 = responses; m2->name != NULL; ++m2)
+			{
+				if (m2->should_keep_alive == 0) continue;
+				++count;
+				p.inject(m2->raw);
+				QVERIFY(!p.hasError());
+				QCOMPARE(p.statusCode(), m2->status_code);
+				QCOMPARE(p.httpMajor(), m2->http_major);
+				QCOMPARE(p.httpMinor(), m2->http_minor);
+				QCOMPARE(p.headers().size(), m2->num_headers);
+				QCOMPARE(p.content(), QByteArray(m2->body));
+				QCOMPARE(p.shouldKeepAlive(), m2->should_keep_alive == TRUE);
+				QCOMPARE(p.completesOnEof(), m2->message_complete_on_eof);
+			}
+		}
+		QVERIFY(count > 2);
+	}
+
+	void test_invalid_responses()
+	{
+		Pillow::HttpResponseParser p;
+		p.inject("HTTP/1.1 BADBAD=-=-=-=-1-1-1-1-\r\nFFFFFFFUUUUUUUUUUUU\r\n\r\n");
+
+		QVERIFY(p.hasError());
+		QCOMPARE(p.error(), HPE_INVALID_STATUS);
+		QCOMPARE(p.statusCode(), 0);
+		QCOMPARE(p.httpMajor(), 1);
+		QCOMPARE(p.httpMinor(), 1);
+		QCOMPARE(p.headers().size(), 0);
+		QCOMPARE(p.content(), QByteArray());
+		QVERIFY(!p.shouldKeepAlive());
+		QVERIFY(p.completesOnEof());
+		QVERIFY(!p.isParsing());
+
+		p.injectEof();
+
+		QVERIFY(p.hasError());
+		QCOMPARE(p.error(), HPE_INVALID_STATUS);
+		QCOMPARE(p.statusCode(), 0);
+		QCOMPARE(p.httpMajor(), 1);
+		QCOMPARE(p.httpMinor(), 1);
+		QCOMPARE(p.headers().size(), 0);
+		QCOMPARE(p.content(), QByteArray());
+		QVERIFY(!p.shouldKeepAlive());
+		QVERIFY(p.completesOnEof());
+		QVERIFY(!p.isParsing());
+
+		// Injecting a good message should not make the parser recover.
+		p.inject("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
+		QVERIFY(p.hasError());
+		QCOMPARE(p.error(), HPE_INVALID_STATUS);
+		QCOMPARE(p.statusCode(), 0);
+		QCOMPARE(p.httpMajor(), 1);
+		QCOMPARE(p.httpMinor(), 1);
+		QCOMPARE(p.headers().size(), 0);
+		QCOMPARE(p.content(), QByteArray());
+		QVERIFY(!p.shouldKeepAlive());
+		QVERIFY(p.completesOnEof());
+		QVERIFY(!p.isParsing());
+	}
+
+	void should_recover_from_error_when_cleared()
+	{
+		Pillow::HttpResponseParser p;
+		p.inject("HTTP/1.1 POPOPO=-=-=-=-1-1-1-1-\r\nFFFFFFFFUUUUUUUUUUUUUU\r\n\r\n");
+
+		QVERIFY(p.hasError());
+		QCOMPARE(p.error(), HPE_INVALID_STATUS);
+		QCOMPARE(p.statusCode(), 0);
+		QCOMPARE(p.httpMajor(), 1);
+		QCOMPARE(p.httpMinor(), 1);
+		QCOMPARE(p.headers().size(), 0);
+		QCOMPARE(p.content(), QByteArray());
+		QVERIFY(!p.shouldKeepAlive());
+		QVERIFY(p.completesOnEof());
+		QVERIFY(!p.isParsing());
+
+		p.clear();
+
+		p.inject("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
+		QVERIFY(!p.hasError());
+		QCOMPARE(p.error(), HPE_OK);
+		QCOMPARE(p.statusCode(), 200);
+		QCOMPARE(p.httpMajor(), 1);
+		QCOMPARE(p.httpMinor(), 1);
+		QCOMPARE(p.headers().size(), 1);
+		QCOMPARE(p.content(), QByteArray());
+		QVERIFY(p.shouldKeepAlive());
+		QVERIFY(!p.completesOnEof());
+		QVERIFY(!p.isParsing());
+	}
+
+	void should_clear_all_fields_when_cleared()
+	{
+		Pillow::HttpResponseParser p;
+		p.inject("HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc");
+		QVERIFY(!p.hasError());
+		QCOMPARE(p.statusCode(), 200);
+		QCOMPARE(p.httpMajor(), 1);
+		QCOMPARE(p.httpMinor(), 1);
+		QCOMPARE(p.headers().size(), 1);
+		QCOMPARE(p.content(), QByteArray("abc"));
+		QVERIFY(p.shouldKeepAlive());
+		QVERIFY(!p.completesOnEof());
+
+		p.clear();
+
+		QVERIFY(!p.hasError());
+		QCOMPARE(p.error(), HPE_OK);
+		QCOMPARE(p.statusCode(), 0);
+		QCOMPARE(p.httpMinor(), 0);
+		QCOMPARE(p.httpMajor(), 0);
+		QCOMPARE(p.headers().size(), 0);
+		QCOMPARE(p.shouldKeepAlive(), 0);
+		QCOMPARE(p.completesOnEof(), false);
+		QCOMPARE(p.content(), QByteArray());
+	}
+
+	void should_only_consume_one_response_at_a_time_for_pipelined_responses()
+	{
+		QByteArray threeResponses = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\nHTTP/1.1 201 OK\r\nContent-Length: 0\r\n\r\nHTTP/1.1 202 OK\r\nContent-Length: 0\r\n\r\n";
+
+		Pillow::HttpResponseParser p;
+		int consumed = p.inject(threeResponses);
+
+		QCOMPARE(consumed, 38);
+		QCOMPARE(p.statusCode(), 200);
+		QVERIFY(!p.completesOnEof());
+
+		int consumed2 = p.inject(threeResponses.mid(consumed));
+		QCOMPARE(p.statusCode(), 201);
+		QVERIFY(!p.completesOnEof());
+
+		p.inject(threeResponses.mid(consumed).mid(consumed2));
+		QCOMPARE(p.statusCode(), 202);
+		QVERIFY(!p.completesOnEof());
+	}
+
+
+	void should_detect_too_much_data()
+	{
+		Pillow::HttpResponseParser p;
+		p.inject("HTTP/1.0 200 OK\r\nContent-Length:4\r\n\r\nabcdefg"); // Too much content!
+
+		QVERIFY(!p.hasError());
+		QCOMPARE(p.statusCode(), 200);
+		QCOMPARE(p.httpMajor(), 1);
+		QCOMPARE(p.httpMinor(), 0);
+		QCOMPARE(p.headers().size(), 1);
+		QCOMPARE(p.content(), QByteArray("abcd"));
+		QVERIFY(!p.shouldKeepAlive());
+		QVERIFY(!p.completesOnEof());
+	}
+
+	void should_call_callbacks()
+	{
+		ResponseParserWithCounter p;
+		QCOMPARE(p.messageBeginCount, 0);
+		QCOMPARE(p.headersCompleteCount, 0);
+		QCOMPARE(p.messageContentCount, 0);
+		QCOMPARE(p.messageCompleteCount, 0);
+
+		p.inject("HTTP/1.1");
+		QCOMPARE(p.messageBeginCount, 1);
+		QCOMPARE(p.headersCompleteCount, 0);
+		QCOMPARE(p.messageContentCount, 0);
+		QCOMPARE(p.messageCompleteCount, 0);
+
+		p.inject(" 200 OK\r\nContent-Length: 4\r\n");
+		QCOMPARE(p.messageBeginCount, 1);
+		QCOMPARE(p.headersCompleteCount, 0);
+		QCOMPARE(p.messageContentCount, 0);
+		QCOMPARE(p.messageCompleteCount, 0);
+
+		p.inject("\r\n");
+		QCOMPARE(p.messageBeginCount, 1);
+		QCOMPARE(p.headersCompleteCount, 1);
+		QCOMPARE(p.messageContentCount, 0);
+		QCOMPARE(p.messageCompleteCount, 0);
+
+		p.inject("12");
+		QCOMPARE(p.messageBeginCount, 1);
+		QCOMPARE(p.headersCompleteCount, 1);
+		QCOMPARE(p.messageContentCount, 1);
+		QCOMPARE(p.messageCompleteCount, 0);
+
+		p.inject("34");
+		QCOMPARE(p.messageBeginCount, 1);
+		QCOMPARE(p.headersCompleteCount, 1);
+		QCOMPARE(p.messageContentCount, 2);
+		QCOMPARE(p.messageCompleteCount, 1);
+
+		p.inject("HTTP/1.1 302 Found\r\nLocation: somewhere\r\nContent-Length: 0\r\n\r\n");
+		QCOMPARE(p.messageBeginCount, 2);
+		QCOMPARE(p.headersCompleteCount, 2);
+		QCOMPARE(p.messageContentCount, 2);
+		QCOMPARE(p.messageCompleteCount, 2);
+
+		p.inject("HTTP/1.1 400 Bad Request\r\nContent-Length: 2\r\n\r\n12");
+		QCOMPARE(p.messageBeginCount, 3);
+		QCOMPARE(p.headersCompleteCount, 3);
+		QCOMPARE(p.messageContentCount, 3);
+		QCOMPARE(p.messageCompleteCount, 3);
+	}
+
+	void should_be_pausable_in_callbacks()
+	{
+		QByteArray responseHeaders = "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nContent-Type: text/plain\r\n\r\n";
+		QByteArray responseContent = "1234";
+		QByteArray response = responseHeaders + responseContent;
+
+		{
+			ResponseParserWithCounter p;
+			p.pauseInMessageBegin = true;
+			int consumed = p.inject(response);
+			QCOMPARE(consumed, 1); // http_parser wants at least 1 valid byte to get started.
+			QCOMPARE(p.messageBeginCount, 1);
+			QCOMPARE(p.headersCompleteCount, 0);
+			QCOMPARE(p.messageContentCount, 0);
+			QCOMPARE(p.messageCompleteCount, 0);
+
+			// Should allow continuing.
+			p.inject(response.mid(consumed));
+			QCOMPARE(p.messageBeginCount, 1);
+			QCOMPARE(p.headersCompleteCount, 1);
+			QCOMPARE(p.messageContentCount, 1);
+			QCOMPARE(p.messageCompleteCount, 1);
+			QCOMPARE(p.content(), QByteArray("1234"));
+		}
+
+		{
+			ResponseParserWithCounter p;
+			p.pauseInHeadersComplete = true;
+			int consumed = p.inject(response);
+			QCOMPARE(consumed, responseHeaders.size() - 1); // headers are complete as soon as the parser encountered "\r\n\r" (it will then silently consume the other "\n")
+			QVERIFY(responseHeaders.size() > 0);
+			QCOMPARE(p.messageBeginCount, 1);
+			QCOMPARE(p.headersCompleteCount, 1);
+			QCOMPARE(p.messageContentCount, 0);
+			QCOMPARE(p.messageCompleteCount, 0);
+
+			// Should allow continuing.
+			p.inject(response.mid(consumed));
+			QCOMPARE(p.messageBeginCount, 1);
+			QCOMPARE(p.headersCompleteCount, 1);
+			QCOMPARE(p.messageContentCount, 1);
+			QCOMPARE(p.messageCompleteCount, 1);
+			QCOMPARE(p.content(), QByteArray("1234"));
+		}
+
+		{
+			ResponseParserWithCounter p;
+			p.pauseInMessageContent = true;
+			int consumed = p.inject(response);
+			QCOMPARE(consumed, responseHeaders.size() + responseContent.size() - 1);
+			QVERIFY(responseContent.size() > 0);
+			QCOMPARE(p.messageBeginCount, 1);
+			QCOMPARE(p.headersCompleteCount, 1);
+			QCOMPARE(p.messageContentCount, 1);
+			QCOMPARE(p.messageCompleteCount, 0);
+
+			// Should allow continuing.
+			p.inject(response.mid(consumed));
+			QCOMPARE(p.messageBeginCount, 1);
+			QCOMPARE(p.headersCompleteCount, 1);
+			QCOMPARE(p.messageContentCount, 1);
+			QCOMPARE(p.messageCompleteCount, 1);
+			QCOMPARE(p.content(), QByteArray("1234"));
+		}
+
+		{
+			ResponseParserWithCounter p;
+			p.pauseInMessageComplete = true;
+			int consumed = p.inject(response);
+			QCOMPARE(consumed, response.size());
+			QCOMPARE(p.messageBeginCount, 1);
+			QCOMPARE(p.headersCompleteCount, 1);
+			QCOMPARE(p.messageContentCount, 1);
+			QCOMPARE(p.messageCompleteCount, 1);
+
+			// Continuing should do nothing as there is nothing left.
+			p.inject(response.mid(consumed));
+			QCOMPARE(p.messageBeginCount, 1);
+			QCOMPARE(p.headersCompleteCount, 1);
+			QCOMPARE(p.messageContentCount, 1);
+			QCOMPARE(p.messageCompleteCount, 1);
+			QCOMPARE(p.content(), QByteArray("1234"));
+		}
+	}
+
+	void should_be_parsing_while_parsing()
+	{
+		ResponseParserWithIsParsingChecker p;
+		QVERIFY(!p.wasParsingInMessageBegin);
+		QVERIFY(!p.wasParsingInHeadersComplete);
+		QVERIFY(!p.wasParsingInMessageContent);
+		QVERIFY(!p.wasParsingInMessageComplete);
+		QVERIFY(!p.isParsing());
+
+		p.inject("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nab");
+		QVERIFY(p.wasParsingInMessageBegin);
+		QVERIFY(p.wasParsingInHeadersComplete);
+		QVERIFY(p.wasParsingInMessageContent);
+		QVERIFY(p.wasParsingInMessageComplete);
+		QVERIFY(!p.isParsing());
+	}
+
+	void should_pause_parsing_when_cleared_while_parsing()
+	{
+		QByteArray response = "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nContent-Type: text/plain\r\n\r\nabcd";
+
+		{
+			ResponseParser p;
+			p.messageBeginCallback = [&]{ p.clear(); };
+			int consumed = p.inject(response);
+			QCOMPARE(consumed, 1); // http_parser wants at least 1 valid byte to get started.
+
+			// Should be reset and ready to parse a new response.
+			QVERIFY(!p.hasError());
+			p.messageBeginCallback = 0;
+
+			QCOMPARE(p.inject(response), response.size());
+			QVERIFY(!p.hasError());
+			QCOMPARE(p.statusCode(), 200);
+			QCOMPARE(p.httpMajor(), 1);
+			QCOMPARE(p.httpMinor(), 1);
+			QCOMPARE(p.headers().size(), 2);
+			QCOMPARE(p.content(), QByteArray("abcd"));
+			QVERIFY(p.shouldKeepAlive());
+			QVERIFY(!p.completesOnEof());
+		}
+
+		{
+			ResponseParser p;
+			p.headersCompleteCallback = [&]{ p.clear(); };
+			QCOMPARE(p.inject(response), 63);
+
+			// Should be reset and ready to parse a new response.
+			QVERIFY(!p.hasError());
+			p.headersCompleteCallback = 0;
+
+			QCOMPARE(p.inject(response), response.size());
+			QVERIFY(!p.hasError());
+			QCOMPARE(p.statusCode(), 200);
+			QCOMPARE(p.httpMajor(), 1);
+			QCOMPARE(p.httpMinor(), 1);
+			QCOMPARE(p.headers().size(), 2);
+			QCOMPARE(p.content(), QByteArray("abcd"));
+			QVERIFY(p.shouldKeepAlive());
+			QVERIFY(!p.completesOnEof());
+		}
+
+		{
+			ResponseParser p;
+			p.messageContentCallback = [&]{ p.clear(); };
+			QCOMPARE(p.inject(response), 67);
+
+			// Should be reset and ready to parse a new response.
+			QVERIFY(!p.hasError());
+			p.messageContentCallback = 0;
+
+			QCOMPARE(p.inject(response), response.size());
+			QVERIFY(!p.hasError());
+			QCOMPARE(p.statusCode(), 200);
+			QCOMPARE(p.httpMajor(), 1);
+			QCOMPARE(p.httpMinor(), 1);
+			QCOMPARE(p.headers().size(), 2);
+			QCOMPARE(p.content(), QByteArray("abcd"));
+			QVERIFY(p.shouldKeepAlive());
+			QVERIFY(!p.completesOnEof());
+		}
+
+		{
+			ResponseParser p;
+			p.messageCompleteCallback = [&]{ p.clear(); };
+			QCOMPARE(p.inject(response), 68);
+
+			// Should be reset and ready to parse a new response.
+			QVERIFY(!p.hasError());
+			p.messageCompleteCallback = 0;
+
+			QCOMPARE(p.inject(response), response.size());
+			QVERIFY(!p.hasError());
+			QCOMPARE(p.statusCode(), 200);
+			QCOMPARE(p.httpMajor(), 1);
+			QCOMPARE(p.httpMinor(), 1);
+			QCOMPARE(p.headers().size(), 2);
+			QCOMPARE(p.content(), QByteArray("abcd"));
+			QVERIFY(p.shouldKeepAlive());
+			QVERIFY(!p.completesOnEof());
+		}
+	}
+};
+PILLOW_TEST_DECLARE(HttpResponseParserTest)
+
+//
+// HttpClient test class
+//
 
 class HttpClientTest : public QObject
 {
@@ -1541,1209 +2369,395 @@ private slots:
 };
 PILLOW_TEST_DECLARE(HttpClientTest)
 
-class HttpRequestWriterTest : public QObject
+//
+// NetworkAccessManager test class
+//
+
+class NetworkAccessManagerTest : public QObject
 {
 	Q_OBJECT
-	QBuffer *buffer;
+	Pillow::NetworkAccessManager *nam;
+	TestServer server;
 
 private slots:
+	void initTestCase()
+	{
+		QVERIFY(server.listen(QHostAddress::LocalHost, 4571));
+	}
+
 	void init()
 	{
-		buffer = new QBuffer(this);
-		buffer->open(QBuffer::ReadWrite);
+		nam = new Pillow::NetworkAccessManager();
+		QVERIFY(server.receivedRequests.isEmpty());
+		QVERIFY(server.receivedConnections.isEmpty());
+		QVERIFY(server.receivedSockets.isEmpty());
 	}
 
 	void cleanup()
 	{
-		delete buffer; buffer = 0;
+		delete nam; nam = 0;
+		server.receivedRequests.clear();
+		server.receivedConnections.clear();
+		server.receivedSockets.clear();
 	}
-
-	QByteArray readAll()
-	{
-		QByteArray data = buffer->data();
-		buffer->seek(0);
-		return data;
-	}
-
-private slots:
-	void test_initial_state()
-	{
-		Pillow::HttpRequestWriter w;
-		QVERIFY(w.device() == 0);
-		w.setDevice(buffer);
-		QVERIFY(w.device() == buffer);
-	}
-
-	void test_write_get()
-	{
-		Pillow::HttpRequestWriter w; w.setDevice(buffer);
-
-		w.get("/some/path", Pillow::HttpHeaderCollection());
-		QCOMPARE(readAll(), QByteArray("GET /some/path HTTP/1.1\r\n\r\n"));
-
-		w.get("/other/cool%20path", Pillow::HttpHeaderCollection() <<
-			  Pillow::HttpHeader("My-Header", "Is-Cool") <<
-			  Pillow::HttpHeader("X-And-Another", "Is-Better"));
-		QCOMPARE(readAll(), QByteArray("GET /other/cool%20path HTTP/1.1\r\nMy-Header: Is-Cool\r\nX-And-Another: Is-Better\r\n\r\n"));
-	}
-
-	void test_write_head()
-	{
-		Pillow::HttpRequestWriter w; w.setDevice(buffer);
-
-		w.head("/some/path", Pillow::HttpHeaderCollection());
-		QCOMPARE(readAll(), QByteArray("HEAD /some/path HTTP/1.1\r\n\r\n"));
-
-		w.head("/other/cool%20path", Pillow::HttpHeaderCollection() <<
-			  Pillow::HttpHeader("My-Header", "Is-Cool") <<
-			  Pillow::HttpHeader("X-And-Another", "Is-Better"));
-		QCOMPARE(readAll(), QByteArray("HEAD /other/cool%20path HTTP/1.1\r\nMy-Header: Is-Cool\r\nX-And-Another: Is-Better\r\n\r\n"));
-	}
-
-	void test_write_post()
-	{
-		Pillow::HttpRequestWriter w; w.setDevice(buffer);
-
-		w.post("/some/path.txt", Pillow::HttpHeaderCollection(), QByteArray());
-		QCOMPARE(readAll(), QByteArray("POST /some/path.txt HTTP/1.1\r\n\r\n"));
-
-		w.post("/other/path.txt", Pillow::HttpHeaderCollection() << Pillow::HttpHeader("One", "Header"), QByteArray("Some Data"));
-		QCOMPARE(readAll(), QByteArray("POST /other/path.txt HTTP/1.1\r\nOne: Header\r\nContent-Length: 9\r\n\r\nSome Data"));
-	}
-	void test_write_put()
-	{
-		Pillow::HttpRequestWriter w; w.setDevice(buffer);
-
-		w.put("/some/path.txt", Pillow::HttpHeaderCollection(), QByteArray());
-		QCOMPARE(readAll(), QByteArray("PUT /some/path.txt HTTP/1.1\r\n\r\n"));
-
-		w.put("/other/path.txt", Pillow::HttpHeaderCollection() << Pillow::HttpHeader("One", "Header"), QByteArray("Some Data"));
-		QCOMPARE(readAll(), QByteArray("PUT /other/path.txt HTTP/1.1\r\nOne: Header\r\nContent-Length: 9\r\n\r\nSome Data"));
-	}
-
-	void test_write_deleteResource()
-	{
-		Pillow::HttpRequestWriter w; w.setDevice(buffer);
-
-		w.deleteResource("/some/path", Pillow::HttpHeaderCollection());
-		QCOMPARE(readAll(), QByteArray("DELETE /some/path HTTP/1.1\r\n\r\n"));
-
-		w.deleteResource("/other/cool%20path", Pillow::HttpHeaderCollection() <<
-			  Pillow::HttpHeader("My-Header", "Is-Cool") <<
-			  Pillow::HttpHeader("X-And-Another", "Is-Better"));
-		QCOMPARE(readAll(), QByteArray("DELETE /other/cool%20path HTTP/1.1\r\nMy-Header: Is-Cool\r\nX-And-Another: Is-Better\r\n\r\n"));
-	}
-};
-PILLOW_TEST_DECLARE(HttpRequestWriterTest)
-
-//
-// Test data taken from joyent/http_parser's test.c
-//
-#undef TRUE
-#define TRUE 1
-#undef FALSE
-#define FALSE 0
-
-#define MAX_HEADERS 13
-#define MAX_ELEMENT_SIZE 500
-
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
-
-struct message {
-  const char *name; // for debugging purposes
-  enum http_parser_type type;
-  const char *raw;
-  int should_keep_alive;
-  int message_complete_on_eof;
-  unsigned short http_major;
-  unsigned short http_minor;
-  unsigned short status_code;
-  int num_headers;
-  char headers [MAX_HEADERS][2][MAX_ELEMENT_SIZE];
-  size_t body_size;
-  char body[MAX_ELEMENT_SIZE];
-
-
-//  enum http_method method;
-//  char request_path[MAX_ELEMENT_SIZE];
-//  char request_url[MAX_ELEMENT_SIZE];
-//  char fragment[MAX_ELEMENT_SIZE];
-//  char query_string[MAX_ELEMENT_SIZE];
-//  uint16_t port;
-//  enum { NONE=0, FIELD, VALUE } last_header_element;
-
-//  const char *upgrade; // upgraded body
-
-
-//  int message_begin_cb_called;
-//  int headers_complete_cb_called;
-//  int message_complete_cb_called;
-};
-Q_DECLARE_METATYPE(message)
-
-const struct message responses[] =
-#define GOOGLE_301 0
-{ {"google 301"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 301 Moved Permanently\r\n"
-		 "Location: http://www.google.com/\r\n"
-		 "Content-Type: text/html; charset=UTF-8\r\n"
-		 "Date: Sun, 26 Apr 2009 11:11:49 GMT\r\n"
-		 "Expires: Tue, 26 May 2009 11:11:49 GMT\r\n"
-		 "X-$PrototypeBI-Version: 1.6.0.3\r\n" /* $ char in header field */
-		 "Cache-Control: public, max-age=2592000\r\n"
-		 "Server: gws\r\n"
-		 "Content-Length:  219  \r\n"
-		 "\r\n"
-		 "<HTML><HEAD><meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n"
-		 "<TITLE>301 Moved</TITLE></HEAD><BODY>\n"
-		 "<H1>301 Moved</H1>\n"
-		 "The document has moved\n"
-		 "<A HREF=\"http://www.google.com/\">here</A>.\r\n"
-		 "</BODY></HTML>\r\n"
-  ,TRUE
-  ,FALSE
-  ,1
-  ,1
-  ,301
-  ,8
-  ,
-	{ { "Location", "http://www.google.com/" }
-	, { "Content-Type", "text/html; charset=UTF-8" }
-	, { "Date", "Sun, 26 Apr 2009 11:11:49 GMT" }
-	, { "Expires", "Tue, 26 May 2009 11:11:49 GMT" }
-	, { "X-$PrototypeBI-Version", "1.6.0.3" }
-	, { "Cache-Control", "public, max-age=2592000" }
-	, { "Server", "gws" }
-	, { "Content-Length", "219  " }
-	}
-  ,0
-  ,"<HTML><HEAD><meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n"
-		  "<TITLE>301 Moved</TITLE></HEAD><BODY>\n"
-		  "<H1>301 Moved</H1>\n"
-		  "The document has moved\n"
-		  "<A HREF=\"http://www.google.com/\">here</A>.\r\n"
-		  "</BODY></HTML>\r\n"
-  }
-
-#define NO_CONTENT_LENGTH_RESPONSE 1
-/* The client should wait for the server's EOF. That is, when content-length
- * is not specified, and "Connection: close", the end of body is specified
- * by the EOF.
- * Compare with APACHEBENCH_GET
- */
-, {"no content-length response"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 200 OK\r\n"
-		 "Date: Tue, 04 Aug 2009 07:59:32 GMT\r\n"
-		 "Server: Apache\r\n"
-		 "X-Powered-By: Servlet/2.5 JSP/2.1\r\n"
-		 "Content-Type: text/xml; charset=utf-8\r\n"
-		 "Connection: close\r\n"
-		 "\r\n"
-		 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-		 "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"
-		 "  <SOAP-ENV:Body>\n"
-		 "    <SOAP-ENV:Fault>\n"
-		 "       <faultcode>SOAP-ENV:Client</faultcode>\n"
-		 "       <faultstring>Client Error</faultstring>\n"
-		 "    </SOAP-ENV:Fault>\n"
-		 "  </SOAP-ENV:Body>\n"
-		 "</SOAP-ENV:Envelope>"
-  ,FALSE
-  ,TRUE
-  ,1
-  ,1
-  ,200
-  ,5
-  ,
-	{ { "Date", "Tue, 04 Aug 2009 07:59:32 GMT" }
-	, { "Server", "Apache" }
-	, { "X-Powered-By", "Servlet/2.5 JSP/2.1" }
-	, { "Content-Type", "text/xml; charset=utf-8" }
-	, { "Connection", "close" }
-	}
-   ,0
-  ,"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-		  "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"
-		  "  <SOAP-ENV:Body>\n"
-		  "    <SOAP-ENV:Fault>\n"
-		  "       <faultcode>SOAP-ENV:Client</faultcode>\n"
-		  "       <faultstring>Client Error</faultstring>\n"
-		  "    </SOAP-ENV:Fault>\n"
-		  "  </SOAP-ENV:Body>\n"
-		  "</SOAP-ENV:Envelope>"
-  }
-
-#define NO_HEADERS_NO_BODY_404 2
-, {"404 no headers no body"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 404 Not Found\r\n\r\n"
-  ,FALSE
-  ,TRUE
-  ,1
-  ,1
-  ,404
-  ,0
-  , {}
-  ,0
-  ,""
-  }
-
-#define NO_REASON_PHRASE 3
-, {"301 no response phrase"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 301\r\n\r\n"
-  ,FALSE
-  ,TRUE
-  ,1
-  ,1
-  ,301
-  ,0
-  , {}
-  ,0
-  ,""
-  }
-
-#define TRAILING_SPACE_ON_CHUNKED_BODY 4
-, {"200 trailing space on chunked body"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 200 OK\r\n"
-		 "Content-Type: text/plain\r\n"
-		 "Transfer-Encoding: chunked\r\n"
-		 "\r\n"
-		 "25  \r\n"
-		 "This is the data in the first chunk\r\n"
-		 "\r\n"
-		 "1C\r\n"
-		 "and this is the second one\r\n"
-		 "\r\n"
-		 "0  \r\n"
-		 "\r\n"
-  ,TRUE
-  ,FALSE
-  ,1
-  ,1
-  ,200
-  ,2
-  ,
-	{ {"Content-Type", "text/plain" }
-	, {"Transfer-Encoding", "chunked" }
-	}
-  ,37+28
-  ,
-		 "This is the data in the first chunk\r\n"
-		 "and this is the second one\r\n"
-
-  }
-
-#define NO_CARRIAGE_RET 5
-, {"no carriage ret"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 200 OK\n"
-		 "Content-Type: text/html; charset=utf-8\n"
-		 "Connection: close\n"
-		 "\n"
-		 "these headers are from http://news.ycombinator.com/"
-  ,FALSE
-  ,TRUE
-  ,1
-  ,1
-  ,200
-  ,2
-  ,
-	{ {"Content-Type", "text/html; charset=utf-8" }
-	, {"Connection", "close" }
-	}
-  ,0
-  ,"these headers are from http://news.ycombinator.com/"
-  }
-
-#define PROXY_CONNECTION 6
-, {"proxy connection"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 200 OK\r\n"
-		 "Content-Type: text/html; charset=UTF-8\r\n"
-		 "Content-Length: 11\r\n"
-		 "Proxy-Connection: close\r\n"
-		 "Date: Thu, 31 Dec 2009 20:55:48 +0000\r\n"
-		 "\r\n"
-		 "hello world"
-  ,FALSE
-  ,FALSE
-  ,1
-  ,1
-  ,200
-  ,4
-  ,
-	{ {"Content-Type", "text/html; charset=UTF-8" }
-	, {"Content-Length", "11" }
-	, {"Proxy-Connection", "close" }
-	, {"Date", "Thu, 31 Dec 2009 20:55:48 +0000"}
-	}
-  ,11
-  ,"hello world"
-  }
-
-#define UNDERSTORE_HEADER_KEY 7
-  // shown by
-  // curl -o /dev/null -v "http://ad.doubleclick.net/pfadx/DARTSHELLCONFIGXML;dcmt=text/xml;"
-, {"underscore header key"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 200 OK\r\n"
-		 "Server: DCLK-AdSvr\r\n"
-		 "Content-Type: text/xml\r\n"
-		 "Content-Length: 0\r\n"
-		 "DCLK_imp: v7;x;114750856;0-0;0;17820020;0/0;21603567/21621457/1;;~okv=;dcmt=text/xml;;~cs=o\r\n\r\n"
-  ,TRUE
-  ,FALSE
-  ,1
-  ,1
-  ,200
-  ,4
-  ,
-	{ {"Server", "DCLK-AdSvr" }
-	, {"Content-Type", "text/xml" }
-	, {"Content-Length", "0" }
-	, {"DCLK_imp", "v7;x;114750856;0-0;0;17820020;0/0;21603567/21621457/1;;~okv=;dcmt=text/xml;;~cs=o" }
-	}
-  ,0
-  ,""
-  }
-
-#define BONJOUR_MADAME_FR 8
-/* The client should not merge two headers fields when the first one doesn't
- * have a value.
- */
-, {"bonjourmadame.fr"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.0 301 Moved Permanently\r\n"
-		 "Date: Thu, 03 Jun 2010 09:56:32 GMT\r\n"
-		 "Server: Apache/2.2.3 (Red Hat)\r\n"
-		 "Cache-Control: public\r\n"
-		 "Pragma: \r\n"
-		 "Location: http://www.bonjourmadame.fr/\r\n"
-		 "Vary: Accept-Encoding\r\n"
-		 "Content-Length: 0\r\n"
-		 "Content-Type: text/html; charset=UTF-8\r\n"
-		 "Connection: keep-alive\r\n"
-		 "\r\n"
-  ,TRUE
-  ,FALSE
-  ,1
-  ,0
-  ,301
-  ,9
-  ,
-	{ { "Date", "Thu, 03 Jun 2010 09:56:32 GMT" }
-	, { "Server", "Apache/2.2.3 (Red Hat)" }
-	, { "Cache-Control", "public" }
-	, { "Pragma", "" }
-	, { "Location", "http://www.bonjourmadame.fr/" }
-	, { "Vary",  "Accept-Encoding" }
-	, { "Content-Length", "0" }
-	, { "Content-Type", "text/html; charset=UTF-8" }
-	, { "Connection", "keep-alive" }
-	}
-  ,0
-  ,""
-  }
-
-#define RES_FIELD_UNDERSCORE 9
-/* Should handle spaces in header fields */
-, {"field underscore"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 200 OK\r\n"
-		 "Date: Tue, 28 Sep 2010 01:14:13 GMT\r\n"
-		 "Server: Apache\r\n"
-		 "Cache-Control: no-cache, must-revalidate\r\n"
-		 "Expires: Mon, 26 Jul 1997 05:00:00 GMT\r\n"
-		 ".et-Cookie: PlaxoCS=1274804622353690521; path=/; domain=.plaxo.com\r\n"
-		 "Vary: Accept-Encoding\r\n"
-		 "_eep-Alive: timeout=45\r\n" /* semantic value ignored */
-		 "_onnection: Keep-Alive\r\n" /* semantic value ignored */
-		 "Transfer-Encoding: chunked\r\n"
-		 "Content-Type: text/html\r\n"
-		 "Connection: close\r\n"
-		 "\r\n"
-		 "0\r\n\r\n"
-  ,FALSE
-  ,FALSE
-  ,1
-  ,1
-  ,200
-  ,11
-  ,
-	{ { "Date", "Tue, 28 Sep 2010 01:14:13 GMT" }
-	, { "Server", "Apache" }
-	, { "Cache-Control", "no-cache, must-revalidate" }
-	, { "Expires", "Mon, 26 Jul 1997 05:00:00 GMT" }
-	, { ".et-Cookie", "PlaxoCS=1274804622353690521; path=/; domain=.plaxo.com" }
-	, { "Vary", "Accept-Encoding" }
-	, { "_eep-Alive", "timeout=45" }
-	, { "_onnection", "Keep-Alive" }
-	, { "Transfer-Encoding", "chunked" }
-	, { "Content-Type", "text/html" }
-	, { "Connection", "close" }
-	}
-   ,0
-  ,""
-  }
-
-#define NON_ASCII_IN_STATUS_LINE 10
-/* Should handle non-ASCII in status line */
-, {"non-ASCII in status line"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 500 Oriëntatieprobleem\r\n"
-		 "Date: Fri, 5 Nov 2010 23:07:12 GMT+2\r\n"
-		 "Content-Length: 0\r\n"
-		 "Connection: close\r\n"
-		 "\r\n"
-  ,FALSE
-  ,FALSE
-  ,1
-  ,1
-  ,500
-  ,3
-  ,
-	{ { "Date", "Fri, 5 Nov 2010 23:07:12 GMT+2" }
-	, { "Content-Length", "0" }
-	, { "Connection", "close" }
-	}
-   ,0
-  ,""
-  }
-
-#define HTTP_VERSION_0_9 11
-/* Should handle HTTP/0.9 */
-, {"http version 0.9"
-  ,HTTP_RESPONSE
-  ,"HTTP/0.9 200 OK\r\n"
-		 "\r\n"
-  ,FALSE
-  ,TRUE
-  ,0
-  ,9
-  ,200
-  ,0
-  ,
-	{}
-   ,0
-  ,""
-  }
-
-#define NO_CONTENT_LENGTH_NO_TRANSFER_ENCODING_RESPONSE 12
-/* The client should wait for the server's EOF. That is, when neither
- * content-length nor transfer-encoding is specified, the end of body
- * is specified by the EOF.
- */
-, {"neither content-length nor transfer-encoding response"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 200 OK\r\n"
-		 "Content-Type: text/plain\r\n"
-		 "\r\n"
-		 "hello world"
-  ,FALSE
-  ,TRUE
-  ,1
-  ,1
-  ,200
-  ,1
-  ,
-	{ { "Content-Type", "text/plain" }
-	}
-   ,11
-  ,"hello world"
-  }
-
-#define NO_BODY_HTTP10_KA_200 13
-, {"HTTP/1.0 with keep-alive and EOF-terminated 200 status"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.0 200 OK\r\n"
-		 "Connection: keep-alive\r\n"
-		 "\r\n"
-  ,FALSE
-  ,TRUE
-  ,1
-  ,0
-  ,200
-  ,1
-  ,
-	{ { "Connection", "keep-alive" }
-	}
-  ,0
-  ,""
-  }
-
-#define NO_BODY_HTTP10_KA_204 14
-, {"HTTP/1.0 with keep-alive and a 204 status"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.0 204 No content\r\n"
-		 "Connection: keep-alive\r\n"
-		 "\r\n"
-  ,TRUE
-  ,FALSE
-  ,1
-  ,0
-  ,204
-  ,1
-  ,
-	{ { "Connection", "keep-alive" }
-	}
-  ,0
-  ,""
-  }
-
-#define NO_BODY_HTTP11_KA_200 15
-, {"HTTP/1.1 with an EOF-terminated 200 status"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 200 OK\r\n"
-		 "\r\n"
-  ,FALSE
-  ,TRUE
-  ,1
-  ,1
-  ,200
-  ,0
-  ,{}
-  ,0
-  ,""
-  }
-
-#define NO_BODY_HTTP11_KA_204 16
-, {"HTTP/1.1 with a 204 status"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 204 No content\r\n"
-		 "\r\n"
-  ,TRUE
-  ,FALSE
-  ,1
-  ,1
-  ,204
-  ,0
-  ,{}
-  ,0
-  ,""
-  }
-
-#define NO_BODY_HTTP11_NOKA_204 17
-, {"HTTP/1.1 with a 204 status and keep-alive disabled"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 204 No content\r\n"
-		 "Connection: close\r\n"
-		 "\r\n"
-  ,FALSE
-  ,FALSE
-  ,1
-  ,1
-  ,204
-  ,1
-  ,
-	{ { "Connection", "close" }
-	}
-  ,0
-  ,""
-  }
-
-#define NO_BODY_HTTP11_KA_CHUNKED_200 18
-, {"HTTP/1.1 with chunked encoding and a 200 response"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 200 OK\r\n"
-		 "Transfer-Encoding: chunked\r\n"
-		 "\r\n"
-		 "0\r\n"
-		 "\r\n"
-  ,TRUE
-  ,FALSE
-  ,1
-  ,1
-  ,200
-  ,1
-  ,
-	{ { "Transfer-Encoding", "chunked" }
-	}
-  ,0
-  ,""
-  }
-
-#if !HTTP_PARSER_STRICT
-#define SPACE_IN_FIELD_RES 19
-/* Should handle spaces in header fields */
-, {"field space"
-  ,HTTP_RESPONSE
-  ,"HTTP/1.1 200 OK\r\n"
-		 "Server: Microsoft-IIS/6.0\r\n"
-		 "X-Powered-By: ASP.NET\r\n"
-		 "en-US Content-Type: text/xml\r\n" /* this is the problem */
-		 "Content-Type: text/xml\r\n"
-		 "Content-Length: 16\r\n"
-		 "Date: Fri, 23 Jul 2010 18:45:38 GMT\r\n"
-		 "Connection: keep-alive\r\n"
-		 "\r\n"
-		 "<xml>hello</xml>" /* fake body */
-  ,TRUE
-  ,FALSE
-  ,1
-  ,1
-  ,200
-  ,7
-  ,
-	{ { "Server",  "Microsoft-IIS/6.0" }
-	, { "X-Powered-By", "ASP.NET" }
-	, { "en-US Content-Type", "text/xml" }
-	, { "Content-Type", "text/xml" }
-	, { "Content-Length", "16" }
-	, { "Date", "Fri, 23 Jul 2010 18:45:38 GMT" }
-	, { "Connection", "keep-alive" }
-	}
-  ,"<xml>hello</xml>"
-  }
-#endif /* !HTTP_PARSER_STRICT */
-
-, {NULL, HTTP_RESPONSE, 0, FALSE, FALSE, 0, 0, 0, 0, {}, 0, { 0 }} /* sentinel */
-};
-
-class ResponseParserWithCounter : public Pillow::HttpResponseParser
-{
-public:
-	int messageBeginCount;
-	int headersCompleteCount;
-	int messageContentCount;
-	int messageCompleteCount;
-	bool pauseInMessageBegin;
-	bool pauseInHeadersComplete;
-	bool pauseInMessageContent;
-	bool pauseInMessageComplete;
-
-	ResponseParserWithCounter()
-		: messageBeginCount(0), headersCompleteCount(0), messageContentCount(0), messageCompleteCount(0)
-		, pauseInMessageBegin(false), pauseInHeadersComplete(false), pauseInMessageContent(false), pauseInMessageComplete(false)
-	{}
-
-protected:
-	void messageBegin() { ++messageBeginCount; Pillow::HttpResponseParser::messageBegin(); if (pauseInMessageBegin) pause(); }
-	void headersComplete() { ++headersCompleteCount;  Pillow::HttpResponseParser::headersComplete(); if (pauseInHeadersComplete) pause(); }
-	void messageContent(const char *data, int length) { ++messageContentCount;  Pillow::HttpResponseParser::messageContent(data, length); if (pauseInMessageContent) pause(); }
-	void messageComplete() { ++messageCompleteCount;  Pillow::HttpResponseParser::messageComplete(); if (pauseInMessageComplete) pause(); }
-};
-
-class ResponseParserWithIsParsingChecker : public Pillow::HttpResponseParser
-{
-public:
-	bool wasParsingInMessageBegin;
-	bool wasParsingInHeadersComplete;
-	bool wasParsingInMessageContent;
-	bool wasParsingInMessageComplete;
-
-	ResponseParserWithIsParsingChecker()
-		: wasParsingInMessageBegin(false), wasParsingInHeadersComplete(false)
-		, wasParsingInMessageContent(false), wasParsingInMessageComplete(false)
-	{}
-
-protected:
-	void messageBegin() { Pillow::HttpResponseParser::messageBegin(); wasParsingInMessageBegin = isParsing(); }
-	void headersComplete() { Pillow::HttpResponseParser::headersComplete(); wasParsingInHeadersComplete = isParsing(); }
-	void messageContent(const char *data, int length) { Pillow::HttpResponseParser::messageContent(data, length); wasParsingInMessageContent = isParsing(); }
-	void messageComplete() { Pillow::HttpResponseParser::messageComplete(); wasParsingInMessageComplete = isParsing(); }
-};
-
-class ResponseParser : public Pillow::HttpResponseParser
-{
-public:
-	std::function<void()> messageBeginCallback;
-	std::function<void()> headersCompleteCallback;
-	std::function<void()> messageContentCallback;
-	std::function<void()> messageCompleteCallback;
-
-protected:
-	void messageBegin() { Pillow::HttpResponseParser::messageBegin(); if (messageBeginCallback) messageBeginCallback(); }
-	void headersComplete() { Pillow::HttpResponseParser::headersComplete(); if (headersCompleteCallback) headersCompleteCallback(); }
-	void messageContent(const char *data, int length) { Pillow::HttpResponseParser::messageContent(data, length); if (messageContentCallback) messageContentCallback(); }
-	void messageComplete() { Pillow::HttpResponseParser::messageComplete(); if (messageCompleteCallback) messageCompleteCallback(); }
-};
-
-class HttpResponseParserTest : public QObject
-{
-	Q_OBJECT
 
 private:
-	bool compareParsedResponse(const Pillow::HttpResponseParser& p, const message& m)
-	{
-		bool ok; compareParsedResponse(p, m, &ok); return ok;
-	}
-
-	void compareParsedResponse(const Pillow::HttpResponseParser& p, const message& m, bool* ok)
-	{
-		*ok = false;
-		QCOMPARE(p.statusCode(), m.status_code);
-		QCOMPARE(p.httpMajor(), m.http_major);
-		QCOMPARE(p.httpMinor(), m.http_minor);
-		QCOMPARE(p.headers().size(), m.num_headers);
-		QCOMPARE(p.content(), QByteArray(m.body));
-		QCOMPARE(p.shouldKeepAlive(), m.should_keep_alive == TRUE);
-		QCOMPARE(p.completesOnEof(), m.message_complete_on_eof);
-		*ok = true; // All passed
-		throw "Parsed response does not match message";
-	}
+	QUrl testUrl() const { return QUrl("http://127.0.0.1:4571/test/path"); }
 
 private slots:
-	void test_initial_state()
+	void should_send_valid_requests_data()
 	{
-		Pillow::HttpResponseParser p;
+		QTest::addColumn<QByteArray>("method");
+		QTest::addColumn<QUrl>("url");
+		QTest::addColumn<Pillow::HttpHeaderCollection>("headers");
+		QTest::addColumn<QByteArray>("content");
+		QTest::addColumn<HttpRequestData>("expectedRequestData");
 
-		QVERIFY(!p.hasError());
-		QCOMPARE(p.error(), HPE_OK);
-		QCOMPARE(p.statusCode(), 0);
-		QCOMPARE(p.httpMinor(), 0);
-		QCOMPARE(p.httpMajor(), 0);
-		QCOMPARE(p.headers().size(), 0);
-		QCOMPARE(p.shouldKeepAlive(), 0);
-		QCOMPARE(p.completesOnEof(), false);
-		QVERIFY(!p.isParsing());
+		Pillow::HttpHeaderCollection baseExpectedHeaders;
+		baseExpectedHeaders << Pillow::HttpHeader("Host", "127.0.0.1:4571");
+
+		QTest::newRow("Simple GET") << QByteArray("GET")
+									<< QUrl("http://127.0.0.1:4571/")
+									<< Pillow::HttpHeaderCollection()
+									<< QByteArray()
+									<< HttpRequestData()
+									   .withMethod("GET")
+									   .withUri("/").withPath("/").withQueryString("").withFragment("")
+									   .withHttpVersion("HTTP/1.1")
+									   .withContent("")
+									   .withHeaders(baseExpectedHeaders);
+
+		QTest::newRow("GET with headers") << QByteArray("GET")
+									<< QUrl("http://127.0.0.1:4571/some/path?and=query")
+									<< (Pillow::HttpHeaderCollection()
+										<< Pillow::HttpHeader("X-Some", "Header")
+										<< Pillow::HttpHeader("X-And-Another", "even-better; header"))
+									<< QByteArray()
+									<< HttpRequestData()
+									   .withMethod("GET")
+									   .withUri("/some/path?and=query").withPath("/some/path").withQueryString("and=query").withFragment("")
+									   .withHttpVersion("HTTP/1.1")
+									   .withContent("")
+									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
+													<< Pillow::HttpHeader("X-Some", "Header")
+													<< Pillow::HttpHeader("X-And-Another", "even-better; header"));
+		QTest::newRow("GET with connection: close") << QByteArray("GET")
+									<< QUrl("http://127.0.0.1:4571/")
+									<< (Pillow::HttpHeaderCollection()
+										<< Pillow::HttpHeader("Connection", "close"))
+									<< QByteArray()
+									<< HttpRequestData()
+									   .withMethod("GET")
+									   .withUri("/").withPath("/").withQueryString("").withFragment("")
+									   .withHttpVersion("HTTP/1.1")
+									   .withContent("")
+									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
+													<< Pillow::HttpHeader("Connection", "close"));
+		QTest::newRow("Simple PUT") << QByteArray("PUT")
+									<< QUrl("http://127.0.0.1:4571/some/path")
+									<< (Pillow::HttpHeaderCollection())
+									<< QByteArray("Some sent data")
+									<< HttpRequestData()
+									   .withMethod("PUT")
+									   .withUri("/some/path").withPath("/some/path").withQueryString("").withFragment("")
+									   .withHttpVersion("HTTP/1.1")
+									   .withContent("Some sent data")
+									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
+													<< Pillow::HttpHeader("Content-Length", "14"));
+		QTest::newRow("Large POST") << QByteArray("POST")
+									<< QUrl("http://127.0.0.1:4571/some/large/path")
+									<< (Pillow::HttpHeaderCollection())
+									<< QByteArray(128 * 1024, '*')
+									<< HttpRequestData()
+									   .withMethod("POST")
+									   .withUri("/some/large/path").withPath("/some/large/path").withQueryString("").withFragment("")
+									   .withHttpVersion("HTTP/1.1")
+									   .withContent(QByteArray(128 * 1024, '*'))
+									   .withHeaders(Pillow::HttpHeaderCollection(baseExpectedHeaders)
+													<< Pillow::HttpHeader("Content-Length", "131072"));
 	}
 
-	void test_single_valid_responses_data()
+	void should_send_valid_requests()
 	{
-		QTest::addColumn<message>("testMessage");
+		QFETCH(QByteArray, method);
+		QFETCH(QUrl, url);
+		QFETCH(Pillow::HttpHeaderCollection, headers);
+		QFETCH(QByteArray, content);
+		QFETCH(HttpRequestData, expectedRequestData);
 
-		for (const message* m = responses; m->name != NULL; ++m)
-			QTest::newRow(m->name) << *m;
+		QNetworkRequest request;
+		request.setUrl(url);
+		foreach (const Pillow::HttpHeader &header, headers) request.setRawHeader(header.first, header.second);
+		QBuffer requestContent(&content); requestContent.open(QIODevice::ReadOnly);
+
+		nam->sendCustomRequest(request, method, &requestContent);
+
+		QVERIFY(server.waitForRequest());
+		QCOMPARE(server.receivedRequests.size(), 1);
+		QCOMPARE(server.receivedRequests.first(), expectedRequestData);
 	}
 
-	void test_single_valid_responses()
+	void should_receive_response()
 	{
-		QFETCH(message, testMessage);
-		QVERIFY(testMessage.type = HTTP_RESPONSE);
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(201, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("X-Some", "Header"), "Hello World!");
 
-		Pillow::HttpResponseParser p;
-		size_t consumed = p.inject(testMessage.raw);
-		p.injectEof();
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
 
-		QCOMPARE(consumed, strlen(testMessage.raw));
-		QVERIFY(!p.hasError());
-		QCOMPARE(p.statusCode(), testMessage.status_code);
-		QCOMPARE(p.httpMajor(), testMessage.http_major);
-		QCOMPARE(p.httpMinor(), testMessage.http_minor);
-		QCOMPARE(p.headers().size(), testMessage.num_headers);
-		QCOMPARE(p.content(), QByteArray(testMessage.body));
-		QCOMPARE(p.shouldKeepAlive(), testMessage.should_keep_alive == TRUE);
-		QCOMPARE(p.completesOnEof(), testMessage.message_complete_on_eof);
-		QVERIFY(!p.isParsing());
+		QCOMPARE(r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 201);
+		QCOMPARE(r->readAll(), QByteArray("Hello World!"));
+		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
+				 << Pillow::HttpHeader("X-Some", "Header")
+				 << Pillow::HttpHeader("Content-Length", "12")
+				 << Pillow::HttpHeader("Content-Type", "text/plain"));
 	}
 
-	void test_keep_alive_responses()
+	void should_set_cooked_headers_from_received_headers()
 	{
-		Pillow::HttpResponseParser p;
-		int count = 0;
-		for (const message* m1 = responses; m1->name != NULL; ++m1)
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(
+					302,
+					Pillow::HttpHeaderCollection()
+					<< Pillow::HttpHeader("Location", "http://example.org")
+					<< Pillow::HttpHeader("Content-Type", "some/type")
+					<< Pillow::HttpHeader("Last-Modified", Pillow::HttpProtocol::Dates::getHttpDate(QDateTime(QDate(2012, 4, 30), QTime(8, 9, 0))))
+					<< Pillow::HttpHeader("Set-Cookie", "ChocolateCookie=Very Delicious")
+					, "Hello!");
+
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
+		QCOMPARE(r->readAll(), QByteArray("Hello!"));
+		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
+				 << Pillow::HttpHeader("Location", "http://example.org")
+				 << Pillow::HttpHeader("Last-Modified", "Mon, 30 Apr 2012 12:09:00 GMT")
+				 << Pillow::HttpHeader("Content-Length", "6")
+				 << Pillow::HttpHeader("Content-Type", "some/type")
+				 << Pillow::HttpHeader("Set-Cookie", "ChocolateCookie=Very Delicious")
+				 );
+
+		QCOMPARE(r->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl(), QUrl("http://example.org"));
+		QCOMPARE(r->header(QNetworkRequest::ContentTypeHeader).toByteArray(), QByteArray("some/type"));
+		QCOMPARE(r->header(QNetworkRequest::ContentLengthHeader).toInt(), 6);
+		QCOMPARE(r->header(QNetworkRequest::LastModifiedHeader).toDateTime(), QDateTime(QDate(2012, 4, 30), QTime(8, 9, 0)));
+
+		QList<QNetworkCookie> cookies;
+		cookies << QNetworkCookie("ChocolateCookie", "Very Delicious");
+		QCOMPARE(r->header(QNetworkRequest::SetCookieHeader).value<QList<QNetworkCookie> >(), cookies);
+	}
+
+	void should_store_received_cookies_in_the_jar()
+	{
+		class JarOpener : public QNetworkCookieJar
 		{
-			if (m1->should_keep_alive == 0) continue;
-			++count;
-			p.inject(m1->raw);
-			QVERIFY(!p.hasError());
-			QCOMPARE(p.statusCode(), m1->status_code);
-			QCOMPARE(p.httpMajor(), m1->http_major);
-			QCOMPARE(p.httpMinor(), m1->http_minor);
-			QCOMPARE(p.headers().size(), m1->num_headers);
-			QCOMPARE(p.content(), QByteArray(m1->body));
-			QCOMPARE(p.shouldKeepAlive(), m1->should_keep_alive == TRUE);
-			QCOMPARE(p.completesOnEof(), m1->message_complete_on_eof);
+		public:
+			QList<QNetworkCookie> getAllCookies() const { return QNetworkCookieJar::allCookies(); }
+		};
 
-			for (const message* m2 = responses; m2->name != NULL; ++m2)
-			{
-				if (m2->should_keep_alive == 0) continue;
-				++count;
-				p.inject(m2->raw);
-				QVERIFY(!p.hasError());
-				QCOMPARE(p.statusCode(), m2->status_code);
-				QCOMPARE(p.httpMajor(), m2->http_major);
-				QCOMPARE(p.httpMinor(), m2->http_minor);
-				QCOMPARE(p.headers().size(), m2->num_headers);
-				QCOMPARE(p.content(), QByteArray(m2->body));
-				QCOMPARE(p.shouldKeepAlive(), m2->should_keep_alive == TRUE);
-				QCOMPARE(p.completesOnEof(), m2->message_complete_on_eof);
-			}
-		}
-		QVERIFY(count > 2);
+		QCOMPARE(static_cast<JarOpener*>(nam->cookieJar())->getAllCookies().size(), 0);
+
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200,
+					Pillow::HttpHeaderCollection()
+					<< Pillow::HttpHeader("Set-Cookie", "SomeCookie=Super Chocolate")
+					<< Pillow::HttpHeader("seT-CoOKie", "AnotherCookie=Mega Caramel")
+					, "Hello!");
+
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
+		QCOMPARE(static_cast<JarOpener*>(nam->cookieJar())->getAllCookies().size(), 2);
+
+		QList<QNetworkCookie> cookies;
+		cookies << QNetworkCookie("SomeCookie", "Super Chocolate");
+		cookies << QNetworkCookie("AnotherCookie", "Mega Caramel");
+		QCOMPARE(r->header(QNetworkRequest::SetCookieHeader).value<QList<QNetworkCookie> >(), cookies);
 	}
 
-	void test_invalid_responses()
+	void should_send_cookies_from_the_jar()
 	{
-		Pillow::HttpResponseParser p;
-		p.inject("HTTP/1.1 BADBAD=-=-=-=-1-1-1-1-\r\nFFFFFFFUUUUUUUUUUUU\r\n\r\n");
+		QNetworkCookieJar jar;
+		QNetworkCookie c1("First", "FirstValue");
+		QNetworkCookie c2("Second", "SecondValue");
+		QNetworkCookie c3("Third", "ThirdValue");
+		jar.setCookiesFromUrl(QList<QNetworkCookie>() << c1 << c3, QUrl("http://127.0.0.1:4571/"));
+		jar.setCookiesFromUrl(QList<QNetworkCookie>() << c2, QUrl("http://127.0.1.1:7777/"));
 
-		QVERIFY(p.hasError());
-		QCOMPARE(p.error(), HPE_INVALID_STATUS);
-		QCOMPARE(p.statusCode(), 0);
-		QCOMPARE(p.httpMajor(), 1);
-		QCOMPARE(p.httpMinor(), 1);
-		QCOMPARE(p.headers().size(), 0);
-		QCOMPARE(p.content(), QByteArray());
-		QVERIFY(!p.shouldKeepAlive());
-		QVERIFY(p.completesOnEof());
-		QVERIFY(!p.isParsing());
+		nam->setCookieJar(&jar); jar.setParent(0);
+		nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
 
-		p.injectEof();
-
-		QVERIFY(p.hasError());
-		QCOMPARE(p.error(), HPE_INVALID_STATUS);
-		QCOMPARE(p.statusCode(), 0);
-		QCOMPARE(p.httpMajor(), 1);
-		QCOMPARE(p.httpMinor(), 1);
-		QCOMPARE(p.headers().size(), 0);
-		QCOMPARE(p.content(), QByteArray());
-		QVERIFY(!p.shouldKeepAlive());
-		QVERIFY(p.completesOnEof());
-		QVERIFY(!p.isParsing());
-
-		// Injecting a good message should not make the parser recover.
-		p.inject("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
-		QVERIFY(p.hasError());
-		QCOMPARE(p.error(), HPE_INVALID_STATUS);
-		QCOMPARE(p.statusCode(), 0);
-		QCOMPARE(p.httpMajor(), 1);
-		QCOMPARE(p.httpMinor(), 1);
-		QCOMPARE(p.headers().size(), 0);
-		QCOMPARE(p.content(), QByteArray());
-		QVERIFY(!p.shouldKeepAlive());
-		QVERIFY(p.completesOnEof());
-		QVERIFY(!p.isParsing());
-	}
-
-	void should_recover_from_error_when_cleared()
-	{
-		Pillow::HttpResponseParser p;
-		p.inject("HTTP/1.1 POPOPO=-=-=-=-1-1-1-1-\r\nFFFFFFFFUUUUUUUUUUUUUU\r\n\r\n");
-
-		QVERIFY(p.hasError());
-		QCOMPARE(p.error(), HPE_INVALID_STATUS);
-		QCOMPARE(p.statusCode(), 0);
-		QCOMPARE(p.httpMajor(), 1);
-		QCOMPARE(p.httpMinor(), 1);
-		QCOMPARE(p.headers().size(), 0);
-		QCOMPARE(p.content(), QByteArray());
-		QVERIFY(!p.shouldKeepAlive());
-		QVERIFY(p.completesOnEof());
-		QVERIFY(!p.isParsing());
-
-		p.clear();
-
-		p.inject("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
-		QVERIFY(!p.hasError());
-		QCOMPARE(p.error(), HPE_OK);
-		QCOMPARE(p.statusCode(), 200);
-		QCOMPARE(p.httpMajor(), 1);
-		QCOMPARE(p.httpMinor(), 1);
-		QCOMPARE(p.headers().size(), 1);
-		QCOMPARE(p.content(), QByteArray());
-		QVERIFY(p.shouldKeepAlive());
-		QVERIFY(!p.completesOnEof());
-		QVERIFY(!p.isParsing());
-	}
-
-	void should_clear_all_fields_when_cleared()
-	{
-		Pillow::HttpResponseParser p;
-		p.inject("HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc");
-		QVERIFY(!p.hasError());
-		QCOMPARE(p.statusCode(), 200);
-		QCOMPARE(p.httpMajor(), 1);
-		QCOMPARE(p.httpMinor(), 1);
-		QCOMPARE(p.headers().size(), 1);
-		QCOMPARE(p.content(), QByteArray("abc"));
-		QVERIFY(p.shouldKeepAlive());
-		QVERIFY(!p.completesOnEof());
-
-		p.clear();
-
-		QVERIFY(!p.hasError());
-		QCOMPARE(p.error(), HPE_OK);
-		QCOMPARE(p.statusCode(), 0);
-		QCOMPARE(p.httpMinor(), 0);
-		QCOMPARE(p.httpMajor(), 0);
-		QCOMPARE(p.headers().size(), 0);
-		QCOMPARE(p.shouldKeepAlive(), 0);
-		QCOMPARE(p.completesOnEof(), false);
-		QCOMPARE(p.content(), QByteArray());
-	}
-
-	void should_only_consume_one_response_at_a_time_for_pipelined_responses()
-	{
-		QByteArray threeResponses = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\nHTTP/1.1 201 OK\r\nContent-Length: 0\r\n\r\nHTTP/1.1 202 OK\r\nContent-Length: 0\r\n\r\n";
-
-		Pillow::HttpResponseParser p;
-		int consumed = p.inject(threeResponses);
-
-		QCOMPARE(consumed, 38);
-		QCOMPARE(p.statusCode(), 200);
-		QVERIFY(!p.completesOnEof());
-
-		int consumed2 = p.inject(threeResponses.mid(consumed));
-		QCOMPARE(p.statusCode(), 201);
-		QVERIFY(!p.completesOnEof());
-
-		p.inject(threeResponses.mid(consumed).mid(consumed2));
-		QCOMPARE(p.statusCode(), 202);
-		QVERIFY(!p.completesOnEof());
-	}
-
-
-	void should_detect_too_much_data()
-	{
-		Pillow::HttpResponseParser p;
-		p.inject("HTTP/1.0 200 OK\r\nContent-Length:4\r\n\r\nabcdefg"); // Too much content!
-
-		QVERIFY(!p.hasError());
-		QCOMPARE(p.statusCode(), 200);
-		QCOMPARE(p.httpMajor(), 1);
-		QCOMPARE(p.httpMinor(), 0);
-		QCOMPARE(p.headers().size(), 1);
-		QCOMPARE(p.content(), QByteArray("abcd"));
-		QVERIFY(!p.shouldKeepAlive());
-		QVERIFY(!p.completesOnEof());
-	}
-
-	void should_call_callbacks()
-	{
-		ResponseParserWithCounter p;
-		QCOMPARE(p.messageBeginCount, 0);
-		QCOMPARE(p.headersCompleteCount, 0);
-		QCOMPARE(p.messageContentCount, 0);
-		QCOMPARE(p.messageCompleteCount, 0);
-
-		p.inject("HTTP/1.1");
-		QCOMPARE(p.messageBeginCount, 1);
-		QCOMPARE(p.headersCompleteCount, 0);
-		QCOMPARE(p.messageContentCount, 0);
-		QCOMPARE(p.messageCompleteCount, 0);
-
-		p.inject(" 200 OK\r\nContent-Length: 4\r\n");
-		QCOMPARE(p.messageBeginCount, 1);
-		QCOMPARE(p.headersCompleteCount, 0);
-		QCOMPARE(p.messageContentCount, 0);
-		QCOMPARE(p.messageCompleteCount, 0);
-
-		p.inject("\r\n");
-		QCOMPARE(p.messageBeginCount, 1);
-		QCOMPARE(p.headersCompleteCount, 1);
-		QCOMPARE(p.messageContentCount, 0);
-		QCOMPARE(p.messageCompleteCount, 0);
-
-		p.inject("12");
-		QCOMPARE(p.messageBeginCount, 1);
-		QCOMPARE(p.headersCompleteCount, 1);
-		QCOMPARE(p.messageContentCount, 1);
-		QCOMPARE(p.messageCompleteCount, 0);
-
-		p.inject("34");
-		QCOMPARE(p.messageBeginCount, 1);
-		QCOMPARE(p.headersCompleteCount, 1);
-		QCOMPARE(p.messageContentCount, 2);
-		QCOMPARE(p.messageCompleteCount, 1);
-
-		p.inject("HTTP/1.1 302 Found\r\nLocation: somewhere\r\nContent-Length: 0\r\n\r\n");
-		QCOMPARE(p.messageBeginCount, 2);
-		QCOMPARE(p.headersCompleteCount, 2);
-		QCOMPARE(p.messageContentCount, 2);
-		QCOMPARE(p.messageCompleteCount, 2);
-
-		p.inject("HTTP/1.1 400 Bad Request\r\nContent-Length: 2\r\n\r\n12");
-		QCOMPARE(p.messageBeginCount, 3);
-		QCOMPARE(p.headersCompleteCount, 3);
-		QCOMPARE(p.messageContentCount, 3);
-		QCOMPARE(p.messageCompleteCount, 3);
-	}
-
-	void should_be_pausable_in_callbacks()
-	{
-		QByteArray responseHeaders = "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nContent-Type: text/plain\r\n\r\n";
-		QByteArray responseContent = "1234";
-		QByteArray response = responseHeaders + responseContent;
-
+		int cookieHeaderCount = 0;
+		Pillow::HttpHeaderCollection headers = server.receivedConnections.last()->requestHeaders();
+		foreach (const Pillow::HttpHeader &h, headers)
 		{
-			ResponseParserWithCounter p;
-			p.pauseInMessageBegin = true;
-			int consumed = p.inject(response);
-			QCOMPARE(consumed, 1); // http_parser wants at least 1 valid byte to get started.
-			QCOMPARE(p.messageBeginCount, 1);
-			QCOMPARE(p.headersCompleteCount, 0);
-			QCOMPARE(p.messageContentCount, 0);
-			QCOMPARE(p.messageCompleteCount, 0);
-
-			// Should allow continuing.
-			p.inject(response.mid(consumed));
-			QCOMPARE(p.messageBeginCount, 1);
-			QCOMPARE(p.headersCompleteCount, 1);
-			QCOMPARE(p.messageContentCount, 1);
-			QCOMPARE(p.messageCompleteCount, 1);
-			QCOMPARE(p.content(), QByteArray("1234"));
+			if (h.first.toLower() == "cookie")
+				cookieHeaderCount++;
 		}
 
-		{
-			ResponseParserWithCounter p;
-			p.pauseInHeadersComplete = true;
-			int consumed = p.inject(response);
-			QCOMPARE(consumed, responseHeaders.size() - 1); // headers are complete as soon as the parser encountered "\r\n\r" (it will then silently consume the other "\n")
-			QVERIFY(responseHeaders.size() > 0);
-			QCOMPARE(p.messageBeginCount, 1);
-			QCOMPARE(p.headersCompleteCount, 1);
-			QCOMPARE(p.messageContentCount, 0);
-			QCOMPARE(p.messageCompleteCount, 0);
+		QCOMPARE(cookieHeaderCount, 1);
 
-			// Should allow continuing.
-			p.inject(response.mid(consumed));
-			QCOMPARE(p.messageBeginCount, 1);
-			QCOMPARE(p.headersCompleteCount, 1);
-			QCOMPARE(p.messageContentCount, 1);
-			QCOMPARE(p.messageCompleteCount, 1);
-			QCOMPARE(p.content(), QByteArray("1234"));
+		QByteArray cookieValue = server.receivedConnections.last()->requestHeaderValue("Cookie");
+		QCOMPARE(cookieValue, QByteArray("First=FirstValue; Third=ThirdValue"));
+	}
+
+	void should_set_headers_as_soon_as_they_are_received()
+	{
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeHeaders(200, Pillow::HttpHeaderCollection() << Pillow::HttpHeader("X-Some", "Header") << Pillow::HttpHeader("Content-Length", "12") << Pillow::HttpHeader("Content-Type", "text/plain"));
+
+		QSignalSpy finishedSpy(r, SIGNAL(finished()));
+		QVERIFY(waitForSignal(r, SIGNAL(metaDataChanged())));
+		QVERIFY(finishedSpy.isEmpty()); // The request should not be finished yet even though headers have been received
+
+		QCOMPARE(r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
+				 << Pillow::HttpHeader("X-Some", "Header")
+				 << Pillow::HttpHeader("Content-Length", "12")
+				 << Pillow::HttpHeader("Content-Type", "text/plain"));
+		QCOMPARE(r->header(QNetworkRequest::ContentTypeHeader).toByteArray(), QByteArray("text/plain"));
+		QCOMPARE(r->header(QNetworkRequest::ContentLengthHeader).toInt(), 12);
+		QCOMPARE(r->readAll(), QByteArray());
+
+		server.receivedConnections.last()->writeContent("Hello World!");
+
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
+
+		QCOMPARE(r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+		QCOMPARE(r->rawHeaderPairs(), Pillow::HttpHeaderCollection()
+				 << Pillow::HttpHeader("X-Some", "Header")
+				 << Pillow::HttpHeader("Content-Length", "12")
+				 << Pillow::HttpHeader("Content-Type", "text/plain"));
+		QCOMPARE(r->header(QNetworkRequest::ContentTypeHeader).toByteArray(), QByteArray("text/plain"));
+		QCOMPARE(r->header(QNetworkRequest::ContentLengthHeader).toInt(), 12);
+		QCOMPARE(r->readAll(), QByteArray("Hello World!"));
+	}
+
+	void should_make_request_accessible()
+	{
+		QNetworkRequest originalRequest;
+		originalRequest.setUrl(testUrl());
+		originalRequest.setRawHeader("One-Header", "OneValue");
+		originalRequest.setRawHeader("Another-Header", "AnotherValue");
+		originalRequest.setPriority(QNetworkRequest::HighPriority);
+
+		QNetworkReply *r = nam->post(originalRequest, QByteArray("hello"));
+		QCOMPARE(r->request(), originalRequest);
+		QCOMPARE(r->url(), testUrl());
+		QCOMPARE(r->operation(), QNetworkAccessManager::PostOperation);
+	}
+
+	void should_allow_aborting_reply()
+	{
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		QVERIFY(server.receivedSockets.last()->state() == QAbstractSocket::ConnectedState);
+		QPointer<QTcpSocket> socket = server.receivedSockets.last();
+		QVERIFY(socket != 0);
+		QSignalSpy errorSpy(r, SIGNAL(error(QNetworkReply::NetworkError)));
+		QSignalSpy finishedSpy(r, SIGNAL(finished()));
+		r->abort();
+		QCOMPARE(finishedSpy.size(), 1);
+		QCOMPARE(errorSpy.size(), 1);
+		QCOMPARE(errorSpy.last().first().value<QNetworkReply::NetworkError>(), QNetworkReply::OperationCanceledError);
+		QVERIFY(waitFor([=]{ return socket == 0; })); // The socket should get closed and deleted.
+	}
+
+	void should_emit_readyRead_when_new_content_is_available()
+	{
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeHeaders(200);
+
+		QCOMPARE(r->bytesAvailable(), qint64(0));
+
+		server.receivedConnections.last()->writeContent("Hello");
+		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
+		QCOMPARE(r->bytesAvailable(), qint64(5));
+		QCOMPARE(r->pos(), qint64(0));
+		QCOMPARE(r->read(3), QByteArray("Hel"));
+		QCOMPARE(r->bytesAvailable(), qint64(2));
+		QCOMPARE(r->pos(), qint64(0));
+
+		server.receivedConnections.last()->writeContent("the");
+		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
+		QCOMPARE(r->bytesAvailable(), qint64(5));
+		QCOMPARE(r->read(4), QByteArray("loth"));
+		QCOMPARE(r->bytesAvailable(), qint64(1));
+		QCOMPARE(r->pos(), qint64(0));
+
+		server.receivedConnections.last()->writeContent("world!");
+		QVERIFY(waitForSignal(r, SIGNAL(readyRead())));
+		QCOMPARE(r->bytesAvailable(), qint64(7));
+		QCOMPARE(r->read(5), QByteArray("eworl"));
+		QCOMPARE(r->bytesAvailable(), qint64(2));
+		QCOMPARE(r->read(2), QByteArray("d!"));
+		QCOMPARE(r->bytesAvailable(), qint64(0));
+	}
+
+	void should_report_errors()
+	{
+		{
+			QNetworkReply *r = nam->get(QNetworkRequest(QUrl("http://4230948234.423.423.423.423.32.423.4/bad")));
+			QSignalSpy errorSpy(r, SIGNAL(error(QNetworkReply::NetworkError)));
+			QVERIFY(waitFor([&]{ return errorSpy.size() > 0; }));
+			QCOMPARE(errorSpy.last().first().value<QNetworkReply::NetworkError>(), QNetworkReply::UnknownNetworkError);
 		}
 
 		{
-			ResponseParserWithCounter p;
-			p.pauseInMessageContent = true;
-			int consumed = p.inject(response);
-			QCOMPARE(consumed, responseHeaders.size() + responseContent.size() - 1);
-			QVERIFY(responseContent.size() > 0);
-			QCOMPARE(p.messageBeginCount, 1);
-			QCOMPARE(p.headersCompleteCount, 1);
-			QCOMPARE(p.messageContentCount, 1);
-			QCOMPARE(p.messageCompleteCount, 0);
-
-			// Should allow continuing.
-			p.inject(response.mid(consumed));
-			QCOMPARE(p.messageBeginCount, 1);
-			QCOMPARE(p.headersCompleteCount, 1);
-			QCOMPARE(p.messageContentCount, 1);
-			QCOMPARE(p.messageCompleteCount, 1);
-			QCOMPARE(p.content(), QByteArray("1234"));
-		}
-
-		{
-			ResponseParserWithCounter p;
-			p.pauseInMessageComplete = true;
-			int consumed = p.inject(response);
-			QCOMPARE(consumed, response.size());
-			QCOMPARE(p.messageBeginCount, 1);
-			QCOMPARE(p.headersCompleteCount, 1);
-			QCOMPARE(p.messageContentCount, 1);
-			QCOMPARE(p.messageCompleteCount, 1);
-
-			// Continuing should do nothing as there is nothing left.
-			p.inject(response.mid(consumed));
-			QCOMPARE(p.messageBeginCount, 1);
-			QCOMPARE(p.headersCompleteCount, 1);
-			QCOMPARE(p.messageContentCount, 1);
-			QCOMPARE(p.messageCompleteCount, 1);
-			QCOMPARE(p.content(), QByteArray("1234"));
+			QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+			QSignalSpy errorSpy(r, SIGNAL(error(QNetworkReply::NetworkError)));
+			QVERIFY(server.waitForRequest());
+			server.receivedConnections.last()->outputDevice()->write("=-=-=-=-=-FFFFFFFUUUUUUUUUUU=-=-=-=-=-=!\r\n");
+			QVERIFY(waitFor([&]{ return errorSpy.size() > 0; }));
+			QCOMPARE(errorSpy.last().first().value<QNetworkReply::NetworkError>(), QNetworkReply::ProtocolUnknownError);
 		}
 	}
 
-	void should_be_parsing_while_parsing()
+	void should_use_default_QNetworkAccessManager_implementation_for_non_http_schemes()
 	{
-		ResponseParserWithIsParsingChecker p;
-		QVERIFY(!p.wasParsingInMessageBegin);
-		QVERIFY(!p.wasParsingInHeadersComplete);
-		QVERIFY(!p.wasParsingInMessageContent);
-		QVERIFY(!p.wasParsingInMessageComplete);
-		QVERIFY(!p.isParsing());
+		QByteArray url = "data:text/plain;base64," + QByteArray("Hello World!").toBase64();
 
-		p.inject("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nab");
-		QVERIFY(p.wasParsingInMessageBegin);
-		QVERIFY(p.wasParsingInHeadersComplete);
-		QVERIFY(p.wasParsingInMessageContent);
-		QVERIFY(p.wasParsingInMessageComplete);
-		QVERIFY(!p.isParsing());
+		QNetworkReply *r = nam->get(QNetworkRequest(QUrl(url)));
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
+
+		QCOMPARE(r->readAll(), QByteArray("Hello World!"));
 	}
 
-	void should_pause_parsing_when_cleared_while_parsing()
+	void should_reuse_existing_connection_to_same_server_when_available()
 	{
-		QByteArray response = "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nContent-Type: text/plain\r\n\r\nabcd";
+		QNetworkReply *r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(200);
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
 
-		{
-			ResponseParser p;
-			p.messageBeginCallback = [&]{ p.clear(); };
-			int consumed = p.inject(response);
-			QCOMPARE(consumed, 1); // http_parser wants at least 1 valid byte to get started.
+		r = nam->get(QNetworkRequest(testUrl()));
+		QVERIFY(server.waitForRequest());
+		server.receivedConnections.last()->writeResponse(201);
+		QVERIFY(waitForSignal(r, SIGNAL(finished())));
 
-			// Should be reset and ready to parse a new response.
-			QVERIFY(!p.hasError());
-			p.messageBeginCallback = 0;
+		QCOMPARE(server.receivedSockets.size(), 2);
+		QVERIFY(server.receivedSockets.at(0) == server.receivedSockets.at(1));
+		QVERIFY(server.receivedSockets.at(0) != 0);
 
-			QCOMPARE(p.inject(response), response.size());
-			QVERIFY(!p.hasError());
-			QCOMPARE(p.statusCode(), 200);
-			QCOMPARE(p.httpMajor(), 1);
-			QCOMPARE(p.httpMinor(), 1);
-			QCOMPARE(p.headers().size(), 2);
-			QCOMPARE(p.content(), QByteArray("abcd"));
-			QVERIFY(p.shouldKeepAlive());
-			QVERIFY(!p.completesOnEof());
-		}
+		r = nam->get(QNetworkRequest(testUrl()));
+		QNetworkReply *r4 = nam->get(QNetworkRequest(testUrl()));
+		QNetworkReply *r5 = nam->get(QNetworkRequest(testUrl()));
 
-		{
-			ResponseParser p;
-			p.headersCompleteCallback = [&]{ p.clear(); };
-			QCOMPARE(p.inject(response), 63);
+		QVERIFY(server.waitForRequest());
+		QVERIFY(waitFor([&]{ return server.receivedConnections.size() == 5; }));
+		QVERIFY(server.receivedSockets.at(2) == server.receivedSockets.at(1));
+		QVERIFY(server.receivedSockets.at(3) != server.receivedSockets.at(2));
+		QVERIFY(server.receivedSockets.at(4) != server.receivedSockets.at(2));
+		QVERIFY(server.receivedSockets.at(4) != server.receivedSockets.at(3));
 
-			// Should be reset and ready to parse a new response.
-			QVERIFY(!p.hasError());
-			p.headersCompleteCallback = 0;
+		server.receivedConnections.at(2)->writeResponse(400);
+		server.receivedConnections.at(3)->writeResponse(404);
+		server.receivedConnections.at(4)->writeResponse(500);
 
-			QCOMPARE(p.inject(response), response.size());
-			QVERIFY(!p.hasError());
-			QCOMPARE(p.statusCode(), 200);
-			QCOMPARE(p.httpMajor(), 1);
-			QCOMPARE(p.httpMinor(), 1);
-			QCOMPARE(p.headers().size(), 2);
-			QCOMPARE(p.content(), QByteArray("abcd"));
-			QVERIFY(p.shouldKeepAlive());
-			QVERIFY(!p.completesOnEof());
-		}
-
-		{
-			ResponseParser p;
-			p.messageContentCallback = [&]{ p.clear(); };
-			QCOMPARE(p.inject(response), 67);
-
-			// Should be reset and ready to parse a new response.
-			QVERIFY(!p.hasError());
-			p.messageContentCallback = 0;
-
-			QCOMPARE(p.inject(response), response.size());
-			QVERIFY(!p.hasError());
-			QCOMPARE(p.statusCode(), 200);
-			QCOMPARE(p.httpMajor(), 1);
-			QCOMPARE(p.httpMinor(), 1);
-			QCOMPARE(p.headers().size(), 2);
-			QCOMPARE(p.content(), QByteArray("abcd"));
-			QVERIFY(p.shouldKeepAlive());
-			QVERIFY(!p.completesOnEof());
-		}
-
-		{
-			ResponseParser p;
-			p.messageCompleteCallback = [&]{ p.clear(); };
-			QCOMPARE(p.inject(response), 68);
-
-			// Should be reset and ready to parse a new response.
-			QVERIFY(!p.hasError());
-			p.messageCompleteCallback = 0;
-
-			QCOMPARE(p.inject(response), response.size());
-			QVERIFY(!p.hasError());
-			QCOMPARE(p.statusCode(), 200);
-			QCOMPARE(p.httpMajor(), 1);
-			QCOMPARE(p.httpMinor(), 1);
-			QCOMPARE(p.headers().size(), 2);
-			QCOMPARE(p.content(), QByteArray("abcd"));
-			QVERIFY(p.shouldKeepAlive());
-			QVERIFY(!p.completesOnEof());
-		}
-
-
+		QVERIFY(waitFor([&]{ return !r->isRunning() && !r4->isRunning() && !r5->isRunning(); }));
 	}
 };
-PILLOW_TEST_DECLARE(HttpResponseParserTest)
+PILLOW_TEST_DECLARE(NetworkAccessManagerTest)
 
 #include "HttpClientTest.moc"

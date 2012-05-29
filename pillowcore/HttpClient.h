@@ -173,7 +173,8 @@ namespace Pillow
 		HttpClient(QObject* parent = 0);
 
 		// keepAliveTimeout: Maximum time, in milliseconds, for which the client will keep an established connection channel
-		//                   between requests to the same host. Use 0 to disable keep-alive. Defaults to -1 (no timeout).
+		//                   between requests to the same host. Use 0 to disable keep-alive.
+		//                   Defaults to -1 (no timeout).
 		int keepAliveTimeout() const;
 		void setKeepAliveTimeout(int timeout);
 
@@ -181,7 +182,8 @@ namespace Pillow
 		//                 control will occur. Use consumeContent() to consume data in the buffers and make room for more
 		//                 data. Due to an implementation detail, the effective amount of buffered data can be higher
 		//                 than readBufferSize.
-		qint64 readBufferSize() const; // Defaults to 0 (unlimited).
+		//                 Defaults to 0 (unlimited).
+		qint64 readBufferSize() const;
 		void setReadBufferSize(qint64 size);
 
 	public:
