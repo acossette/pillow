@@ -82,61 +82,49 @@ namespace Pillow
 
 		inline ByteArray& append(const QLatin1Literal& literal)
 		{
-			if (literal.size() > 0)
+			if (capacity() >= size() + literal.size())
 			{
-				if (capacity() >= size() + literal.size())
-				{
-					memcpy(data() + size(), literal.data(), literal.size());
-					data_ptr()->size += literal.size();
-				}
-				else
-					QByteArray::append(literal.data(), literal.size());
+				memcpy(data() + size(), literal.data(), literal.size());
+				data_ptr()->size += literal.size();
 			}
+			else
+				QByteArray::append(literal.data(), literal.size());
 			return *this;
 		}
 
 		inline ByteArray& append(const Pillow::Token& literal)
 		{
-			if (literal.size() > 0)
+			if (capacity() >= size() + literal.size())
 			{
-				if (capacity() >= size() + literal.size())
-				{
-					memcpy(data() + size(), literal.data(), literal.size());
-					data_ptr()->size += literal.size();
-				}
-				else
-					QByteArray::append(literal.data(), literal.size());
+				memcpy(data() + size(), literal.data(), literal.size());
+				data_ptr()->size += literal.size();
 			}
+			else
+				QByteArray::append(literal.data(), literal.size());
 			return *this;
 		}
 
 		inline ByteArray& append(const Pillow::LowerCaseToken& literal)
 		{
-			if (literal.size() > 0)
+			if (capacity() >= size() + literal.size())
 			{
-				if (capacity() >= size() + literal.size())
-				{
-					memcpy(data() + size(), literal.data(), literal.size());
-					data_ptr()->size += literal.size();
-				}
-				else
-					QByteArray::append(literal.data(), literal.size());
+				memcpy(data() + size(), literal.data(), literal.size());
+				data_ptr()->size += literal.size();
 			}
+			else
+				QByteArray::append(literal.data(), literal.size());
 			return *this;
 		}
 
 		inline ByteArray& append(const QByteArray& a)
 		{
-			if (a.size() > 0)
+			if (capacity() >= size() + a.size())
 			{
-				if (capacity() >= size() + a.size())
-				{
-					memcpy(data() + size(), a.constData(), a.size());
-					data_ptr()->size += a.size();
-				}
-				else
-					QByteArray::append(a);
+				memcpy(data() + size(), a.constData(), a.size());
+				data_ptr()->size += a.size();
 			}
+			else
+				QByteArray::append(a);
 			return *this;
 		}
 
@@ -154,16 +142,13 @@ namespace Pillow
 
 		inline ByteArray& append(const char* s, int len)
 		{
-			if (len > 0)
+			if (capacity() >= size() + len)
 			{
-				if (capacity() >= size() + len)
-				{
-					memcpy(data() + size(), s, len);
-					data_ptr()->size += len;
-				}
-				else
-					QByteArray::append(s, len);
+				memcpy(data() + size(), s, len);
+				data_ptr()->size += len;
 			}
+			else
+				QByteArray::append(s, len);
 			return *this;
 		}
 

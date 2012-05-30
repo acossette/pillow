@@ -13,6 +13,7 @@ INCLUDEPATH = .
 
 SOURCES += \
 	parser/parser.c \
+	parser/http_parser.c \
 	HttpServer.cpp \
 	HttpHandler.cpp \
 	HttpHandlerQtScript.cpp \
@@ -20,10 +21,12 @@ SOURCES += \
 	HttpsServer.cpp \
 	HttpHandlerSimpleRouter.cpp \
 	HttpConnection.cpp \
-	HttpHandlerProxy.cpp
+	HttpHandlerProxy.cpp \
+    HttpClient.cpp
 
 HEADERS += \
 	parser/parser.h \
+	parser/http_parser.h \
 	HttpServer.h \
 	HttpHandler.h \
 	HttpHandlerQtScript.h \
@@ -33,6 +36,7 @@ HEADERS += \
 	HttpConnection.h \
 	HttpHandlerProxy.h \
 	ByteArrayHelpers.h \
-	private/ByteArray.h
+	private/ByteArray.h \
+    HttpClient.h
 
 OTHER_FILES +=
