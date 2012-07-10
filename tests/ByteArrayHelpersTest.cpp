@@ -3,6 +3,7 @@
 #include "ByteArrayHelpers.h"
 #include "HttpConnection.h"
 #include "private/ByteArray.h"
+#include "Helpers.h"
 
 class ByteArrayHelpersTest : public QObject
 {
@@ -358,11 +359,6 @@ private slots:
 	}
 
 };
-
-int exec_ByteArrayHelpersTest()
-{
-	ByteArrayHelpersTest t;
-	return QTest::qExec(&t);
-}
+PILLOW_TEST_DECLARE(ByteArrayHelpersTest)
 
 #include "ByteArrayHelpersTest.moc"

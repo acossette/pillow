@@ -106,6 +106,7 @@ void Pillow::HttpHandlerProxyPipe::teardown()
 	deleteLater();
 }
 
+
 void Pillow::HttpHandlerProxyPipe::sendHeaders()
 {
 	if (_headersSent || _broken) return;
@@ -113,10 +114,10 @@ void Pillow::HttpHandlerProxyPipe::sendHeaders()
 
 	// Headers have not been sent yet. Do so now.
 	int statusCode = _proxiedReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-	QList<Pillow::HttpHeader> headerList = _proxiedReply->rawHeaderPairs();
+	QList<QPair<QByteArray, QByteArray> > headerList = _proxiedReply->rawHeaderPairs();
 	Pillow::HttpHeaderCollection headers; headers.reserve(headerList.size());
-	foreach (const Pillow::HttpHeader& header, headerList)
-		headers << header;
+	for (int i = 0, iE = headerList.size(); i < iE; ++i)
+		headers << headerList.at(i);
 	_request->writeHeaders(statusCode, headers);
 }
 

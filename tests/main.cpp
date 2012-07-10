@@ -29,13 +29,13 @@ int main(int argc, char *argv[])
 //	result += execTest<HttpHandlerSimpleRouterTest>();
 //	result += execTest<HttpHandlerProxyTest>();
 
-//	extern int exec_ByteArrayHelpersTest();
-//	result += exec_ByteArrayHelpersTest();
-
+//	PILLOW_TEST_RUN(ByteArrayHelpersTest, result);
 //	PILLOW_TEST_RUN(HttpRequestWriterTest, result);
 //	PILLOW_TEST_RUN(HttpResponseParserTest, result);
-	PILLOW_TEST_RUN(HttpClientTest, result);
-	PILLOW_TEST_RUN(NetworkAccessManagerTest, result);
+//	PILLOW_TEST_RUN(HttpClientTest, result);
+//	PILLOW_TEST_RUN(NetworkAccessManagerTest, result);
+//	PILLOW_TEST_RUN(HttpHeaderTest, result);
+	PILLOW_TEST_RUN(HttpHeaderCollectionTest, result);
 
 	return result;
 }

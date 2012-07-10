@@ -10,12 +10,13 @@
 #ifndef QVECTOR_H
 #include <QtCore/QVector>
 #endif // QVECTOR_H
+#ifndef PILLOW_HTTPHEADER_H
+#include "HttpHeader.h"
+#endif // PILLOW_HTTPHEADER_H
 class QIODevice;
 
 namespace Pillow
 {
-	typedef QPair<QByteArray, QByteArray> HttpHeader;
-	typedef QVector<HttpHeader> HttpHeaderCollection;
 	typedef QPair<QString, QString> HttpParam;
 	typedef QVector<HttpParam> HttpParamCollection;
 	class HttpConnectionPrivate;
@@ -71,9 +72,10 @@ namespace Pillow
 		const QString& requestPathDecoded() const;
 		const QString& requestQueryStringDecoded() const;
 
-		// Request headers.
+		// Request headers. As for field above, the underlying shared QByteArray data remains valid until either the requestCompleted()
+		// or closed() signals are emitted.
 		const Pillow::HttpHeaderCollection& requestHeaders() const;
-		QByteArray requestHeaderValue(const QByteArray& field);
+		const QByteArray & requestHeaderValue(const QByteArray& field);
 
 		// Request params.
 		const Pillow::HttpParamCollection& requestParams();
@@ -110,7 +112,5 @@ namespace Pillow
 		Pillow::HttpConnectionPrivate* d_ptr;
 	};
 }
-Q_DECLARE_METATYPE(Pillow::HttpHeaderCollection)
-Q_DECLARE_METATYPE(Pillow::HttpHeader)
 
 #endif // PILLOW_HTTPCONNECTION_H

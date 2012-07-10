@@ -24,7 +24,8 @@ SOURCES += \
 	HttpHandlerSimpleRouter.cpp \
 	HttpConnection.cpp \
 	HttpHandlerProxy.cpp \
-	HttpClient.cpp
+	HttpClient.cpp \
+	HttpHeader.cpp
 
 HEADERS += \
 	parser/parser.h \
@@ -41,6 +42,6 @@ HEADERS += \
 	private/ByteArray.h \
 	HttpClient.h \
 	pch.h \
-	pch.h
+	HttpHeader.h
 
 OTHER_FILES +=

@@ -80,7 +80,7 @@ HttpServer::~HttpServer()
 
 void HttpServer::incomingConnection(int socketDescriptor)
 {
-	QTcpSocket* socket = new QTcpSocket();
+	QTcpSocket* socket = new QTcpSocket(this);
 	if (socket->setSocketDescriptor(socketDescriptor))
 	{
 		addPendingConnection(socket);

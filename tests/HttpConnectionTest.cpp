@@ -8,6 +8,7 @@
 #include <QtNetwork/QLocalSocket>
 #include <QtCore/QFile>
 #include <QtCore/QBuffer>
+#include "Helpers.h"
 using namespace Pillow;
 
 static void wait(int milliseconds = 10)

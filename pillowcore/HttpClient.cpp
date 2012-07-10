@@ -339,6 +339,7 @@ Pillow::HttpClient::HttpClient(QObject *parent)
 	connect(_device, SIGNAL(connected()), this, SLOT(device_connected()));
 	connect(_device, SIGNAL(readyRead()), this, SLOT(device_readyRead()));
 	_requestWriter.setDevice(_device);
+	_keepAliveTimeoutTimer.invalidate();
 }
 
 int Pillow::HttpClient::keepAliveTimeout() const

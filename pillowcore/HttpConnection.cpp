@@ -100,7 +100,6 @@ namespace Pillow
 		qint64 _responseContentLength, _responseContentBytesSent;
 		bool _responseConnectionKeepAlive;
 		bool _responseChunkedTransferEncoding;
-		const QByteArray nullByteArray;
 
 	public:
 		void initialize();
@@ -126,9 +125,6 @@ namespace Pillow
 		void writeContent(const QByteArray& content);
 		void endContent();
 		void close();
-
-		QByteArray requestHeaderValue(const QByteArray& field);
-		template <typename Literal> const QByteArray& requestHeaderValue(const Literal& field);
 	};
 }
 
@@ -232,7 +228,7 @@ inline void Pillow::HttpConnectionPrivate::transitionToReceivingContent()
 
 	if (_requestContentLength > 0)
 	{
-		if (asciiEqualsCaseInsensitive(requestHeaderValue(expectToken), hundredDashContinueToken))
+		if (asciiEqualsCaseInsensitive(_requestHeaders.getFieldValue(expectToken), hundredDashContinueToken))
 			_outputDevice->write("HTTP/1.1 100 Continue\r\n\r\n");// The client politely wanted to know if it could proceed with his payload. All clear!
 
 		// Resize the request buffer right away to avoid too many reallocs later.
@@ -421,8 +417,11 @@ void Pillow::HttpConnectionPrivate::writeRequestErrorResponse(int statusCode)
 inline void Pillow::HttpConnectionPrivate::parser_http_field(void *data, const char *field, size_t flen, const char *value, size_t vlen)
 {
 	Pillow::HttpConnectionPrivate* request = reinterpret_cast<Pillow::HttpConnectionPrivate*>(data);
+
+	// Find the one request header that interest us, fast.
 	if (flen == 14 && asciiEqualsCaseInsensitive(field, 14, "content-length", 14))
 		request->_requestContentLengthHeaderIndex = request->_requestHeadersRef.size();
+
 	const char* begin = request->_requestBuffer.constData();
 	request->_requestHeadersRef.append(HttpHeaderRef(field - begin, flen, value - begin, vlen));
 }
@@ -516,12 +515,12 @@ inline void Pillow::HttpConnectionPrivate::writeHeaders(int statusCode, const Ht
 	if (_requestHttp11)
 	{
 		// Keep-Alive by default, unless "close" is specified.
-		clientWantsKeepAlive = !asciiEqualsCaseInsensitive(requestHeaderValue(connectionToken), closeToken);
+		clientWantsKeepAlive = !asciiEqualsCaseInsensitive(_requestHeaders.getFieldValue(connectionToken), closeToken);
 	}
 	else
 	{
 		// Close by default, unless "keep-alive" is specified.
-		clientWantsKeepAlive = asciiEqualsCaseInsensitive(requestHeaderValue(connectionToken), keepAliveToken);
+		clientWantsKeepAlive = asciiEqualsCaseInsensitive(_requestHeaders.getFieldValue(connectionToken), keepAliveToken);
 	}
 
 	if (clientWantsKeepAlive)
@@ -612,29 +611,6 @@ inline void Pillow::HttpConnectionPrivate::close()
 {
 	transitionToClosed();
 }
-
-inline QByteArray Pillow::HttpConnectionPrivate::requestHeaderValue(const QByteArray &field)
-{
-	for (const HttpHeader* header = _requestHeaders.constBegin(), *headerE = _requestHeaders.constEnd(); header != headerE; ++header)
-	{
-		if (asciiEqualsCaseInsensitive(field, header->first))
-			return header->second;
-	}
-	return QByteArray();
-}
-
-template <typename Literal>
-inline const QByteArray& Pillow::HttpConnectionPrivate::requestHeaderValue(const Literal &field)
-{
-	const char* fieldData = field.data(); int fieldLength = field.size();
-	for (const HttpHeader* header = _requestHeaders.constBegin(), *headerE = _requestHeaders.constEnd(); header != headerE; ++header)
-	{
-		if (asciiEqualsCaseInsensitive(header->first.constData(), header->first.size(), fieldData, fieldLength))
-			return header->second;
-	}
-	return nullByteArray;
-}
-
 
 //
 // HttpConnection
@@ -745,9 +721,9 @@ qint64 Pillow::HttpConnection::responseContentLength() const
 	return d_ptr->_responseContentLength;
 }
 
-QByteArray Pillow::HttpConnection::requestHeaderValue(const QByteArray &field)
+const QByteArray & Pillow::HttpConnection::requestHeaderValue(const QByteArray &field)
 {
-	return d_ptr->requestHeaderValue(field);
+	return d_ptr->_requestHeaders.getFieldValue(field);
 }
 
 const Pillow::HttpParamCollection& Pillow::HttpConnection::requestParams()
