@@ -31,9 +31,13 @@ namespace Pillow
 		Q_PROPERTY(State state READ state)
 		Q_PROPERTY(QByteArray requestMethod READ requestMethod NOTIFY requestReady)
 		Q_PROPERTY(QByteArray requestUri READ requestUri NOTIFY requestReady)
+		Q_PROPERTY(QString requestUriDecoded READ requestUriDecoded NOTIFY requestReady)
 		Q_PROPERTY(QByteArray requestPath READ requestPath NOTIFY requestReady)
+		Q_PROPERTY(QString requestPathDecoded READ requestPathDecoded NOTIFY requestReady)
 		Q_PROPERTY(QByteArray requestQueryString READ requestQueryString NOTIFY requestReady)
+		Q_PROPERTY(QString requestQueryStringDecoded READ requestQueryStringDecoded NOTIFY requestReady)
 		Q_PROPERTY(QByteArray requestFragment READ requestFragment NOTIFY requestReady)
+		Q_PROPERTY(QString requestFragmentDecoded READ requestFragmentDecoded NOTIFY requestReady)
 		Q_PROPERTY(QByteArray requestHttpVersion READ requestHttpVersion NOTIFY requestReady)
 		Q_PROPERTY(QByteArray requestContent READ requestContent NOTIFY requestReady)
 
@@ -74,13 +78,13 @@ namespace Pillow
 
 		// Request headers. As for field above, the underlying shared QByteArray data remains valid until either the requestCompleted()
 		// or closed() signals are emitted.
-		const Pillow::HttpHeaderCollection& requestHeaders() const;
-		const QByteArray & requestHeaderValue(const QByteArray& field);
+		Q_INVOKABLE const Pillow::HttpHeaderCollection& requestHeaders() const;
+		Q_INVOKABLE const QByteArray & requestHeaderValue(const QByteArray& field);
 
 		// Request params.
 		const Pillow::HttpParamCollection& requestParams();
-		QString requestParamValue(const QString& name);
-		void setRequestParam(const QString& name, const QString& value);
+		Q_INVOKABLE QString requestParamValue(const QString& name);
+		Q_INVOKABLE void setRequestParam(const QString& name, const QString& value);
 
 	public slots:
 		// Response members.
