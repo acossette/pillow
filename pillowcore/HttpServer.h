@@ -28,7 +28,11 @@ namespace Pillow
 		void connection_closed(Pillow::HttpConnection* request);
 		
 	protected:
-		virtual void incomingConnection(int socketDescriptor);
+#if QT_VERSION < 0x050000
+        void incomingConnection(int socketDescriptor);
+#else
+        void incomingConnection(qintptr socketDescriptor);
+#endif
 		HttpConnection* createHttpConnection();
 	
 	public:

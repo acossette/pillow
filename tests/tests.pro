@@ -2,6 +2,7 @@ include(../config.pri)
 TEMPLATE = app
 
 QT       += core network testlib script gui
+QT       += svg # For zlib symbols on Qt5
 
 CONFIG   += console precompile_header
 CONFIG   -= app_bundle

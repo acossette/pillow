@@ -115,7 +115,7 @@ private slots: // Test methods.
 	void benchmarkSimpleGetKeepAlive() { HttpConnectionTest::benchmarkSimpleGetKeepAlive(); }
 };
 
-#ifndef PILLOW_NO_SSL
+#if !defined(PILLOW_NO_SSL) && !defined(QT_NO_SSL)
 
 class SslTestServer;
 class QSslSocket;
@@ -179,7 +179,7 @@ class HttpConnectionSslSocketTest : public QObject
 	Q_OBJECT
 };
 
-#endif // !PILLOW_NO_SSL
+#endif // !defined(PILLOW_NO_SSL) && !defined(QT_NO_SSL)
 
 class HttpConnectionLocalSocketTest : public HttpConnectionTest
 {

@@ -7,6 +7,7 @@
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkCookie>
+#include <QtNetwork/QNetworkCookieJar>
 #include <QtCore/QTimer>
 #include "private/zlib.h"
 
@@ -50,7 +51,10 @@ namespace Pillow
 		QByteArray transform(const char *data, int length)
 		{
 			unsigned char buffer[32 * 1024];
-			_inflatedBuffer.data_ptr()->size = 0;
+            if (_inflatedBuffer.isDetached())
+                _inflatedBuffer.data_ptr()->size = 0;
+            else
+                _inflatedBuffer.clear();
 
 			_inflateStream.next_in = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(data));
 			_inflateStream.avail_in = length;
@@ -73,8 +77,11 @@ namespace Pillow
 
 			if (_streamBad)
 			{
-				_inflatedBuffer.data_ptr()->size = 0;
-				_inflatedBuffer.append(data, length);
+                if (_inflatedBuffer.isDetached())
+                    _inflatedBuffer.data_ptr()->size = 0;
+                else
+                    _inflatedBuffer.clear();
+                _inflatedBuffer.append(data, length);
 			}
 
 			return _inflatedBuffer;
@@ -482,7 +489,10 @@ void Pillow::HttpClient::request(const Pillow::HttpClientRequest &request)
 	}
 	else
 	{
-		_hostHeaderValue.data_ptr()->size = 0; // Clear the previosu host header value (if any), without deallocating memory.
+        if (_hostHeaderValue.isDetached())
+            _hostHeaderValue.data_ptr()->size = 0; // Clear the previous host header value (if any), without deallocating memory.
+        else
+            _hostHeaderValue.clear();
 
 		if (_device->state() != QAbstractSocket::UnconnectedState)
 			_device->disconnectFromHost();
@@ -633,7 +643,7 @@ void Pillow::HttpClient::sendRequest()
 
 	if (_hostHeaderValue.isEmpty())
 	{
-		_hostHeaderValue = _request.url.encodedHost();
+        _hostHeaderValue = _request.url.encodedHost();
 		if (_request.url.port(80) != 80)
 		{
 			_hostHeaderValue.append(':');

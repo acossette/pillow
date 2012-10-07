@@ -3,6 +3,7 @@
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkCookie>
+#include <QtNetwork/QNetworkCookieJar>
 #include <HttpClient.h>
 #include <HttpConnection.h>
 #include <HttpServer.h>
@@ -13,8 +14,11 @@
 
 typedef QList<QByteArray> Chunks;
 Q_DECLARE_METATYPE(Chunks)
+
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
 Q_DECLARE_METATYPE(QAbstractSocket::SocketState)
 Q_DECLARE_METATYPE(QNetworkReply::NetworkError)
+#endif
 
 //
 // HttpRequestWriter test class

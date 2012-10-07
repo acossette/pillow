@@ -2,7 +2,11 @@ include(../examples.pri)
 
 TEMPLATE = app
 
-QT       += core network declarative gui script
+QT       += core network gui script
+
+contains(QT_MAJOR_VERSION, 4): QT += declarative
+contains(QT_MAJOR_VERSION, 5): QT += quick1
+
 
 CONFIG   += console
 CONFIG   -= app_bundle

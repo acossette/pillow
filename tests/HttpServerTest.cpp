@@ -156,8 +156,10 @@ QIODevice * HttpServerTest::createClientConnection()
 {
 	QTcpSocket* socket = new QTcpSocket(server);
 	socket->connectToHost(QHostAddress::LocalHost, 4577);
-	while (socket->state() != QAbstractSocket::ConnectedState && socket->error() == QAbstractSocket::UnknownSocketError)
-		QCoreApplication::processEvents();
+    Q_ASSERT(socket->waitForConnected(50));
+//	while (socket->state() != QAbstractSocket::ConnectedState && socket->error() == QAbstractSocket::UnknownSocketError)
+//		QCoreApplication::processEvents();
+//    Q_ASSERT(socket->state() ==  QAbstractSocket::ConnectedState);
 	return socket;
 }
 

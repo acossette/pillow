@@ -186,7 +186,8 @@ void HttpConnectionTest::testHugePost()
 	QCOMPARE(connection->state(), HttpConnection::ReceivingHeaders);
 
 	clientWrite(clientRequest);
-	clientFlush(); wait(100);
+	clientFlush();
+	wait(100);
 
 	QCOMPARE(connection->state(), HttpConnection::SendingHeaders);
 	QCOMPARE(connection->requestContent(), postData);
@@ -1015,8 +1016,6 @@ void HttpConnectionTcpSocketTest::clientClose()
 	while (client->state() == QAbstractSocket::ConnectedState) wait();
 }
 
-#ifndef PILLOW_NO_SSL
-
 //
 // HttpConnectionSslSocketTest
 //
@@ -1024,6 +1023,8 @@ void HttpConnectionTcpSocketTest::clientClose()
 #include <QtNetwork/QSslSocket>
 #include <QtNetwork/QSslKey>
 #include <QtNetwork/QSslCertificate>
+
+#if !defined(PILLOW_NO_SSL) && !defined(QT_NO_SSL)
 
 class SslTestServer : public QTcpServer
 {
@@ -1150,7 +1151,7 @@ void HttpConnectionSslSocketTest::clientClose()
 	while (client->state() == QAbstractSocket::ConnectedState) wait();
 }
 
-#endif // !PILLOW_NO_SSL
+#endif // !defined(PILLOW_NO_SSL) && !defined(QT_NO_SSL)
 
 //
 // HttpConnectionLocalSocketTest
@@ -1210,9 +1211,17 @@ void HttpConnectionLocalSocketTest::clientFlush(bool _wait /* = true */)
 
 QByteArray HttpConnectionLocalSocketTest::clientReadAll()
 {
-	QElapsedTimer timer; timer.start();
-	while (client->bytesAvailable() == 0 && !timer.hasExpired(500)) QCoreApplication::processEvents();
-	return client->readAll();
+//	if (client->waitForReadyRead(500))
+//	{
+//		qDebug() << client->bytesAvailable();
+//		return client->read(1024);
+//		//return client->readAll();
+//	}
+//	else
+//		return QByteArray();
+    QElapsedTimer timer; timer.start();
+    while (client->bytesAvailable() == 0 && !timer.hasExpired(500)) QCoreApplication::processEvents();
+    return client->readAll();
 }
 
 void HttpConnectionLocalSocketTest::clientClose()

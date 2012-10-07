@@ -1,13 +1,13 @@
 #ifndef _PILLOW_HTTPSSERVER_H_
 #define _PILLOW_HTTPSSERVER_H_
 
-#ifndef PILLOW_NO_SSL
-
 #include "HttpServer.h"
 #include <QtNetwork/QTcpServer>
 #include <QtNetwork/QSslCertificate>
 #include <QtNetwork/QSslKey>
 #include <QtNetwork/QSslError>
+
+#if !defined(PILLOW_NO_SSL) && !defined(QT_NO_SSL)
 
 namespace Pillow
 {
@@ -41,6 +41,6 @@ namespace Pillow
 	};
 }
 
-#endif // !PILLOW_NO_SSL
+#endif // !defined(PILLOW_NO_SSL) && !defined(QT_NO_SSL)
 
 #endif // _PILLOW_HTTPSSERVER_H_

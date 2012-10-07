@@ -9,36 +9,37 @@ Rectangle {
 		
 		onListeningChanged: if (listening) console.log("Server is listening on port", port)		
 		onRequest: {
-            request.writeResponseString(200, undefined, "hello")
-            
-//			for (var i = 0, iE = data.length; i < iE; ++i)
-//			{
-//				var child = data[i];
-//				if (child.handleRequest && child.handleRequest(request))
-//					return;
-//			}
-//			console.log("PillowDream.HttpServer: request for url", request.requestUri, "was not handled");
+//            request.writeResponseString(200, undefined, "hello")
+			console.log("PillowDream.HttpServer", request.requestParamValue("popo"));
+
+			for (var i = 0, iE = data.length; i < iE; ++i)
+			{
+				var child = data[i];
+				if (child.handleRequest && child.handleRequest(request))
+					return;
+			}
+			console.log("PillowDream.HttpServer: request for url", request.requestUri, "was not handled");
 		}		
 				
-//		HttpHandlerLog {}
-//		HttpHandlerFile { publicPath: "/home/acossette/Public" }
+		HttpHandlerLog {}
+		HttpHandlerFile { publicPath: "/home/acossette/Public" }
 
 		property variant headersSet: server.makeHeaders({poops: "yeeeha", momo: true})
 	
         
-        Route {
-			path: "/"
-            onRequest: request.writeResponseString(200, undefined, "hello")
-		}        
+//        Route {
+//			path: "/"
+//            onRequest: request.writeResponseString(200, undefined, "hello")
+//		}
         
-		Route {
-			path: "/hello"
-			onRequest: request.writeResponse(200, server.makeHeaders({poops: "yeah", momo: true, tata:2}), "hello")
-		}
+//		Route {
+//			path: "/hello"
+//			onRequest: request.writeResponse(200, server.makeHeaders({poops: "yeah", momo: true, tata:2}), "hello")
+//		}
 		
 		Route {
-			path: "/world"
-			onRequest: request.writeResponseString(200, server.headersSet, "world")
+			path: "/poops/:yeah"
+			onRequest: request.writeResponseString(200, server.headersSet, "world" + request.requestParamValue['yeah'])
 		}
     
 		Route {

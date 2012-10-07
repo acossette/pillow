@@ -1,5 +1,3 @@
-#ifndef PILLOW_NO_SSL
-
 #include "HttpsServerTest.h"
 #include <HttpsServer.h>
 #include <QtCore/QCoreApplication>
@@ -7,6 +5,8 @@
 #include <QtNetwork/QSslSocket>
 #include <QtNetwork/QSslKey>
 #include <QtNetwork/QSslCertificate>
+
+#if !defined(PILLOW_NO_SSL) && !defined(QT_NO_SSL)
 
 static QSslCertificate sslCertificate()
 {
@@ -53,4 +53,5 @@ QIODevice * HttpsServerTest::createClientConnection()
 	return socket;
 }
 
-#endif // !PILLOW_NO_SSL
+#endif // !defined(PILLOW_NO_SSL) && !defined(QT_NO_SSL)
+

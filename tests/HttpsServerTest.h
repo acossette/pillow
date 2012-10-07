@@ -1,9 +1,9 @@
 #ifndef HTTPSSERVERTEST_H
 #define HTTPSSERVERTEST_H
 
-#ifndef PILLOW_NO_SSL
-
 #include "HttpServerTest.h"
+
+#if !defined(PILLOW_NO_SSL) && !defined(QT_NO_SSL)
 
 class HttpsServerTest : public HttpServerTestBase
 {
@@ -16,7 +16,7 @@ private slots: // Test slots.
 	void testInit() { HttpServerTestBase::testInit(); }
 	void testHandlesConnectionsAsRequests() { HttpServerTestBase::testHandlesConnectionsAsRequests(); }
 	void testHandlesConcurrentConnections() { HttpServerTestBase::testHandlesConcurrentConnections(); }
-	void testReusesRequests() { HttpServerTestBase::testReusesRequests(); }
+    void testReusesRequests() { HttpServerTestBase::testReusesRequests(); }
 	void testDestroysRequests() { HttpServerTestBase::testDestroysRequests(); }
 
 protected:
@@ -33,6 +33,6 @@ class HttpsServerTest : public QObject
 	Q_OBJECT
 };
 
-#endif // !PILLOW_NO_SSL
+#endif // !defined(PILLOW_NO_SSL) && !defined(QT_NO_SSL)
 
 #endif // HTTPSSERVERTEST_H
