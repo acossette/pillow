@@ -1,9 +1,10 @@
-#include <QtTest/QtTest>
 #include <QtTest/QTest>
+#include <QtTest/QSignalSpy>
 #include "HttpHandlerTest.h"
 #include "HttpHandler.h"
 #include "HttpHandlerSimpleRouter.h"
 #include "HttpConnection.h"
+#include <QtCore/QDir>
 #include <QtCore/QBuffer>
 #include <QtCore/QCoreApplication>
 using namespace Pillow;

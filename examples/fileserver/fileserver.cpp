@@ -1,5 +1,4 @@
-#include <QtCore/QtCore>
-
+#include <QtCore/QCoreApplication>
 #include "HttpServer.h"
 #include "HttpConnection.h"
 #include "HttpHandler.h"
@@ -14,13 +13,13 @@ public:
 	{
 		HttpServer* server = NULL;
 		HttpHandler* handler = NULL;
-		
+
 		for (QObject* h = parent(); h != NULL; h = h->parent())
 		{
 			if (qobject_cast<HttpHandler*>(h)) handler = static_cast<HttpHandler*>(h);
 			else if (qobject_cast<HttpServer*>(h)) server = static_cast<HttpServer*>(h);
 		}
-		
+
 		if (rq->requestPath() == "/_stats")
 		{
 			QByteArray result;
@@ -32,7 +31,7 @@ public:
 			{
 				result.append("Alive big file transfers: ").append(QByteArray::number(handler->findChildren<Pillow::HttpHandlerFileTransfer*>().size())).append("\n");
 			}
-			
+
 			rq->writeResponse(200, HttpHeaderCollection(), result);
 			return true;
 		}
@@ -56,5 +55,5 @@ int main(int argc, char *argv[])
 		new HttpHandler404(handler);
 	QObject::connect(&server, SIGNAL(requestReady(Pillow::HttpConnection*)), handler, SLOT(handleRequest(Pillow::HttpConnection*)));
 
-    return a.exec();
+	return a.exec();
 }

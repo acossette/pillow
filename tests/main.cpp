@@ -1,5 +1,4 @@
-#include <QtCore/QtCore>
-#include <QtTest/QTest>
+#include <QtCore/QCoreApplication>
 #include "HttpConnectionTest.h"
 #include "HttpServerTest.h"
 #include "HttpsServerTest.h"

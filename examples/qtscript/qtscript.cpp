@@ -1,6 +1,5 @@
-#include <QtCore/QtCore>
+#include <QtCore/QCoreApplication>
 #include <QtScript/QScriptEngine>
-
 #include "HttpServer.h"
 #include "HttpHandler.h"
 #include "HttpHandlerQtScript.h"
@@ -21,7 +20,7 @@ int main(int argc, char *argv[])
 		new HttpHandlerQtScriptFile(scriptEngine, "test.js", "handleRequest", true, handler);
 		new HttpHandler404(handler);
 	QObject::connect(&server, SIGNAL(requestReady(Pillow::HttpConnection*)),
-	                 handler, SLOT(handleRequest(Pillow::HttpConnection*)));
+					 handler, SLOT(handleRequest(Pillow::HttpConnection*)));
 
-    return a.exec();
+	return a.exec();
 }
