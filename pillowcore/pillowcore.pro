@@ -48,4 +48,5 @@ HEADERS += \
 	HttpHeader.h \
 	PillowCore.h
 
-OTHER_FILES +=
+OTHER_FILES += \
+    pillowcore.qbs
