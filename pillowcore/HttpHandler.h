@@ -1,6 +1,9 @@
-#ifndef _PILLOW_HTTPHANDLER_H_
-#define _PILLOW_HTTPHANDLER_H_
+#ifndef PILLOW_HTTPHANDLER_H
+#define PILLOW_HTTPHANDLER_H
 
+#ifndef PILLOW_PILLOWCORE_H
+#include "PillowCore.h"
+#endif // PILLOW_PILLOWCORE_H
 #ifndef QOBJECT_H
 #include <QtCore/QObject>
 #endif // QOBJECT_H
@@ -12,7 +15,7 @@
 #endif // QHASH_H
 #ifdef Q_COMPILER_LAMBDA
 #include <functional>
-#endif //
+#endif // Q_COMPILER_LAMBDA
 
 class QIODevice;
 class QElapsedTimer;
@@ -25,7 +28,7 @@ namespace Pillow
 	// HttpHandler: abstract handler interface. Does nothing.
 	//
 
-	class HttpHandler : public QObject
+	class PILLOWCORE_EXPORT HttpHandler : public QObject
 	{
 		Q_OBJECT
 
@@ -40,7 +43,7 @@ namespace Pillow
 	// HttpHandlerStack: a handler that delegates the request to zero or more children handlers until one handles the request.
 	//
 
-	class HttpHandlerStack : public HttpHandler
+	class PILLOWCORE_EXPORT HttpHandlerStack : public HttpHandler
 	{
 		Q_OBJECT
 
@@ -55,7 +58,7 @@ namespace Pillow
 	// HttpHandlerFixed: a handler that always returns the same specified response.
 	//
 
-	class HttpHandlerFixed : public HttpHandler
+	class PILLOWCORE_EXPORT HttpHandlerFixed : public HttpHandler
 	{
 		Q_OBJECT
 		Q_PROPERTY(int statusCode READ statusCode WRITE setStatusCode NOTIFY changed)
@@ -87,7 +90,7 @@ namespace Pillow
 	// HttpHandler404: a handler that always respond "404 Not Found". Great as the last handler in your chain!
 	//
 
-	class HttpHandler404 : public HttpHandler
+	class PILLOWCORE_EXPORT HttpHandler404 : public HttpHandler
 	{
 		Q_OBJECT
 
@@ -103,7 +106,7 @@ namespace Pillow
 	// HttpHandlerFunction: a handler that invokes a functor, function or lambda.
 	//
 
-	class HttpHandlerFunction : public HttpHandler
+	class PILLOWCORE_EXPORT HttpHandlerFunction : public HttpHandler
 	{
 		Q_OBJECT
 #ifdef Q_COMPILER_LAMBDA
@@ -125,7 +128,7 @@ namespace Pillow
 	// HttpHandlerLog: a handler that logs requests.
 	//
 
-	class HttpHandlerLog : public HttpHandler
+	class PILLOWCORE_EXPORT HttpHandlerLog : public HttpHandler
 	{
 		Q_OBJECT
 		Q_ENUMS(Mode)
@@ -169,7 +172,7 @@ namespace Pillow
 	// HttpHandlerFile: a handler that serves static files from the filesystem.
 	//
 
-	class HttpHandlerFile : public HttpHandler
+	class PILLOWCORE_EXPORT HttpHandlerFile : public HttpHandler
 	{
 		Q_OBJECT
 		Q_PROPERTY(QString publicPath READ publicPath WRITE setPublicPath NOTIFY changed)
@@ -195,7 +198,7 @@ namespace Pillow
 		void changed();
 	};
 
-	class HttpHandlerFileTransfer : public QObject
+	class PILLOWCORE_EXPORT HttpHandlerFileTransfer : public QObject
 	{
 		Q_OBJECT
 		QPointer<QIODevice> _sourceDevice;
@@ -212,4 +215,4 @@ namespace Pillow
 		void finished();
 	};
 }
-#endif // _PILLOW_HTTPHANDLER_H_
+#endif // PILLOW_HTTPHANDLER_H

@@ -255,10 +255,10 @@ private slots:
 		  << "and more: value";
 
 		qint64 dummy = 0;
-		const QByteArray am("AND more");
-		const char am2[9] = "AND more";
+//		const QByteArray am("AND more");
+//		const char am2[9] = "AND more";
 		Pillow::LowerCaseToken am3("and more");
-		static const char* and_more = "AND more";
+//		static const char* and_more = "AND more";
 
 		QBENCHMARK
 		{
@@ -313,9 +313,9 @@ private slots:
 
 		qint64 dummy = 0;
 		const QByteArray am("AND more");
-		const char am2[9] = "AND more";
-		Pillow::LowerCaseToken am3("and more");
-		static const char* and_more = "AND more";
+//		const char am2[9] = "AND more";
+//		Pillow::LowerCaseToken am3("and more");
+//		static const char* and_more = "AND more";
 
 		QByteArray world("world!");
 

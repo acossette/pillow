@@ -460,7 +460,7 @@ inline void Pillow::HttpConnectionPrivate::writeHeaders(int statusCode, const Ht
 	if (_responseHeadersBuffer.capacity() == 0)
 		_responseHeadersBuffer.reserve(1024);
 
-	_responseHeadersBuffer.append(_requestHttpVersion).append(' ').append(statusCodeAndMessage, strlen(statusCodeAndMessage)).append(crLfToken);
+	_responseHeadersBuffer.append(_requestHttpVersion).append(' ').append(statusCodeAndMessage, static_cast<int>(strlen(statusCodeAndMessage))).append(crLfToken);
 
 	const HttpHeader* contentTypeHeader = 0;
 	const HttpHeader* connectionHeader = 0;

@@ -10,6 +10,7 @@
 #include <QtCore/QUrl>
 #include <QtCore/QElapsedTimer>
 #include <QtNetwork/QHostAddress>
+#include "PillowCore.h"
 #endif // __cplusplus
 
 #endif // PCH_H

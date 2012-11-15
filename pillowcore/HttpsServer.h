@@ -1,13 +1,23 @@
-#ifndef _PILLOW_HTTPSSERVER_H_
-#define _PILLOW_HTTPSSERVER_H_
+#ifndef PILLOW_HTTPSSERVER_H
+#define PILLOW_HTTPSSERVER_H
 
 #ifndef PILLOW_NO_SSL
 
+#ifndef PILLOW_PILLOWCORE_H
+#include "PillowCore.h"
+#endif // PILLOW_PILLOWCORE_H
+#ifndef PILLOW_HTTPSERVER_H
 #include "HttpServer.h"
-#include <QtNetwork/QTcpServer>
+#endif // PILLOW_HTTPSERVER_H
+#ifndef QSSLCERTIFICATE_H
 #include <QtNetwork/QSslCertificate>
+#endif // QSSLCERTIFICATE_H
+#ifndef QSSLKEY_H
 #include <QtNetwork/QSslKey>
+#endif // QSSLKEY_H
+#ifndef QSSLERROR_H
 #include <QtNetwork/QSslError>
+#endif // QSSLERROR_H
 
 namespace Pillow
 {
@@ -15,7 +25,7 @@ namespace Pillow
 	// HttpsServer
 	//
 
-	class HttpsServer : public Pillow::HttpServer
+	class PILLOWCORE_EXPORT HttpsServer : public Pillow::HttpServer
 	{
 		Q_OBJECT
 		QSslCertificate _certificate;
@@ -43,4 +53,4 @@ namespace Pillow
 
 #endif // !PILLOW_NO_SSL
 
-#endif // _PILLOW_HTTPSSERVER_H_
+#endif // PILLOW_HTTPSSERVER_H

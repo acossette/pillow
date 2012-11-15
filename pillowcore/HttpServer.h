@@ -1,21 +1,27 @@
-#ifndef _PILLOW_HTTPSERVER_H_
-#define _PILLOW_HTTPSERVER_H_
+#ifndef PILLOW_HTTPSERVER_H
+#define PILLOW_HTTPSERVER_H
 
+#ifndef PILLOW_PILLOWCORE_H
+#include "PillowCore.h"
+#endif // PILLOW_PILLOWCORE_H
+#ifndef QTCPSERVER_H
 #include <QtNetwork/QTcpServer>
+#endif //  QTCPSERVER_H
+#ifndef QLOCALSERVER_H
 #include <QtNetwork/QLocalServer>
-#include <QtNetwork/QHostAddress>
+#endif // QLOCALSERVER_H
 
 namespace Pillow
 {
 	class HttpConnection;
-	
+
 	//
 	// HttpServer
 	//
-	
+
 	class HttpServerPrivate;
-	
-	class HttpServer : public QTcpServer
+
+	class PILLOWCORE_EXPORT HttpServer : public QTcpServer
 	{
 		Q_OBJECT
 		Q_PROPERTY(QHostAddress serverAddress READ serverAddress)
@@ -23,33 +29,33 @@ namespace Pillow
 		Q_PROPERTY(bool listening READ isListening)
 		Q_DECLARE_PRIVATE(HttpServer)
 		HttpServerPrivate* d_ptr;
-		
+
 	private slots:
 		void connection_closed(Pillow::HttpConnection* request);
-		
+
 	protected:
 		virtual void incomingConnection(int socketDescriptor);
 		HttpConnection* createHttpConnection();
-	
+
 	public:
 		HttpServer(QObject* parent = 0);
 		HttpServer(const QHostAddress& serverAddress, quint16 serverPort, QObject *parent = 0);
-		~HttpServer();		
-		
+		~HttpServer();
+
 	signals:
 		void requestReady(Pillow::HttpConnection* connection); // There is a request ready to be handled on this connection.
 	};
-		
+
 	//
 	// HttpLocalServer
 	//
-		
-	class HttpLocalServer : public QLocalServer
+
+	class PILLOWCORE_EXPORT HttpLocalServer : public QLocalServer
 	{
 		Q_OBJECT
 		Q_DECLARE_PRIVATE(HttpServer)
 		HttpServerPrivate* d_ptr;
-		
+
 	private slots:
 		void this_newConnection();
 		void connection_closed(Pillow::HttpConnection* request);
@@ -57,10 +63,10 @@ namespace Pillow
 	public:
 		HttpLocalServer(QObject* parent = 0);
 		HttpLocalServer(const QString& serverName, QObject *parent = 0);
-		
+
 	signals:
 		void requestReady(Pillow::HttpConnection* connection); // There is a request ready to be handled on this connection.
-	};	
+	};
 }
 
-#endif // _PILLOW_HTTPSERVER_H_
+#endif // PILLOW_HTTPSERVER_H

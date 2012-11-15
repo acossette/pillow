@@ -1,15 +1,15 @@
 #ifndef PILLOW_HTTPCONNECTION_H
 #define PILLOW_HTTPCONNECTION_H
 
+#ifndef PILLOW_PILLOWCORE_H
+#include "PillowCore.h"
+#endif // PILLOW_PILLOWCORE_H
 #ifndef QOBJECT_H
 #include <QObject>
 #endif // QOBJECT_H
 #ifndef QHOSTADDRESS_H
 #include <QtNetwork/QHostAddress>
 #endif // QHOSTADDRESS_H
-#ifndef QVECTOR_H
-#include <QtCore/QVector>
-#endif // QVECTOR_H
 #ifndef PILLOW_HTTPHEADER_H
 #include "HttpHeader.h"
 #endif // PILLOW_HTTPHEADER_H
@@ -25,7 +25,7 @@ namespace Pillow
 	// HttpConnection
 	//
 
-	class HttpConnection : public QObject
+	class PILLOWCORE_EXPORT HttpConnection : public QObject
 	{
 		Q_OBJECT
 		Q_PROPERTY(State state READ state)

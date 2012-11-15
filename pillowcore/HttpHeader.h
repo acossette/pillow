@@ -1,6 +1,9 @@
 #ifndef PILLOW_HTTPHEADER_H
 #define PILLOW_HTTPHEADER_H
 
+#ifndef PILLOW_PILLOWCORE_H
+#include "PillowCore.h"
+#endif // PILLOW_PILLOWCORE_H
 #ifndef QPAIR_H
 #include <QtCore/QPair>
 #endif // QPAIR_H
@@ -27,7 +30,7 @@ namespace Pillow
 	// Note: This class should have the exact same layout as QPair<QByteArray, QByteArray>,
 	// as it allows casting to it.
 	//
-	struct HttpHeader
+	struct PILLOWCORE_EXPORT HttpHeader
 	{
 		inline HttpHeader() : first(), second() {}
 		inline HttpHeader(const HttpHeader &other) : first(other.first), second(other.second) {}
@@ -60,7 +63,7 @@ namespace Pillow
 	// Note: This class should have the same layout as QVector<HttpHeader> and safely allow
 	// slicing to it.
 	//
-	class HttpHeaderCollection : public QVector<HttpHeader>
+	class PILLOWCORE_EXPORT HttpHeaderCollection : public QVector<HttpHeader>
 	{
 	public:
 		// Get the value of the first header with the specified field name.

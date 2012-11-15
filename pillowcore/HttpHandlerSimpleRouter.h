@@ -1,10 +1,21 @@
-#ifndef _PILLOW_HTTPHANDLERSIMPLEROUTER_H_
-#define _PILLOW_HTTPHANDLERSIMPLEROUTER_H_
+#ifndef PILLOW_HTTPHANDLERSIMPLEROUTER_H
+#define PILLOW_HTTPHANDLERSIMPLEROUTER_H
 
+#ifndef PILLOW_PILLOWCORE_H
+#include "PillowCore.h"
+#endif // PILLOW_PILLOWCORE_H
+#ifndef PILLOW_HTTPHANDLER_H
 #include "HttpHandler.h"
+#endif // PILLOW_HTTPHANDLER_H
+#ifndef PILLOW_HTTPCONNECTION_H
 #include "HttpConnection.h"
+#endif // PILLOW_HTTPCONNECTION_H
+#ifndef QREGEXP_H
 #include <QtCore/QRegExp>
+#endif // QREGEXP_H
+#ifndef QSTRINGLIST_H
 #include <QtCore/QStringList>
+#endif // QSTRINGLIST_H
 #ifdef Q_COMPILER_LAMBDA
 #include <functional>
 #endif // Q_COMPILER_LAMBDA
@@ -12,7 +23,7 @@
 namespace Pillow
 {
 	class HttpHandlerSimpleRouterPrivate;
-	class HttpHandlerSimpleRouter : public Pillow::HttpHandler
+	class PILLOWCORE_EXPORT HttpHandlerSimpleRouter : public Pillow::HttpHandler
 	{
 		Q_OBJECT
 		Q_DECLARE_PRIVATE(HttpHandlerSimpleRouter)
@@ -54,4 +65,4 @@ namespace Pillow
 	};
 }
 
-#endif // _PILLOW_HTTPHANDLERSIMPLEROUTER_H_
+#endif // PILLOW_HTTPHANDLERSIMPLEROUTER_H
