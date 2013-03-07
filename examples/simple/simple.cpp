@@ -1,5 +1,4 @@
-#include <QtCore/QtCore>
-
+#include <QtCore/QCoreApplication>
 #include "HttpServer.h"
 #include "HttpHandler.h"
 #include "HttpConnection.h"

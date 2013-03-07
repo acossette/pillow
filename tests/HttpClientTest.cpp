@@ -1274,7 +1274,7 @@ private slots:
 	}
 
 private:
-	bool waitForResponse(int maxTime = 500)
+	bool waitForResponse(int maxTime = 5000)
 	{
 		QElapsedTimer t; t.start();
 		while (client->responsePending() && t.elapsed() < maxTime) QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
@@ -1928,7 +1928,7 @@ private slots:
 
 	void should_report_error_given_an_unsupported_request()
 	{
-		QSKIP("Not implemented", SkipAll);
+		//QSKIP("Not implemented", SkipAll);
 	}
 
 	void should_support_head_requests()

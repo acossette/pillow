@@ -35,3 +35,6 @@ HEADERS += \
 	pch.h
 
 RESOURCES += tests.qrc
+
+OTHER_FILES += \
+    tests.qbs

@@ -1,6 +1,9 @@
 #ifndef PILLOW_HTTPCLIENT_H
 #define PILLOW_HTTPCLIENT_H
 
+#ifndef PILLOW_PILLOWCORE_H
+#include "PillowCore.h"
+#endif // PILLOW_PILLOWCORE_H
 #ifndef QOBJECT_H
 #include <QtCore/QObject>
 #endif // QOBJECT_H
@@ -33,7 +36,7 @@ namespace Pillow
 	//
 	// Reentrant. Not thread safe.
 	//
-	class HttpRequestWriter
+	class PILLOWCORE_EXPORT HttpRequestWriter
 	{
 	public:
 		explicit HttpRequestWriter();
@@ -62,7 +65,7 @@ namespace Pillow
 	//
 	// Reentrant. Not thread safe.
 	//
-	class HttpResponseParser
+	class PILLOWCORE_EXPORT HttpResponseParser
 	{
 	public:
 		HttpResponseParser();
@@ -137,7 +140,7 @@ namespace Pillow
 	//
 	// A small utility class to represent an http request.
 	//
-	struct HttpClientRequest
+	struct PILLOWCORE_EXPORT HttpClientRequest
 	{
 		QByteArray method;
 		QUrl url;
@@ -152,7 +155,7 @@ namespace Pillow
 	//
 	// Reentrant. Not thread safe.
 	//
-	class HttpClient : public QObject, protected HttpResponseParser
+	class PILLOWCORE_EXPORT HttpClient : public QObject, protected HttpResponseParser
 	{
 		Q_OBJECT
 		Q_FLAGS(Error)
@@ -258,7 +261,7 @@ namespace Pillow
 	//
 	// Reentrant. Not thread safe.
 	//
-	class NetworkAccessManager : public QNetworkAccessManager
+	class PILLOWCORE_EXPORT NetworkAccessManager : public QNetworkAccessManager
 	{
 		Q_OBJECT
 

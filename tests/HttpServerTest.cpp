@@ -1,7 +1,8 @@
 #include "HttpServerTest.h"
 #include <HttpServer.h>
 #include <HttpConnection.h>
-#include <QtTest/QtTest>
+#include <QtTest/QTest>
+#include <QtTest/QSignalSpy>
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QLocalSocket>
 
@@ -50,7 +51,7 @@ void HttpServerTestBase::sendResponses()
 	{
 		if (request && request->state() == Pillow::HttpConnection::SendingHeaders)
 		{
-			// Echo the request content as the response content.			
+			// Echo the request content as the response content.
 			request->writeResponse(200, Pillow::HttpHeaderCollection(), request->requestContent());
 		}
 	}
@@ -60,15 +61,15 @@ void HttpServerTestBase::sendConcurrentRequests(int concurrencyLevel)
 {
 	int startingHandledRequests = handledRequests.size();
 	QVector<QIODevice*> clients;
-	
+
 	for (int j = 0; j < concurrencyLevel; ++j) clients << createClientConnection();
 	for (int j = 0; j < concurrencyLevel; ++j) sendRequest(clients.at(j), QByteArray("Hello").append(QByteArray::number(j)));
 
 	while (handledRequests.size() < startingHandledRequests + concurrencyLevel)
 		QCoreApplication::processEvents();
-	
+
 	sendResponses();
-	
+
 	foreach (QIODevice* client, clients)
 	{
 		while (client->bytesAvailable() == 0) QCoreApplication::processEvents();
@@ -100,7 +101,7 @@ void HttpServerTestBase::testHandlesConcurrentConnections()
 
 	sendResponses();
 	QCOMPARE(handledRequests.size(), clientCount);
-	
+
 	for (int i = 0; i < clientCount; ++i)
 	{
 		QIODevice* client = clients.at(i);
@@ -119,7 +120,7 @@ void HttpServerTestBase::testReusesRequests()
 
 	QCOMPARE(handledRequests.size(), iterations * clientCount);
 	QCOMPARE(handledRequests.toSet().size(), 25);
-	
+
 	// Handling way more request should reuse those unique requests.
 	handledRequests.clear();
 	guardedHandledRequests.clear();

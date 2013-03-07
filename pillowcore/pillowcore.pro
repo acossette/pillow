@@ -1,17 +1,25 @@
 include(../config.pri)
 
+TARGET = $$PILLOWCORE_LIB_NAME
 TEMPLATE = lib
 DESTDIR = ../lib
 
 QT       += core network script
 QT       -= gui
 
-CONFIG   += static precompile_header
+CONFIG   += precompile_header
 
 PRECOMPILED_HEADER = pch.h
 
 DEPENDPATH = .
 INCLUDEPATH = .
+
+DEFINES += PILLOWCORE_BUILD
+
+pillow_static {
+	CONFIG += static
+	DEFINES += PILLOWCORE_BUILD_STATIC
+}
 
 SOURCES += \
 	parser/parser.c \
@@ -42,6 +50,8 @@ HEADERS += \
 	private/ByteArray.h \
 	HttpClient.h \
 	pch.h \
-	HttpHeader.h
+	HttpHeader.h \
+	PillowCore.h
 
-OTHER_FILES +=
+OTHER_FILES += \
+    pillowcore.qbs

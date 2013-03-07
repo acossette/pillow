@@ -1,9 +1,10 @@
 #include "HttpsServer.h"
 #include "HttpConnection.h"
 #include <QtNetwork/QSslSocket>
-using namespace Pillow;
 
 #if !defined(PILLOW_NO_SSL) && !defined(QT_NO_SSL)
+
+using namespace Pillow;
 
 //
 // HttpsServer
