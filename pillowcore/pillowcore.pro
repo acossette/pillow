@@ -1,5 +1,6 @@
 include(../config.pri)
 
+TARGET = $$PILLOWCORE_LIB_NAME
 TEMPLATE = lib
 DESTDIR = ../lib
 
@@ -14,7 +15,11 @@ DEPENDPATH = .
 INCLUDEPATH = .
 
 DEFINES += PILLOWCORE_BUILD
-static: DEFINES += PILLOWCORE_BUILD_STATIC
+
+pillow_static {
+	CONFIG += static
+	DEFINES += PILLOWCORE_BUILD_STATIC
+}
 
 SOURCES += \
 	parser/parser.c \
