@@ -213,6 +213,7 @@ namespace Pillow
 
 	signals:
 		void finished();
+		int progress(int progress);
 	};
 }
 #endif // PILLOW_HTTPHANDLER_H
