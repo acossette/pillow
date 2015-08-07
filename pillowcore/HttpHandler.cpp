@@ -19,6 +19,12 @@ HttpHandler::HttpHandler(QObject *parent)
 {
 }
 
+bool HttpHandler::handleContent(HttpConnection *connection)
+{
+	connection->setContentDevice(NULL);
+	return false;
+}
+
 //
 // HttpHandlerStack
 //
@@ -26,6 +32,19 @@ HttpHandler::HttpHandler(QObject *parent)
 HttpHandlerStack::HttpHandlerStack(QObject *parent)
 	: HttpHandler(parent)
 {
+}
+
+bool HttpHandlerStack::handleContent(HttpConnection *connection)
+{
+	foreach (QObject* object, children())
+	{
+		HttpHandler* handler = qobject_cast<HttpHandler*>(object);
+
+		if (handler && handler->handleContent(connection))
+			return true;
+	}
+
+	return false;
 }
 
 bool HttpHandlerStack::handleRequest(Pillow::HttpConnection *connection)

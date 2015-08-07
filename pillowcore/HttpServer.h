@@ -31,6 +31,7 @@ namespace Pillow
 		HttpServerPrivate* d_ptr;
 
 	private slots:
+		void contentReady(Pillow::HttpConnection* connection);
 		void connection_closed(Pillow::HttpConnection* request);
 
 	protected:

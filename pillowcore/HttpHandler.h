@@ -36,6 +36,7 @@ namespace Pillow
 		HttpHandler(QObject *parent = 0);
 
 	public slots:
+		virtual bool handleContent(Pillow::HttpConnection* connection);
 		virtual bool handleRequest(Pillow::HttpConnection* connection) = 0;
 	};
 
@@ -51,6 +52,7 @@ namespace Pillow
 		HttpHandlerStack(QObject* parent = 0);
 
 	public:
+		virtual bool handleContent(Pillow::HttpConnection* connection);
 		virtual bool handleRequest(Pillow::HttpConnection *connection);
 	};
 

@@ -79,6 +79,7 @@ namespace Pillow
 	public:
 		Pillow::HttpConnection::State _state;
 		QIODevice* _inputDevice,* _outputDevice;
+		QIODevice* _contentDevice;
 		http_parser _parser;
 
 		// Request fields.
@@ -91,6 +92,7 @@ namespace Pillow
 		QVarLengthArray<Pillow::HttpHeaderRef, 32> _requestHeadersRef;
 		Pillow::HttpHeaderCollection _requestHeaders;
 		int _requestContentLength; int _requestContentLengthHeaderIndex;
+		int _requestContentReceived, _requestContentWritten;
 		bool _requestHttp11;
 		Pillow::HttpParamCollection _requestParams;
 
@@ -105,7 +107,9 @@ namespace Pillow
 		void initialize();
 		void processInput();
 		void setupRequestHeaders();
+		void prepareRequestHeaders();
 		void transitionToReceivingHeaders();
+		void setContentDevice(QIODevice *contentDevice);
 		void transitionToReceivingContent();
 		void transitionToSendingHeaders();
 		void transitionToSendingContent();
@@ -129,7 +133,7 @@ namespace Pillow
 }
 
 Pillow::HttpConnectionPrivate::HttpConnectionPrivate(HttpConnection *connection)
-	: q_ptr(connection), _state(Pillow::HttpConnection::Uninitialized), _inputDevice(0), _outputDevice(0)
+	: q_ptr(connection), _state(Pillow::HttpConnection::Uninitialized), _inputDevice(0), _outputDevice(0), _contentDevice(0)
 {
 }
 
@@ -156,8 +160,58 @@ inline void Pillow::HttpConnectionPrivate::processInput()
 	if (_state != Pillow::HttpConnection::ReceivingHeaders && _state != Pillow::HttpConnection::ReceivingContent) return;
 
 	qint64 bytesAvailable = _inputDevice->bytesAvailable();
-	if (bytesAvailable > 0)
+
+	if (_state == Pillow::HttpConnection::ReceivingContent && _contentDevice) {
+		// Read some data if possible
+
+		// Limit capacity to min of MaxRequestData or bytesavailable
+		bytesAvailable = qMin(bytesAvailable, qint64(Pillow::HttpConnection::MaximumRequestContentLength));
+		if (_requestContent.capacity() < bytesAvailable) {
+			qDebug("RESERVED %d -> %lld",
+				   _requestContent.capacity(),
+				   bytesAvailable
+				   );
+			_requestContent.reserve(bytesAvailable);
+		}
+		// Limit bytesAvailable to remaining capacity
+		bytesAvailable = qMin(bytesAvailable, qint64(_requestContent.capacity() - _requestContent.size()));
+		if (bytesAvailable > 0) {
+			qint64 bytesRead = _inputDevice->read(_requestContent.data() + _requestContent.size(), bytesAvailable);
+			_requestContent.data_ptr()->size += bytesRead;
+			_requestContent.data_ptr()->data[_requestContent.data_ptr()->size] = 0;
+			_requestContentReceived += bytesRead;
+		}
+
+		// Write some data if possible
+		bytesAvailable = _requestContent.size();
+		if (bytesAvailable > 0) {
+			qint64 bytesWritten = _contentDevice->write(_requestContent.data(), bytesAvailable);
+			if (bytesWritten < 0)
+				return; //TODO: Throw error, close connection
+			else if (bytesWritten < bytesAvailable)
+			{
+				qDebug("SHRANK %d -> %lld",
+					   _requestContent.capacity(),
+					   _requestContent.capacity() - bytesWritten
+					   );
+				_requestContent.remove(0, bytesWritten);
+			}
+			else
+			{
+				_requestContent.data_ptr()->size = 0;
+				_requestContent.data_ptr()->data[0] = 0;
+			}
+			if (_requestHeaders.size() > 0) _requestHeaders.pop_back();
+			_requestContentWritten += bytesWritten;
+			qDebug("WROTE %d/%d",
+				   _requestContentWritten,
+				   _requestContentLength
+				   );
+		}
+	}
+	else if (bytesAvailable > 0)
 	{
+		// Simple content or headers
 		if (_requestBuffer.capacity() < _requestBuffer.size() + bytesAvailable)
 			_requestBuffer.reserve(_requestBuffer.size() + bytesAvailable + 1);
 		qint64 bytesRead = _inputDevice->read(_requestBuffer.data() + _requestBuffer.size(), bytesAvailable);
@@ -174,11 +228,27 @@ inline void Pillow::HttpConnectionPrivate::processInput()
 			return writeRequestErrorResponse(400); // Bad client Request!
 		else if (thin_http_parser_is_finished(&_parser))
 			transitionToReceivingContent();
+		else if (_inputDevice->bytesAvailable() > 0)
+			QTimer::singleShot(0, q_ptr, SLOT(processInput()));
 	}
 	else if (_state == Pillow::HttpConnection::ReceivingContent)
 	{
-		if (_requestBuffer.size() - int(_parser.body_start) >= _requestContentLength)
-			transitionToSendingHeaders(); // Finished receiving the content.
+		if (_contentDevice)
+		{
+			if (_requestContentWritten >= _requestContentLength)
+			{
+				transitionToSendingHeaders();
+			}
+			else if (_inputDevice->bytesAvailable() > 0 || _requestContentReceived < _requestContentLength)
+				QTimer::singleShot(0, q_ptr, SLOT(processInput()));
+		}
+		else
+		{
+			if (_requestContentReceived >= _requestContentLength || int(_requestBuffer.size() - _parser.body_start) >= _requestContentLength)
+				transitionToSendingHeaders(); // Finished receiving the content.
+			else if (_inputDevice->bytesAvailable() > 0 || _requestContentReceived < _requestContentLength)
+				QTimer::singleShot(0, q_ptr, SLOT(processInput()));
+		}
 	}
 }
 
@@ -192,6 +262,18 @@ inline void Pillow::HttpConnectionPrivate::transitionToReceivingHeaders()
 	_requestContentLengthHeaderIndex = -1;
 	_requestHttp11 = false;
 }
+
+void Pillow::HttpConnectionPrivate::setContentDevice(QIODevice *contentDevice)
+{
+	if (_state != Pillow::HttpConnection::ContentReady) return;
+	_state = Pillow::HttpConnection::ReceivingContent;
+	_contentDevice = contentDevice;
+	if (_contentDevice) {
+		setFromRawData(_requestContent, _requestBuffer.constData(), _parser.body_start, _requestBuffer.size() - _parser.body_start);
+	}
+	processInput();
+}
+
 
 inline void Pillow::HttpConnectionPrivate::setupRequestHeaders()
 {
@@ -209,50 +291,8 @@ inline void Pillow::HttpConnectionPrivate::setupRequestHeaders()
 	}
 }
 
-inline void Pillow::HttpConnectionPrivate::transitionToReceivingContent()
+void Pillow::HttpConnectionPrivate::prepareRequestHeaders()
 {
-	if (_state == Pillow::HttpConnection::ReceivingContent) return;
-	_state = Pillow::HttpConnection::ReceivingContent;
-
-	setupRequestHeaders();
-
-	bool contentLengthParseOk = true;
-	if (_requestContentLengthHeaderIndex >= 0)
-		_requestContentLength = _requestHeaders.at(_requestContentLengthHeaderIndex).second.toInt(&contentLengthParseOk);
-
-	// Exit early if the client sent an incorrect or unacceptable content-length.
-	if (_requestContentLength < 0)
-		return writeRequestErrorResponse(400); // Invalid request: negative content length does not make sense.
-	else if (_requestContentLength > Pillow::HttpConnection::MaximumRequestContentLength || !contentLengthParseOk)
-		return writeRequestErrorResponse(413); // Request entity too large.
-
-	if (_requestContentLength > 0)
-	{
-		if (asciiEqualsCaseInsensitive(_requestHeaders.getFieldValue(expectToken), hundredDashContinueToken))
-			_outputDevice->write("HTTP/1.1 100 Continue\r\n\r\n");// The client politely wanted to know if it could proceed with his payload. All clear!
-
-		// Resize the request buffer right away to avoid too many reallocs later.
-		// NOTE: This invalidates the request headers QByteArrays if the reallocation
-		// changes the buffer's address (very likely unless the content-length is tiny).
-		_requestBuffer.reserve(_parser.body_start + _requestContentLength + 1);
-
-		// So do invalidate the request headers.
-		if (_requestHeaders.size() > 0) _requestHeaders.pop_back();
-
-		// Pump; the content may already be sitting in the buffers.
-		processInput();
-	}
-	else
-	{
-		transitionToSendingHeaders(); // No content to receive. Go straight to sending headers.
-	}
-}
-
-inline void Pillow::HttpConnectionPrivate::transitionToSendingHeaders()
-{
-	if (_state == Pillow::HttpConnection::SendingHeaders) return;
-	_state = Pillow::HttpConnection::SendingHeaders;
-
 	// Prepare and null terminate the request fields.
 
 	if (_requestHeaders.size() != _requestHeadersRef.size())
@@ -283,8 +323,61 @@ inline void Pillow::HttpConnectionPrivate::transitionToSendingHeaders()
 	if (!_requestQueryStringDecoded.isEmpty())_requestQueryStringDecoded = QString();
 
 	_requestHttp11 = _requestHttpVersion == httpSlash11Token;
+}
 
-	setFromRawData(_requestContent, _requestBuffer.constData(), _parser.body_start, _requestContentLength);
+inline void Pillow::HttpConnectionPrivate::transitionToReceivingContent()
+{
+	if (_state == Pillow::HttpConnection::ReceivingContent ||
+			_state == Pillow::HttpConnection::ContentReady) return;
+	_state = Pillow::HttpConnection::ContentReady;
+
+	setupRequestHeaders();
+
+	bool contentLengthParseOk = true;
+	if (_requestContentLengthHeaderIndex >= 0)
+		_requestContentLength = _requestHeaders.at(_requestContentLengthHeaderIndex).second.toInt(&contentLengthParseOk);
+
+	// Exit early if the client sent an incorrect or unacceptable content-length.
+	if (_requestContentLength < 0)
+		return writeRequestErrorResponse(400); // Invalid request: negative content length does not make sense.
+	else if (!contentLengthParseOk)
+		return writeRequestErrorResponse(413); // Request entity too large.
+
+	if (_requestContentLength > 0)
+	{
+		if (asciiEqualsCaseInsensitive(_requestHeaders.getFieldValue(expectToken), hundredDashContinueToken))
+			_outputDevice->write("HTTP/1.1 100 Continue\r\n\r\n");// The client politely wanted to know if it could proceed with his payload. All clear!
+
+		// Resize the request buffer right away to avoid too many reallocs later.
+		// NOTE: This invalidates the request headers QByteArrays if the reallocation
+		// changes the buffer's address (very likely unless the content-length is tiny).
+		_requestBuffer.reserve(_parser.body_start + qMin(_requestContentLength, int(Pillow::HttpConnection::MaximumRequestContentLength)) + 1);
+
+		_requestContentReceived = _requestBuffer.size() - _parser.body_start;
+		_requestContentWritten = 0;
+
+		// So do invalidate the request headers.
+		if (_requestHeaders.size() > 0) _requestHeaders.pop_back();
+
+		prepareRequestHeaders();
+
+		emit q_ptr->contentReady(q_ptr);
+	}
+	else
+	{
+		transitionToSendingHeaders(); // No content to receive. Go straight to sending headers.
+	}
+}
+
+inline void Pillow::HttpConnectionPrivate::transitionToSendingHeaders()
+{
+	if (_state == Pillow::HttpConnection::SendingHeaders) return;
+	_state = Pillow::HttpConnection::SendingHeaders;
+
+	prepareRequestHeaders();
+
+	if (!_contentDevice)
+		setFromRawData(_requestContent, _requestBuffer.constData(), _parser.body_start, _requestContentLength);
 
 	// Reset our known information about the response.
 	_responseContentLength = -1;   // The response content-length is initially unknown.
@@ -651,6 +744,11 @@ void Pillow::HttpConnection::initialize(QIODevice* inputDevice, QIODevice* outpu
 	d_ptr->initialize();
 }
 
+void Pillow::HttpConnection::setContentDevice(QIODevice *contentDevice)
+{
+	d_ptr->setContentDevice(contentDevice);
+}
+
 Pillow::HttpConnection::State Pillow::HttpConnection::state() const
 {
 	return d_ptr->_state;
@@ -664,6 +762,11 @@ QIODevice *Pillow::HttpConnection::inputDevice() const
 QIODevice *Pillow::HttpConnection::outputDevice() const
 {
 	return d_ptr->_outputDevice;
+}
+
+QIODevice *Pillow::HttpConnection::contentDevice() const
+{
+	return d_ptr->_contentDevice;
 }
 
 void Pillow::HttpConnection::processInput()
@@ -693,7 +796,12 @@ void Pillow::HttpConnection::writeResponseString(int statusCode, const HttpHeade
 
 void Pillow::HttpConnection::writeHeaders(int statusCode, const HttpHeaderCollection& headers)
 {
-	d_ptr->writeHeaders(statusCode, headers);
+    d_ptr->writeHeaders(statusCode, headers);
+}
+
+void Pillow::HttpConnection::writeRequestErrorResponse(int statusCode)
+{
+    d_ptr->writeRequestErrorResponse(statusCode);
 }
 
 void Pillow::HttpConnection::writeContent(const QByteArray& content)
@@ -804,6 +912,11 @@ const QByteArray &Pillow::HttpConnection::requestHttpVersion() const
 const QByteArray &Pillow::HttpConnection::requestContent() const
 {
 	return d_ptr->_requestContent;
+}
+
+qint64 Pillow::HttpConnection::requestContentLength() const
+{
+	return d_ptr->_requestContentLength;
 }
 
 const Pillow::HttpHeaderCollection &Pillow::HttpConnection::requestHeaders() const
