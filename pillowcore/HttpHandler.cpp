@@ -21,7 +21,6 @@ HttpHandler::HttpHandler(QObject *parent)
 
 bool HttpHandler::handleContent(HttpConnection *connection)
 {
-	connection->setContentDevice(NULL);
 	return false;
 }
 

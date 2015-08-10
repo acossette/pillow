@@ -104,8 +104,11 @@ void HttpServer::contentReady(HttpConnection *connection)
 		if (methodIndex < 0)
 			continue;
 		QMetaMethod method = object->metaObject()->method(methodIndex);
-		if (method.invoke(object, Q_ARG(Pillow::HttpConnection *, connection)))
-			return;
+		bool result = false;
+		if (method.invoke(object, Q_RETURN_ARG(bool, result), Q_ARG(Pillow::HttpConnection *, connection))) {
+			if (result)
+				return;
+		}
 	}
 
 	connection->setContentDevice(NULL);
