@@ -166,13 +166,9 @@ inline void Pillow::HttpConnectionPrivate::processInput()
 
 		// Limit capacity to min of MaxRequestData or bytesavailable
 		bytesAvailable = qMin(bytesAvailable, qint64(Pillow::HttpConnection::MaximumRequestContentLength));
-		if (_requestContent.capacity() < bytesAvailable) {
-			qDebug("RESERVED %d -> %lld",
-				   _requestContent.capacity(),
-				   bytesAvailable
-				   );
+		if (_requestContent.capacity() < bytesAvailable)
 			_requestContent.reserve(bytesAvailable);
-		}
+
 		// Limit bytesAvailable to remaining capacity
 		bytesAvailable = qMin(bytesAvailable, qint64(_requestContent.capacity() - _requestContent.size()));
 		if (bytesAvailable > 0) {
@@ -190,10 +186,6 @@ inline void Pillow::HttpConnectionPrivate::processInput()
 				return; //TODO: Throw error, close connection
 			else if (bytesWritten < bytesAvailable)
 			{
-				qDebug("SHRANK %d -> %lld",
-					   _requestContent.capacity(),
-					   _requestContent.capacity() - bytesWritten
-					   );
 				_requestContent.remove(0, bytesWritten);
 			}
 			else
@@ -203,10 +195,6 @@ inline void Pillow::HttpConnectionPrivate::processInput()
 			}
 			if (_requestHeaders.size() > 0) _requestHeaders.pop_back();
 			_requestContentWritten += bytesWritten;
-			qDebug("WROTE %d/%d",
-				   _requestContentWritten,
-				   _requestContentLength
-				   );
 		}
 	}
 	else if (bytesAvailable > 0)
