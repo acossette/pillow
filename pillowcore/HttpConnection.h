@@ -42,7 +42,7 @@ namespace Pillow
 		Q_PROPERTY(QByteArray requestContent READ requestContent NOTIFY requestReady)
 
 	public:
-		enum State { Uninitialized, ReceivingHeaders, ReceivingContent, SendingHeaders, SendingContent, Completed, Flushing, Closed };
+		enum State { Uninitialized, ReceivingHeaders, ContentReady, ReceivingContent, SendingHeaders, SendingContent, Completed, Flushing, Closed };
 		enum { MaximumRequestHeaderLength = 32 * 1024 };
 		enum { MaximumRequestContentLength = 128 * 1024 * 1024 };
 		Q_ENUMS(State);
@@ -52,9 +52,11 @@ namespace Pillow
 		~HttpConnection();
 
 		void initialize(QIODevice* inputDevice, QIODevice* outputDevice = 0);
+		void setContentDevice(QIODevice *contentDevice);
 
 		QIODevice* inputDevice() const;
 		QIODevice* outputDevice() const;
+		QIODevice* contentDevice() const;
 		State state() const;
 
 		QHostAddress remoteAddress() const;
@@ -68,6 +70,7 @@ namespace Pillow
 		const QByteArray& requestQueryString() const;
 		const QByteArray& requestHttpVersion() const;
 		const QByteArray& requestContent() const;
+		qint64 requestContentLength() const;
 
 		// Request members, decoded version. Use those rather than manually decoding the raw data returned by the methods
 		// above when decoded values are desired (they are cached).
@@ -91,6 +94,7 @@ namespace Pillow
 		void writeResponse(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QByteArray& content = QByteArray());
 		void writeResponseString(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection(), const QString& content = QString());
 		void writeHeaders(int statusCode = 200, const Pillow::HttpHeaderCollection& headers = Pillow::HttpHeaderCollection());
+		void writeRequestErrorResponse(int statusCode = 400);
 		void writeContent(const QByteArray& content);
 		void endContent();
 
@@ -103,6 +107,7 @@ namespace Pillow
 		qint64 responseContentLength() const;
 
 	signals:
+		void contentReady(Pillow::HttpConnection* self);     // The headers are ready to be processed, all request headers have been received. If a contentHandler has been specified, it MUST call setContentDevice (with or without NULL) to continue handling the connection.
 		void requestReady(Pillow::HttpConnection* self);     // The request is ready to be processed, all request headers and content have been received.
 		void requestCompleted(Pillow::HttpConnection* self); // The response is completed, all response headers and content have been sent.
 		void closed(Pillow::HttpConnection* self);			 // The connection is closing, no further requests will arrive on this object.

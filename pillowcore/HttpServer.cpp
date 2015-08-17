@@ -2,6 +2,7 @@
 #include "HttpConnection.h"
 #include <QtNetwork/QTcpSocket>
 #include <QtNetwork/QLocalSocket>
+#include <QMetaMethod>
 using namespace Pillow;
 
 //
@@ -36,6 +37,7 @@ namespace Pillow
 		HttpConnection* createConnection()
 		{
 			HttpConnection* connection = new HttpConnection(q_ptr);
+			QObject::connect(connection, SIGNAL(contentReady(Pillow::HttpConnection*)), q_ptr, SLOT(contentReady(Pillow::HttpConnection*)));
 			QObject::connect(connection, SIGNAL(requestReady(Pillow::HttpConnection*)), q_ptr, SIGNAL(requestReady(Pillow::HttpConnection*)));
 			QObject::connect(connection, SIGNAL(closed(Pillow::HttpConnection*)), q_ptr, SLOT(connection_closed(Pillow::HttpConnection*)));
 			return connection;
@@ -92,6 +94,24 @@ void HttpServer::incomingConnection(int socketDescriptor)
 		qWarning() << "HttpServer::incomingConnection: failed to set socket descriptor '" << socketDescriptor << "' on socket.";
 		delete socket;
 	}
+}
+
+void HttpServer::contentReady(HttpConnection *connection)
+{
+	foreach (QObject* object, children())
+	{
+		int methodIndex = object->metaObject()->indexOfMethod("handleContent(Pillow::HttpConnection*)");
+		if (methodIndex < 0)
+			continue;
+		QMetaMethod method = object->metaObject()->method(methodIndex);
+		bool result = false;
+		if (method.invoke(object, Q_RETURN_ARG(bool, result), Q_ARG(Pillow::HttpConnection *, connection))) {
+			if (result)
+				return;
+		}
+	}
+
+	connection->setContentDevice(NULL);
 }
 
 void HttpServer::connection_closed(Pillow::HttpConnection *connection)
