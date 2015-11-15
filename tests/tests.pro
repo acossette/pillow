@@ -2,7 +2,6 @@ include(../config.pri)
 TEMPLATE = app
 
 QT       += core network testlib script gui
-QT       += svg # For zlib symbols on Qt5
 
 CONFIG   += console precompile_header
 CONFIG   -= app_bundle
@@ -12,7 +11,6 @@ PRECOMPILED_HEADER = pch.h
 INCLUDEPATH = . ../pillowcore
 DEPENDPATH = . ../pillowcore
 LIBS += -L../lib -l$${PILLOWCORE_LIB_NAME}
-unix: LIBS += -lz
 POST_TARGETDEPS += ../lib/$$PILLOWCORE_LIB_FILE
 
 SOURCES += main.cpp \

@@ -34,6 +34,7 @@ namespace Pillow
 		virtual QByteArray transform(const char *data, int length) = 0;
 	};
 
+#ifdef PILLOW_ZLIB
 	class GunzipContentTransformer : public ContentTransformer
 	{
 	public:
@@ -92,6 +93,7 @@ namespace Pillow
 		QByteArray _inflatedBuffer;
 		bool _streamBad;
 	};
+#endif // PILLOW_ZLIB
 }
 
 //
@@ -684,6 +686,7 @@ void Pillow::HttpClient::headersComplete()
 	}
 	else
 	{
+#ifdef PILLOW_ZLIB
 		for (int i = 0, iE = _headers.size(); i < iE; ++i)
 		{
 			const Pillow::HttpHeader& header = _headers.at(i);
@@ -693,6 +696,7 @@ void Pillow::HttpClient::headersComplete()
 					_contentDecoder = new Pillow::GunzipContentTransformer();
 			}
 		}
+#endif // PILLOW_ZLIB
 	}
 }
 

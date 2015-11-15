@@ -21,6 +21,10 @@ pillow_static {
 	DEFINES += PILLOWCORE_BUILD_STATIC
 }
 
+pillow_zlib {
+	LIBS += $$PILLOW_ZLIB_LIBS
+}
+
 SOURCES += \
 	parser/parser.c \
 	parser/http_parser.c \

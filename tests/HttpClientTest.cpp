@@ -2348,7 +2348,7 @@ private slots:
 		QCOMPARE(client->statusCode(), 200);
 		QCOMPARE(client->content(), QByteArray("1234567890123456789012345678901234567890"));
 #else
-		QSKIP("Zlib support is disabled");
+		QSKIP("Zlib support is disabled", SkipSingle);
 #endif // PILLOW_ZLIB
 	}
 
@@ -2363,7 +2363,7 @@ private slots:
 		QCOMPARE(client->statusCode(), 200);
 		QCOMPARE(client->content(), QByteArray("Definitely not gzipped data"));
 #else
-		QSKIP("Zlib support is disabled");
+		QSKIP("Zlib support is disabled", SkipSingle);
 #endif // PILLOW_ZLIB
 	}
 
