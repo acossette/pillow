@@ -784,7 +784,7 @@ private slots:
 		QCOMPARE(p.httpMinor(), 0);
 		QCOMPARE(p.httpMajor(), 0);
 		QCOMPARE(p.headers().size(), 0);
-		QCOMPARE(p.shouldKeepAlive(), 0);
+		QCOMPARE(p.shouldKeepAlive(), false);
 		QCOMPARE(p.completesOnEof(), false);
 		QVERIFY(!p.isParsing());
 	}
@@ -814,7 +814,7 @@ private slots:
 		QCOMPARE(p.headers().size(), testMessage.num_headers);
 		QCOMPARE(p.content(), QByteArray(testMessage.body));
 		QCOMPARE(p.shouldKeepAlive(), testMessage.should_keep_alive == TRUE);
-		QCOMPARE(p.completesOnEof(), testMessage.message_complete_on_eof);
+		QCOMPARE(p.completesOnEof(), bool(testMessage.message_complete_on_eof));
 		QVERIFY(!p.isParsing());
 	}
 
@@ -834,7 +834,7 @@ private slots:
 			QCOMPARE(p.headers().size(), m1->num_headers);
 			QCOMPARE(p.content(), QByteArray(m1->body));
 			QCOMPARE(p.shouldKeepAlive(), m1->should_keep_alive == TRUE);
-			QCOMPARE(p.completesOnEof(), m1->message_complete_on_eof);
+			QCOMPARE(p.completesOnEof(), bool(m1->message_complete_on_eof));
 
 			for (const message* m2 = responses; m2->name != NULL; ++m2)
 			{
@@ -848,7 +848,7 @@ private slots:
 				QCOMPARE(p.headers().size(), m2->num_headers);
 				QCOMPARE(p.content(), QByteArray(m2->body));
 				QCOMPARE(p.shouldKeepAlive(), m2->should_keep_alive == TRUE);
-				QCOMPARE(p.completesOnEof(), m2->message_complete_on_eof);
+				QCOMPARE(p.completesOnEof(), bool(m2->message_complete_on_eof));
 			}
 		}
 		QVERIFY(count > 2);
@@ -949,7 +949,7 @@ private slots:
 		QCOMPARE(p.httpMinor(), 0);
 		QCOMPARE(p.httpMajor(), 0);
 		QCOMPARE(p.headers().size(), 0);
-		QCOMPARE(p.shouldKeepAlive(), 0);
+		QCOMPARE(p.shouldKeepAlive(), false);
 		QCOMPARE(p.completesOnEof(), false);
 		QCOMPARE(p.content(), QByteArray());
 	}
