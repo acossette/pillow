@@ -7,8 +7,10 @@
 
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
 #define REFCOUNT ref.atomic._q_value
+#define REFCOUNT_IS_SHARED_STATIC ==-1
 #else
 #define REFCOUNT ref
+#define REFCOUNT_IS_SHARED_STATIC > 1
 #endif
 
 
@@ -23,7 +25,7 @@ private slots:
 		QByteArray ba;
 		QByteArray::DataPtr oldDataPtr = ba.data_ptr();
 		QVERIFY(ba.data_ptr() == oldDataPtr);
-		QVERIFY(ba.data_ptr()->REFCOUNT > 1); // Should be the multi-referenced shared null.
+		QVERIFY(ba.data_ptr()->REFCOUNT REFCOUNT_IS_SHARED_STATIC); // Should be the multi-referenced shared null.
 		QVERIFY(rawData[5] != '\0');
 
 		// Calling setFromRawDataAndNullterm on a shared byte array should detach it.
@@ -49,11 +51,14 @@ private slots:
 		QVERIFY(ba.data_ptr() != oldDataPtr);
 		oldDataPtr = ba.data_ptr();
 		Pillow::ByteArrayHelpers::setFromRawDataAndNullterm(ba, rawData, 0, 2);
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
 		QVERIFY(ba.data_ptr() == oldDataPtr);
+#endif // < Qt5
 		QVERIFY(ba.data_ptr()->REFCOUNT == 1);
 		QVERIFY(rawData[2] == '\0');
 		QCOMPARE(ba, QByteArray("he"));
 
+		oldDataPtr = ba.data_ptr();
 		Pillow::ByteArrayHelpers::setFromRawDataAndNullterm(ba, rawData, 0, 0);
 		QVERIFY(ba.data_ptr() == oldDataPtr);
 		QVERIFY(ba.data_ptr()->REFCOUNT == 1);
@@ -71,16 +76,21 @@ private slots:
 		QVERIFY(oldDataPtr != ba.data_ptr());
 		oldDataPtr = ba.data_ptr();
 		ba.setRawData(rawData + 6, 5);
+
+#if (QT_VERSION < QT_VERSION_CHECK(5, 0, 0))
 		// Start using QByteArray::setRawData directly if the following QVERIFY fails.
 		// This would mean that the QByteArray::setRawData behavior has been changed to the
 		// desired one where switching from one raw data to another does not cause a
 		// QByteArray data block reallocation. Qt5 maybe?
 		QVERIFY(oldDataPtr != ba.data_ptr());
+#else
+		// Indeed, the comment above is true with Qt >= 5.0
+#endif
 
 		// Go ahead and do tests on our replacement setFromRawData.
 		ba = QByteArray();
 		oldDataPtr = ba.data_ptr();
-		QVERIFY(ba.data_ptr()->REFCOUNT > 1); // Should be the multi-referenced shared null.
+		QVERIFY(ba.data_ptr()->REFCOUNT REFCOUNT_IS_SHARED_STATIC); // Should be the multi-referenced shared null.
 		Pillow::ByteArrayHelpers::setFromRawData(ba, rawData, 0, 5);
 		QVERIFY(ba.data_ptr() != oldDataPtr);
 		QVERIFY(ba.data_ptr()->REFCOUNT == 1);
