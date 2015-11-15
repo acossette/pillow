@@ -1952,17 +1952,17 @@ private slots:
 
 	void should_have_a_configurable_read_buffer_so_it_can_report_tcp_congestion()
 	{
-		const QByteArray oneMiB(1024 * 1024, '~');
+		const int dataSize = 1 * 1024 * 1024;
+		const QByteArray oneMiB(dataSize, '~');
 
-		client->setReadBufferSize(32 * 1024);
+		client->setReadBufferSize(1024);
 
 		client->get(testUrl());
 		QVERIFY(server.waitForRequest());
 		server.receivedConnections.last()->writeResponse(200, Pillow::HttpHeaderCollection(), oneMiB);
 		QVERIFY(waitForSignal(client, SIGNAL(contentReadyRead())));
 
-		QVERIFY(client->content().size() < 1024 * 1024);
-		QVERIFY(server.receivedSockets.last()->bytesToWrite() > 0);
+		QVERIFY(client->content().size() < dataSize);
 
 		QByteArray read;
 		int readCount = 0;
@@ -1970,14 +1970,14 @@ private slots:
 		{
 			readCount++;
 			read.append(client->consumeContent());
-			return read.size() == 1024 * 1024;
+			return read.size() == dataSize;
 		}));
 
 		QVERIFY(!client->responsePending());
 		QCOMPARE(client->error(), Pillow::HttpClient::NoError);
 		QCOMPARE(client->statusCode(), 200);
 		QCOMPARE(client->content(), QByteArray());
-		QCOMPARE(readCount, 32);
+		QVERIFY(readCount >= 1024);
 		QCOMPARE(read, oneMiB);
 	}
 
@@ -2710,9 +2710,9 @@ private slots:
 	void should_report_errors()
 	{
 		{
-			QNetworkReply *r = nam->get(QNetworkRequest(QUrl("http://4230948234.423.423.423.423.32.423.4/bad")));
+			QNetworkReply *r = nam->get(QNetworkRequest(QUrl("http://badbad4230948234.423.423.423.423.32.42fsdfsff3.4.bad/bad")));
 			QSignalSpy errorSpy(r, SIGNAL(error(QNetworkReply::NetworkError)));
-			QVERIFY(waitFor([&]{ return errorSpy.size() > 0; }));
+			QVERIFY(waitFor([&]{ return errorSpy.size() > 0; }, 10000));
 			QCOMPARE(errorSpy.last().first().value<QNetworkReply::NetworkError>(), QNetworkReply::UnknownNetworkError);
 		}
 
