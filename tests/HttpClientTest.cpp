@@ -1155,7 +1155,7 @@ private slots:
 
 			// Should be reset and ready to parse a new response.
 			QVERIFY(!p.hasError());
-			p.messageBeginCallback = 0;
+			p.messageBeginCallback = nullptr;
 
 			QCOMPARE(p.inject(response), response.size());
 			QVERIFY(!p.hasError());
@@ -1175,7 +1175,7 @@ private slots:
 
 			// Should be reset and ready to parse a new response.
 			QVERIFY(!p.hasError());
-			p.headersCompleteCallback = 0;
+			p.headersCompleteCallback = nullptr;
 
 			QCOMPARE(p.inject(response), response.size());
 			QVERIFY(!p.hasError());
@@ -1195,7 +1195,7 @@ private slots:
 
 			// Should be reset and ready to parse a new response.
 			QVERIFY(!p.hasError());
-			p.messageContentCallback = 0;
+			p.messageContentCallback = nullptr;
 
 			QCOMPARE(p.inject(response), response.size());
 			QVERIFY(!p.hasError());
@@ -1215,7 +1215,7 @@ private slots:
 
 			// Should be reset and ready to parse a new response.
 			QVERIFY(!p.hasError());
-			p.messageCompleteCallback = 0;
+			p.messageCompleteCallback = nullptr;
 
 			QCOMPARE(p.inject(response), response.size());
 			QVERIFY(!p.hasError());
@@ -2302,6 +2302,7 @@ private slots:
 
 	void should_support_gzip_content_encoding()
 	{
+#ifdef PILLOW_ZLIB
 		QByteArray gzippedData;
 		{
 			QFile gzipFile(":/test.gz");
@@ -2346,10 +2347,14 @@ private slots:
 		QVERIFY(waitForResponse());
 		QCOMPARE(client->statusCode(), 200);
 		QCOMPARE(client->content(), QByteArray("1234567890123456789012345678901234567890"));
+#else
+		QSKIP("Zlib support is disabled");
+#endif // PILLOW_ZLIB
 	}
 
 	void should_pass_bad_gzipped_content_through()
 	{
+#ifdef PILLOW_ZLIB
 		QTest::ignoreMessage(QtWarningMsg, "Pillow::GunzipContentTransformer::transform: error inflating input stream passing original content through.");
 		client->get(testUrl());
 		QVERIFY(server.waitForRequest());
@@ -2357,6 +2362,9 @@ private slots:
 		QVERIFY(waitForResponse());
 		QCOMPARE(client->statusCode(), 200);
 		QCOMPARE(client->content(), QByteArray("Definitely not gzipped data"));
+#else
+		QSKIP("Zlib support is disabled");
+#endif // PILLOW_ZLIB
 	}
 
 	void should_close_connection_after_request_if_asked_by_server()

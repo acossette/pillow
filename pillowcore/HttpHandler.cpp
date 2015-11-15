@@ -91,7 +91,7 @@ bool HttpHandler404::handleRequest(Pillow::HttpConnection *connection)
 //
 
 HttpHandlerFunction::HttpHandlerFunction(QObject *parent)
-	:HttpHandler(parent), _function(0)
+	:HttpHandler(parent), _function()
 {
 }
 
