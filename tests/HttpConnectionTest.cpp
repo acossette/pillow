@@ -187,9 +187,9 @@ void HttpConnectionTest::testHugePost()
 
 	clientWrite(clientRequest);
 	clientFlush();
-	wait(100);
 
-	QCOMPARE(connection->state(), HttpConnection::SendingHeaders);
+	QVERIFY(waitFor([&] { return connection->state() == HttpConnection::SendingHeaders; }, 5000));
+
 	QCOMPARE(connection->requestContent(), postData);
 	QCOMPARE(readySpy->size(), 1);
 	QCOMPARE(completedSpy->size(), 0);
