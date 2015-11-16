@@ -1034,7 +1034,11 @@ public:
 	QSslKey key;
 
 protected:
-	virtual void incomingConnection(int socketDescriptor)
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+	void incomingConnection(int socketDescriptor)
+#else
+	void incomingConnection(qintptr socketDescriptor) Q_DECL_OVERRIDE
+#endif
 	{
 		QSslSocket* sslSocket = new QSslSocket(this);
 		if (sslSocket->setSocketDescriptor(socketDescriptor))

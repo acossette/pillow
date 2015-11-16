@@ -36,7 +36,11 @@ namespace Pillow
 		void sslSocket_sslErrors(const QList<QSslError>& sslErrors);
 
 	protected:
-		virtual void incomingConnection(int socketDescriptor);
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+		void incomingConnection(int socketDescriptor);
+#else
+		void incomingConnection(qintptr socketDescriptor) Q_DECL_OVERRIDE;
+#endif
 
 	public:
 		HttpsServer(QObject* parent = 0);

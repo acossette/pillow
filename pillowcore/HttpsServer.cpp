@@ -30,7 +30,11 @@ void HttpsServer::setPrivateKey(const QSslKey &privateKey)
 	_privateKey = privateKey;
 }
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
 void HttpsServer::incomingConnection(int socketDescriptor)
+#else
+void HttpsServer::incomingConnection(qintptr socketDescriptor)
+#endif
 {
 	QSslSocket* sslSocket = new QSslSocket(this);
 	if (sslSocket->setSocketDescriptor(socketDescriptor))

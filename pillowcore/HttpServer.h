@@ -34,10 +34,10 @@ namespace Pillow
 		void connection_closed(Pillow::HttpConnection* request);
 
 	protected:
-#if QT_VERSION < 0x050000
-        void incomingConnection(int socketDescriptor);
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+		void incomingConnection(int socketDescriptor);
 #else
-        void incomingConnection(qintptr socketDescriptor);
+		void incomingConnection(qintptr socketDescriptor) Q_DECL_OVERRIDE;
 #endif
 		HttpConnection* createHttpConnection();
 
