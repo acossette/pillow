@@ -157,7 +157,7 @@ bool HttpHandlerLog::handleRequest(Pillow::HttpConnection *connection)
 	{
 		QString logEntry = QString("[BEGIN] %1 - - [%2] \"%3 %4 %5\" - - -")
 				.arg(connection->remoteAddress().toString())
-				.arg(QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss"))
+                .arg(QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm:ss"))
 				.arg(QString(connection->requestMethod())).arg(QString(connection->requestUri())).arg(QString(connection->requestHttpVersion()));
 
 		log(logEntry);
@@ -176,7 +176,7 @@ void HttpHandlerLog::requestCompleted(Pillow::HttpConnection *connection)
 		qint64 elapsed = timer->elapsed();
 		QString logEntry = QString(formatString)
 				.arg(connection->remoteAddress().toString())
-				.arg(QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss"))
+                .arg(QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm:ss"))
 				.arg(QString(connection->requestMethod())).arg(QString(connection->requestUri())).arg(QString(connection->requestHttpVersion()))
 				.arg(connection->responseStatusCode()).arg(connection->responseContentLength())
 				.arg(elapsed / 1000.0, 3, 'f', 3);
@@ -195,7 +195,7 @@ void HttpHandlerLog::requestClosed(HttpConnection *connection)
 		qint64 elapsed = timer->elapsed();
 		QString logEntry = QString(formatString)
 				.arg(connection->remoteAddress().toString())
-				.arg(QDateTime::currentDateTime().toString("dd/MMM/yyyy hh:mm:ss"))
+                .arg(QDateTime::currentDateTime().toString("dd/MM/yyyy hh:mm:ss"))
 				.arg(QString(connection->requestMethod())).arg(QString(connection->requestUri())).arg(QString(connection->requestHttpVersion()))
 				.arg(connection->responseStatusCode()).arg(connection->responseContentLength())
 				.arg(elapsed / 1000.0, 3, 'f', 3);

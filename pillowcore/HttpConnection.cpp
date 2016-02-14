@@ -731,11 +731,15 @@ const QByteArray & Pillow::HttpConnection::requestHeaderValue(const QByteArray &
 
 const Pillow::HttpParamCollection& Pillow::HttpConnection::requestParams()
 {
-	if (d_ptr->_requestParams.isEmpty() && !d_ptr->_requestQueryString.isEmpty())
+    Pillow::ByteArray reqestParamData = d_ptr->_requestQueryString;
+    if(d_ptr->_requestMethod.toStdString() == "POST"){
+        reqestParamData = d_ptr->_requestContent;
+    }
+    if (d_ptr->_requestParams.isEmpty() && !reqestParamData.isEmpty())
 	{
 		// The params have not yet been initialized. Parse them.
 		const char paramDelimiter = '&', keyValueDelimiter = '=';
-		for (const char* c = d_ptr->_requestQueryString.constBegin(), *cE = d_ptr->_requestQueryString.constEnd(); c < cE;)
+        for (const char* c = reqestParamData.constBegin(), *cE = reqestParamData.constEnd(); c < cE;)
 		{
 			const char *paramEnd, *keyEnd;
 			for (paramEnd = c; paramEnd < cE; ++paramEnd) if (*paramEnd == paramDelimiter) break; // Find the param delimiter, or the end of string.
