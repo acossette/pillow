@@ -371,7 +371,15 @@ void HttpHandlerFileTransfer::writeNextPayload()
 	{
 		_connection->writeContent(_sourceDevice->read(bytesToRead));
 
+		if (bytesAvailable != _sourceDevice->size()) // this avoids division by zero
+			emit progress((int)(100 - (100 * (bytesAvailable / (qreal)_sourceDevice->size()))));
+		else
+			emit progress(0);
+
 		if (_sourceDevice->atEnd())
+		{
+			emit progress(100);
 			emit finished();
+		}
 	}
 }
