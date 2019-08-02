@@ -29,10 +29,15 @@ CONFIG(debug, debug|release) {
 	PILLOWCORE_LIB_NAME = $${PILLOWCORE_LIB_NAME}d
 }
 
-contains(QMAKE_CC, cl) {
+msvc: {
 	PILLOWCORE_LIB_FILE = $${PILLOWCORE_LIB_NAME}.lib
 } else {
-	pillow_static: PILLOWCORE_LIB_FILE = lib$${PILLOWCORE_LIB_NAME}.a
-	!pillow_static: PILLOWCORE_LIB_FILE = lib$${PILLOWCORE_LIB_NAME}.so
+	win32: {
+		!pillow_static: PILLOWCORE_LIB_FILE = $${PILLOWCORE_LIB_NAME}.dll
+		pillow_static: PILLOWCORE_LIB_FILE = $${PILLOWCORE_LIB_NAME}.a
+	} else {
+		!pillow_static: PILLOWCORE_LIB_FILE = lib$${PILLOWCORE_LIB_NAME}.so
+		pillow_static: PILLOWCORE_LIB_FILE = lib$${PILLOWCORE_LIB_NAME}.a
+	}
 	QMAKE_CXXFLAGS += --std=c++11
 }

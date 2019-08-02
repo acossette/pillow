@@ -97,10 +97,10 @@ namespace Pillow
 		inline const QByteArray& content() const { return _content; }
 
 		// Returns whether the http client should reuse the same communication channel at the end of the current request or close it.
-		inline bool shouldKeepAlive() const { return http_should_keep_alive(const_cast<http_parser*>(&parser)); }
+		bool shouldKeepAlive() const;
 
 		// Returns whether the parser needs EOF to know where the message completes. The http client should use the injectEof() method to let the parser know that EOF was encountered.
-		inline bool completesOnEof() const { return http_message_needs_eof(const_cast<http_parser*>(&parser)); }
+		bool completesOnEof() const;
 
 	protected:
 		// Parser callbacks.

@@ -251,6 +251,16 @@ QByteArray Pillow::HttpResponseParser::errorString() const
 	return QByteArray::fromRawData(desc, qstrlen(desc));
 }
 
+bool Pillow::HttpResponseParser::shouldKeepAlive() const
+{
+	return http_should_keep_alive(const_cast<http_parser *>(&parser));
+}
+
+bool Pillow::HttpResponseParser::completesOnEof() const
+{
+	return http_message_needs_eof(const_cast<http_parser *>(&parser));
+}
+
 void Pillow::HttpResponseParser::messageBegin()
 {
 	while (!_headers.isEmpty()) _headers.pop_back();
